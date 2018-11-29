@@ -1,0 +1,6 @@
+# Sharing and Interactive Interfaces
+
+![Overview of the *iSEE* interactive data visualization package's relationship to a *SingleCellExperiment* object](images/iSEE-dataflow.png)
+
+
+*WIP*

@@ -1,0 +1,147 @@
+# Adaptations for Large-scale Data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')                      
+options(digits = 4)
+```
+
+Large datasets such as the Human Cell Atlas (with over 1.3 million cells) have the potential to benefit from special adaptations that enable analysis in compute-constrained environments (such as personal laptops). Here, we briefly cover topics that aim to ease working with scRNA-seq data to make it faster and more tractable.
+
+Do note however that these adaptations do not universally result in improved computational efficiency. For example, parallelization does incur costs, and disk-backed data representation will generally be slower than purely in-memory representations. In both cases, hardware specifics may dictate any potential gains in efficiency, as can be imagined in the case of a solid state drive (SSD) being faster for disk-backed data representations relative to a hard disk drive (HDD).
+
+Thus, with the right compute environment, data, and task, these adaptations can yield significant computational improvements.
+
+
+## Approximate Methods
+
+A general approach that works across all scales of data involves changing the task itself. Some methods - such as PCA or nearest neighbor searches - have been extended to include versions that provide approximate results. Generally, these adaptations result in acceptable losses in accuracy for significant computational gains. In some cases, approximate methods may even be desirable for the results themselves, as has been shown by the FIt-SNE approach.
+
+Some example packages that provide approximate versions of popular methods include:
+
+* *BiocSingular* via the `IrlbaParam()` and `RandomParam()` for approximate singular value decomposition (SVD)
+* *BiocNeighbors* via the `AnnoyParam()` for approximate nearest neighbor searches
+
+These packages provide users (and developers) a common interface, enabling modular swapping of key algorithms within functions. For example, we can see the immediate benefit of using an approximate method for PCA as provided by the `BSPARAM` argument in the following code, which utilizes the *bench* package for profiling:
+
+```{r}
+library(SingleCellExperiment)
+library(scater)
+
+## Simulate a dataset with 1k genes and 1k cells
+mat <- matrix(rpois(1e6, 100), nrow = 1000)
+tiny_sce <- SingleCellExperiment(assays = list(counts = mat))
+tiny_sce <- normalize(tiny_sce)
+```
+
+```{r}
+library(bench)
+library(BiocSingular)
+
+## simple function to show only cols of interest
+.show_bench <- function(b) {
+    b[, c('expression', 'min', 'median', 'mem_alloc')]
+}
+
+bm <- bench::mark(
+           runPCA(tiny_sce, BSPARAM = IrlbaParam()),
+           runPCA(tiny_sce, BSPARAM = ExactParam()), 
+           check = FALSE)
+
+.show_bench(bm)
+```
+
+We can see that the approximate, irlba based implementation is about 6 times faster than the exact version in this case.
+
+We can also try this with nearest neighbor searches. Here we provide the `BNPARAM` argument to build a shared nearest neighbors graph using different algorithms under the hood:
+
+```{r}
+library(scran)
+library(BiocNeighbors)
+
+## Calculate PCA before testing NN back-ends
+tiny_sce_pca <- runPCA(tiny_sce, BSPARAM = IrlbaParam())
+
+bm <- bench::mark(
+           buildSNNGraph(tiny_sce_pca, BNPARAM = AnnoyParam()),
+           buildSNNGraph(tiny_sce_pca, BNPARAM = KmknnParam()),
+           check = FALSE)
+
+.show_bench(bm)
+```
+
+We can see from the above benchmark that in our tiny dataset, we don't see much, if any, benefit of using an approximate method (via the `AnnoyParam()`, which uses the Annoy library).
+
+However, if we increase our dataset to something larger..
+
+```{r}
+## Simulate a dataset with 1k genes and 10k cells
+mat <- matrix(rpois(10e6, 100), nrow = 1000)
+big_sce <- SingleCellExperiment(assays = list(counts = mat))
+big_sce <- normalize(big_sce)
+```
+
+```{r}
+## Calculate PCA before testing NN back-ends
+big_sce <- runPCA(big_sce, BSPARAM = IrlbaParam())
+
+## NN search
+bm <- bench::mark(
+           buildSNNGraph(big_sce, BNPARAM = AnnoyParam()),
+           buildSNNGraph(big_sce, BNPARAM = KmknnParam()),
+           check = FALSE)
+
+.show_bench(bm)
+```
+
+We see (more consistently) that we have realized some gains from using the approximate-based nearest neighbors search.
+
+
+## Parallelization
+
+Many tasks that arise in the analysis of scRNA-seq data are able to be parallelized. In other words, the problem can be broken down into smaller pieces that can be solved independently. Parallel computing can be performed in computing environments with access to multiple cores.
+
+Bioconductor has reduced the complexity of implementing parallelized software via the [*BiocParallel*](https://bioconductor.org/packages/BiocParallel) package. This enables a common interface across Bioconductor software packages for parallel computing.
+
+Across many Bioconductor packages, an argument that will often be present in functions that are parallelizable is the `BPPARAM` argument. Here, it is possible to specify the parallel back-end that can be used for evaluation.
+
+Again, note that parallelization does incur an overhead cost in splitting up the data, sending it off, and combining the results, and thus your mileage may vary depending on the specifics. 
+
+Below is an example usage of the *BiocParallel* library supplying `BPPARAM` argument for constructing the UMAP representation from the PCA results:
+
+```{r}
+library(BiocParallel)
+
+bm <- bench::mark(
+           runUMAP(tiny_sce_pca, BPPARAM = SerialParam()),           
+           runUMAP(tiny_sce_pca, BPPARAM = MulticoreParam()),
+           check = FALSE)
+
+.show_bench(bm)
+```
+
+On this dataset and equipment, there's not much, if any, benefit to parallelization, but your mileage may vary dependent on those aspects.
+
+
+## On-Disk Data
+
+The matrix of data from a single-cell experiment can be on the order of tens to hundreds of gigabytes, depending on the number of features and cells measured. A standard approach to import and represent these matrices has been to load the entire data set into memory using either the *matrix* object in base R or sparse and dense matrix classes from the *Matrix* R package. This approach however may prove intractable in computing environments with limited memory.
+
+Disk-backed representations such as HDF5 free us from having to load an entire dataset into memory, and thus make it possible to work with large-scale scRNA-seq data.
+
+```{r}
+library(rhdf5)
+library(HDF5Array)
+```
+
+
+
+<!-- ## Notes on Data Representation -->
+
+
+<!-- However, the explosion of data from single-cell assays has led to alternative data representations that are compatible with high-performance C++ code used for computationally intensive tasks in existing Bioconductor packages. This enables memory-efficient data manipulation and operations in R. For example, the *beachmat* Bioconductor package is a C++ interface for accessing single-cell data that is interoperable with sparse, dense and file-backed matrices, such as the HDF5 file format, which allows users to only load a subset of the data into memory at a time. In addition, Bioconductor has developed the infrastructure to read and write HDF5 files from R using the *rhdf5* package, to efficiently work with data in HDF5 files using array-like containers in the *HDF5Array*, *DelayedArray*, and *DelayedMatrixStats* packages. Much of this infrastructure was motivated by previous work done in the context of flow cytometry and whole genome bisulfite sequencing. -->
+
+
+<!-- At a low-level, the main interface between HDF5 and Bioconductor is implemented in the packages `rhdf5`, which provides read/write functionalities, `Rhdf5lib`, which provides C and C++ HDF5 libraries, and `beachmat`, which provides a consistent C++ class interface for a variety of commonly used matrix types, including sparse and HDF5-backed matrices. These packages are useful for developers that want to develop methods able to interact with HDF5 data sets. -->

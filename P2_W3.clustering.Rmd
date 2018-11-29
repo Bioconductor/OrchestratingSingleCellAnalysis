@@ -1,0 +1,228 @@
+# Clustering
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      eval=TRUE, # NEEDS HOTFIX
+                      message = FALSE, warning = FALSE, error = FALSE,
+                      dev = 'CairoPNG',
+                      cache = TRUE)
+options(digits = 4)
+```
+
+Data derived from single-cell assays have enabled researchers to unravel tissue heterogeneity at unprecedented levels of detail, enabling the identification of novel cell types, as well as rare cell populations that were previously unidentifiable using bulk assays. Clustering - the process of grouping cells - is a fundamental step in deconvoluting heterogeneous single-cell data into distinct groups of cells with similar expression profiles. These clusters are interpreted as proxies for more abstract biological concepts such as discrete cell types or cell states.
+
+<!-- Here we will work with a dataset that contains labeled cell type populations to highlight different approaches to clustering scRNA-seq data. -->
+
+
+## Loading the Data
+
+<!-- To follow along with this chapter, we will be using the 5 cell line data from the [*CellBench_data*](https://github.com/LuyiTian/CellBench_data) repository. We will load the original dataset, and then subsample down to 1000 cells to make performing downstream calculations faster: -->
+
+```{r}
+## library(TENxBrainData)  # would be neat to try on this
+## sce <- TENxBrainData()
+library(TENxPBMCData)
+sce <- TENxPBMCData('pbmc4k')
+
+set.seed(1234)
+sce <- sce[, sample(ncol(sce), 1000)]
+sce
+```
+
+<!-- The per cell labels pertaining to the 5 cell lines assayed can be found within the `colData` component under the column name `cell_line`. We can count the number of instances of each cell line present in our subsampled dataset as follows: -->
+
+<!-- ```{r} -->
+<!-- table(sce$cell_line) -->
+<!-- ``` -->
+
+Before continuing, we will perform normalization, feature selection, and dimensionality reduction that will be used downstream by the clustering methods and visualizations. 
+
+```{r}
+library(BiocSingular)
+library(scater)
+library(scran)
+
+## normalization
+sce <- normalize(sce)
+
+## feature selection
+fit <- trendVar(sce, use.spikes = FALSE)
+dec <- decomposeVar(sce, fit)
+hvg <- rownames(dec[dec$bio > 0, ]) # ~4k genes
+
+## dimensionality reduction
+set.seed(1234)
+sce <- runPCA(sce, 
+              feature_set = hvg)
+```
+
+```{r}
+sce <- runUMAP(sce)
+```
+
+We can now visualize the data prior to clustering via UMAP:
+
+```{r}
+plotUMAP(sce)
+```
+
+<!-- One thing to note is that, per our UMAP visualization, cell line H1975 appears to be two primary clusters, with some cells resembling the H838 cell line. -->
+
+
+## Manual Clustering
+
+Low-level clustering relies on building the shared- or k-nearest neighbors graphs manually, and thenppppppppp applying a graph-based clustering algorithm based on the resulting graph. One such wrapper to construct the SNN/KNN graph comes from the `scran` package's `buildSNNGraph()` and `buildKNNGraph()` functions, respectively. The resulting `igraph` object from these functions can then be fed into any number of clustering algorithms provided by `igraph`. For example, louvain clustering is a popular algorithm that is implemented in the `cluster_louvain()` function.
+
+Further, one additional parameter to note in the `buildSNNGraph()` function below is the `BNPARAM`, which provides even finer control over nearest-neighbors detection via the `BiocNeighbors` package. This parameter allows the user to specify an implementation from `BiocNeighbors` to use that has been designed for high-dimensional data. Here, we highlight the use of an approximate method via the Annoy algorithm by way of providing `AnnoyParam()`.
+
+
+```{r}
+g <- buildSNNGraph(sce, k = 50, use.dimred = 'PCA')
+louvain_clusters <- igraph::cluster_louvain(g)$membership
+
+sce$louvain_clusters <- as.factor(louvain_clusters)
+```
+
+We can then inspect the results of our clustering both on the UMAP as well as via a confusion matrix:
+
+```{r, fig.cap="Louvain clustering applied to an SNN graph constructed with k=50."}
+plotUMAP(sce, colour_by = 'louvain_clusters')
+```
+
+<!-- table(sce$louvain_clusters, sce$cell_line) -->
+
+
+<!-- Overall at this k, we see that the clusters align very sensibly with the cell lines of origins. -->
+
+
+### Varying `k`
+
+While our first try appeared to work fairly well, this may not always be the case. Furthermore, checking the stability of clustering is sensible to ensure that a clustering result is robust. 
+
+To iterate over the varying `k` parameter (the number of nearest neighbors to draw the graph with), we utilize the `purrr` functional programming library in this example, but note that `lapply` works equally well.
+
+```{r}
+library(purrr)
+
+## Iterate over varying k for SNNGraph construction
+k_v <- seq(5, 50, by = 15)
+g_l <- map(k_v, function(x) {
+    buildSNNGraph(sce, k = x, use.dimred = 'PCA')
+})
+names(g_l) <- paste0('k_', k_v)
+
+## Iterate over resulting graphs to apply louvain clustering
+lc_l <- map(g_l, function(g) {
+    igraph::cluster_louvain(g)$membership
+})
+names(lc_l) <- paste0('k_', k_v)
+
+## Coerce louvain cluster results list to dataframe of factors
+lc_df <- data.frame(do.call(cbind, lc_l))
+lc_df <- apply(lc_df, 2, as.factor)
+
+## Append results to colData for plotting
+colData(sce) <- cbind(colData(sce), lc_df)
+```
+
+Now we can plot across our various k's on the UMAP for ease of interpretation. Note that we use the *patchwork* package to combine the multiple `ggplot` objects that are generated by the `plotUMAP()` function.
+
+```{r, fig.cap="Varying k, from top left clockwise, k is set to 5, 20, 50, and 35."}
+library(patchwork)
+p_l <- map(colnames(lc_df), ~ plotUMAP(sce, colour_by = .))
+wrap_plots(p_l, ncol = 2)
+```
+
+
+### Varying Clustering Algorithms
+
+Another area for tweaking is in the clustering algorithm applied, as there are various community detection methods available through packages such as `igraph`. Here, we demonstrate a few select clustering methods - louvain, walktrap, and fast/greedy - across two different sets of graphs generated above, where k equaled 5 or 20:
+
+```{r}
+## Clustering functions (cf)
+cf_l <- list(louvain = igraph::cluster_louvain,
+             walktrap = igraph::cluster_walktrap,
+             fastgreedy = igraph::cluster_fast_greedy)
+
+## Cluster assignments (ca) per function with k_5 and k_20 graphs
+ca_l <- map2(c(cf_l, cf_l),
+     c(g_l[rep(c(1:2), each = length(cf_l))]),
+     function(f, g) {
+         f(g)$membership
+})
+names(ca_l) <- paste0(rep(names(cf_l), 2), '__',
+                      rep(names(g_l)[1:2], each = 3))
+
+## Coerce clustering results list to dataframe of factors
+ca_df <- data.frame(do.call(cbind, ca_l))
+ca_df <- apply(ca_df, 2, as.factor)
+
+## Append results to colData for plotting
+colData(sce) <- cbind(colData(sce), ca_df)
+```
+
+```{r, fig.cap="Three clustering methods (by row, top to bottom: louvain, walktrap, and fast/greedy) were applied to two graphs (by column, left to right: k=5, k=20). Clustering results are shown as different colors on the UMAP projection."}
+p_l <- map(colnames(ca_df), ~ plotUMAP(sce, colour_by = .))
+wrap_plots(p_l, ncol = 2, byrow = FALSE)
+```
+
+We can see from this result that the choice of clustering method was largely a non-factor in the k=20 case, whereas the more granular clustering method of k=5 did indeed produce some variation, particularly between the louvain/walktrap vs the fast-greedy.
+
+
+## Automated Clustering
+
+_NOTE: not run in current book build due to error. However, the code below can likely be run locally without problem._
+
+Automated clustering frameworks seek to find an "optimal" number of clusters. The *SC3* package provides a simple framework that allows users to test for a variable number of clusters. Additionally, the *SC3* package provides handy visualizations to qualitatively assess the clustering results.
+
+Before we use the *SC3* package, we first set a required `rowData` column for *SC3* to work:
+
+```{r, eval=FALSE}
+## SC3 requires this column to be appended
+rowData(sce)$feature_symbol <- rownames(sce)
+```
+
+Further, for compatibility purposes, we must make the counts in the `assays` slot are of class `matrix` rather than disk-backed classes such as `DelayedMatrix`:
+
+```{r, eval=FALSE}
+counts(sce) <- as.matrix(counts(sce))
+```
+
+And now we run the `sc3()` function to test for variable numbers of clusters by setting the `ks` argument. Here we search for 3 to 6` clusters:
+
+
+```{r, eval=FALSE}
+library(SC3)
+
+## SC3 will return an SCE object with appended "sc3_" columns
+sce <- sc3(sce,
+           ks = 3:6,
+           k_estimator = TRUE,
+           n_cores = 2)
+```
+
+After using `sc3()`, the function returns the original `SingleCellExperiment` object, but with new columns in `colData(sce)` corresponding to the different `ks` supplied to the function, as well as a full representation of the analysis that is stored in `metadata(sce)$sc3`, which includes an estimate of the optimal `k` (as dictated by the `k_estimator = TRUE` argument above). 
+
+Below, we show the clustering results of the `ks` we supplied, 3 through 6, shown on the UMAP representation of the data. 
+
+```{r, eval=FALSE}
+sc3_cols <- paste0('sc3_', 3:6, '_clusters')
+
+p_l <- map(sc3_cols, ~ plotUMAP(sce, colour_by = .))
+
+wrap_plots(p_l, ncol = 2)
+```
+
+To access all the output generated by `sc3()`, we can inspect the `metadata` component of our `sce` object:
+
+```{r, eval=FALSE}
+str(metadata(sce)$sc3, 1)
+```
+
+The parameters and various outputs from `sc3()` are saved shown to be saved in a list. For example, we can access the estimated `k` (as we asked for via the `k_estimator = TRUE` argument to `sc3()`) by inspecting this list as follows below. Based on our data, `sc3()` estimates the optimal `k` to be:
+
+```{r, eval=FALSE}
+metadata(sce)$sc3$k_estimation
+```
+
+The *SC3* package contains many more utilities for exploring the stability of clustering and can even produce differential expression analysis results using the `biology = TRUE` argument within the `sc3()` function. We leave it to the interested reader to [learn more advanced features in *SC3*](https://bioconductor.org/packages/release/bioc/html/SC3.html) via their vignette.

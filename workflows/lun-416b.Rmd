@@ -1,0 +1,57 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+Obtaining a `SingleCellExperiment` object.
+
+```{r download}
+# NOTE: to be moved to ExperimentHub. 
+# Bear with it for now.
+
+library(BiocFileCache)
+bfc <- BiocFileCache("raw_data", ask = FALSE)
+lun.zip <- bfcrpath(bfc, 
+    file.path("https://www.ebi.ac.uk/arrayexpress/files",
+        "E-MTAB-5522/E-MTAB-5522.processed.1.zip"))
+lun.sdrf <- bfcrpath(bfc, 
+    file.path("https://www.ebi.ac.uk/arrayexpress/files",
+        "E-MTAB-5522/E-MTAB-5522.sdrf.txt"))
+unzip(lun.zip, exdir=tempdir())
+
+plate1 <- read.delim(file.path(tempdir(), "counts_Calero_20160113.tsv"), 
+    header=TRUE, row.names=1, check.names=FALSE)
+plate2 <- read.delim(file.path(tempdir(), "counts_Calero_20160325.tsv"), 
+    header=TRUE, row.names=1, check.names=FALSE)
+
+gene.lengths <- plate1$Length # First column is the gene length.
+plate1 <- as.matrix(plate1[,-1]) # Discarding gene length (as it is not a cell).
+plate2 <- as.matrix(plate2[,-1])
+rbind(Plate1=dim(plate1), Plate2=dim(plate2))
+
+all.counts <- cbind(plate1, plate2)
+
+library(SingleCellExperiment)
+sce.416b <- SingleCellExperiment(list(counts=all.counts))
+rowData(sce.416b)$GeneLength <- gene.lengths
+
+isSpike(sce.416b, "ERCC") <- grepl("^ERCC", rownames(sce.416b))
+summary(isSpike(sce.416b, "ERCC"))
+
+is.sirv <- grepl("^SIRV", rownames(sce.416b))
+
+metadata <- read.delim(lun.sdrf, check.names=FALSE, header=TRUE)
+m <- match(colnames(sce.416b), metadata[["Source Name"]]) # Enforcing identical order.
+stopifnot(all(!is.na(m))) # Checking that nothing's missing.
+metadata <- metadata[m,]
+head(colnames(metadata))
+
+colData(sce.416b)$Plate <- factor(metadata[["Factor Value[block]"]])
+pheno <- metadata[["Factor Value[phenotype]"]]
+levels(pheno) <- c("induced", "control")
+colData(sce.416b)$Oncogene <- pheno
+table(colData(sce.416b)$Oncogene, colData(sce.416b)$Plate)
+
+# library(scRNAseq)
+# sce.416b <- LunSpikeInData(type="416B") # TODO: this will replace the above.
+```
+

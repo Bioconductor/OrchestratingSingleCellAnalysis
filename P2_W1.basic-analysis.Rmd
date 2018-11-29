@@ -1,0 +1,487 @@
+
+# A Basic Analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
+```
+
+In this chapter, we will walk through a minimal analysis of a simple scRNA-seq dataset in order to acquaint you with the overall framework of scRNA-seq in code terms. 
+
+Where relevant within each part of this basic workflow, we will refer the interested reader to the associated chapter to learn advanced or alternate ways of performing a given task.
+
+Put another way, the workflow demonstrated in this chapter is written with the aim of *simplicity*, and thus will likely require nontrivial tweaking of parameters or alternate methods in real-world analyses.
+
+One note: in this workflow, we will be loading libraries as they become necessary to clearly link libraries to their respective functions, which usually runs counter to the norm of loading libraries first, at the top of the analysis script.
+
+
+## Preprocessing & Import to R
+
+We will assume here that sequencing alignment and quantification of the data into a counts matrix, as well as the subsequent import to R has already been performed since this is highly platform- or technology-dependent. 
+
+Note that for 10X Genomics data (which is used in this example workflow), the counts matrix and associated metadata (cell barcodes, data path, etc.) can be imported via the `DropletUtils` package's `read10xCounts()` function. For data processed through `Salmon`/`Alevin`/`Kallisto`, we recommend checking out the `tximport`/`tximeta` Bioconductor packages. These are either imported as `SingleCellExperiment` or as a counts matrix which can be then coerced into a `SingleCellExperiment` object as demonstrated below.
+
+
+## Constructing the SingleCellExperiment
+
+### From Scratch
+
+Below we show an example of creating a `SingleCellExperiment` class object from a counts matrix and associated experimental metadata. 
+
+```{r}
+library(SingleCellExperiment)
+
+## More realistic: read in your experimental design metadata
+## If its per cell metadata, make sure it lines up with your
+## counts matrix row IDs correctly
+## my_metadata <- read.csv("my_metadata.csv") 
+
+## Example data
+ncells <- 100
+my_counts_matrix <- matrix(rpois(20000, 5), ncol = ncells)
+my_metadata <- data.frame(genotype = rep(c('A', 'B'), each = 50),
+                          experiment_id = 'Experiment1')
+
+## Construct the sce object manually
+sce <- SingleCellExperiment(assays = list(counts = my_counts_matrix),
+                            colData = my_metadata)
+
+## Manually adding a variable that is the same across all cells
+colData(sce) <- cbind(colData(sce), date = '2020-01-01')
+
+sce
+```
+
+
+### From Publicly Available Data
+
+From here on out, we will be working with a small example dataset from the `TENxPBMCData` Bioconductor package which has already been packaged into a `SingleCellExperiment` class object:
+
+```{r}
+library(TENxPBMCData)
+sce <- TENxPBMCData('pbmc3k')
+
+sce
+```
+
+One decision that should be made early on in the analysis is what row identifier to identify genes. Depending on how the data is imported, the `rowData` component may already have additional annotation information, such as multiple row mappings. For our new `sce` object from the `pbmc3k` dataset, we can take a look at `rowData` to see our options:
+
+```{r}
+rowData(sce)
+```
+
+We see that we could choose between `ENSEMBL_ID` (the default), `Symbol_TENx`, and `Symbol`. For ease of readability and subsetting, we will utilize the `Symbol_TENx` identifier as our object's rownames, making it possible to subset the `sce` with gene symbols as in `sce["CD8A", ]`.
+
+```{r}
+## reassign rownames
+rownames(sce) <- rowData(sce)[, "Symbol_TENx"]
+```
+
+Now, while this seems to work just fine, eventually we may run into an issue because we actually have duplicated row names here. Depending on how a downstream function is coded, this may cause an esoteric error to pop-up. In fact, here we have about 100 duplicates.
+
+We can avoid future errors (and many headaches) by removing duplicates before any analysis:
+
+```{r}
+## counts dupes from top to bottom to make a logical vector
+dupes <- duplicated(rownames(sce))
+
+sce <- sce[!dupes, ]
+```
+
+Keep in mind, the above is likely the most inelegant solution to the problem. Other methods could include, from the duplicated set of genes, choosing the one with the highest expression, aggregating the counts per cell, or keeping them all by adding an additional suffix to make the row names unique. Each has its own tradeoffs, so we leave this choice up to the diligent reader.
+
+And one more bit of preprocessing to prevent a potential downstream error is to assign our columns proper names. We can grab the barcodes of each cell from `colData` and assign them as column names as follows:
+
+```{r}
+colnames(sce) <- sce$Barcode
+```
+
+
+## Data Processing
+
+The aim of this section is to form the basis for more interesting downstream analyses. Thus, the objective here is to transform the data into a "clean" expression matrix that has been normalized and freed of technical artifacts, as well as a dimensionality reduction representation that can be used in subsequent analyses and visualization.
+
+
+### Quality Control Metrics
+
+The first step is to ensure that our dataset only contains viable cells, e.g. droplets that contain proper mRNA libraries. 
+
+One way to do that is to use the popular "knee plot", which shows the relationship between the log rank vs the log total counts, and then calculate where the "knee" of the plot is. We use the `DropletUtils` package to demonstrate this in our example PBMC dataset.
+
+```{r, fig.cap="Barcode rank (aka knee) plot showing log10-rank by log10-total counts relationship and calculated knee (horizontal line)."}
+library(DropletUtils)
+
+## Calculate the rank vs total counts per cell
+br <- barcodeRanks(counts(sce))
+
+## Create the knee plot
+plot(log10(br$rank), log10(br$total))
+abline(h = log10(metadata(br)$knee))
+
+## Save the calculated knee from `barcodeRanks()`
+knee <- log10(metadata(br)$knee)
+```
+
+We see that the knee calculated via this method (horizontal line) is at `r 10^knee`, or on the log scale, `r knee`. 
+
+This can be used as a filter to remove cells that are likely to be empty droplets. Before we do that, we will finish calculating other quality control (QC) metrics via the `scater` package and show the results from the first three cells.
+
+
+```{r}
+library(scater)
+
+sce <- calculateQCMetrics(sce)
+```
+
+```{r, include=FALSE}
+## quietly round QC metrics for better printing
+colData(sce)[, -1:-12] <- apply(colData(sce)[, -1:-12], 2, round, digits = 2)
+```
+
+We can display some of the calculated QC metrics appended to the `colData` component - there are a number of other columns present, but for brevity will only show two pertinent ones.
+
+```{r}
+colData(sce)[1:3, c("log10_total_features_by_counts", "log10_total_counts")]
+```
+
+We can further inspect these cells based on their total counts as well as vs the total features detected by counts (e.g. the number of genes that have nonzero counts).
+
+```{r, fig.cap="Histogram of the log10 total counts with the calculated knee from above (vertical line)."}
+hist(sce$log10_total_counts, breaks = 100)
+abline(v = knee)
+```
+
+```{r, fig.cap="Smoothed scatter plot of the log10-total counts vs the log10-total features detected by counts with the calculated knee from above (vertical line)."}
+smoothScatter(sce$log10_total_counts, sce$log10_total_features_by_counts, nbin = 250)
+abline(v = knee)
+```
+
+While there are various ways to filter cells, here we actually will not need to perform any filtering, as the data has already undergone a stringent quality control, and thus all the cells can be considered high quality.
+
+For the sake of completeness, we will demonstrate here - without evaluating - how to subset based on the previously calculated barcode ranks knee:
+
+```{r, eval=FALSE}
+## not run
+sce <- sce[, sce$log10_total_counts > knee]
+```
+
+
+### Normalizing Data
+
+Next up we will transform the primary data, the counts, into a (log) normalized version. In this section, we will use the `scran` package throughout.
+
+First however, we will need to calculate scaling factors per cell. This function relies on an initial "quick and dirty" clustering to get roughly similar pools of cells. These are used to generate pool-based estimates, from which the subsequent cell-based size factors are generated. To learn more about the method, see the `?computeSumFactors` documentation. 
+
+For now, we will perform a simpler normalization, using the library sizes per cell to create a log-normalized expression matrix:
+
+<!-- 's `quickCluster()` function to do the initial clustering. Then the (cell) size factors are used to log-normalize the counts data via -->
+<!-- ## quick_clusters <- quickCluster(sce, use.ranks = FALSE) -->
+<!-- ## sce <- computeSumFactors(sce, clusters = quick_clusters) -->
+
+```{r}
+sce <- scater::normalize(sce)
+```
+
+We can see below that we now have two assays, `counts` and `logcounts`. 
+
+```{r}
+assays(sce)
+```
+
+
+### Feature Selection
+
+This section will use the `scran` package, as we select for informative genes by selecting for those with high coefficients of biological variation. 
+
+Since this experiment does not have spike-ins, we will fit the mean-variance trend across the endogenous genes. 
+
+```{r, fig.cap="Mean-variance trend line fit by scran package trendVar() function."}
+library(scran)
+fit <- trendVar(sce, use.spikes = FALSE)
+
+plot(fit$mean, fit$var)
+curve(fit$trend(x), col = 'red', lwd = 2, add = TRUE)
+```
+
+We can see that the trend line goes through the central mass of genes, and thus continue on with looking at the decomposed variance. In this method, it is assumed that the total variance is the sum of the technical and biological variance, where the technical variance can be determined by interpolating the fitted trend at the mean log-count for that gene. Thus the biological variance is the total variance minus this interpolated (technical) variance. 
+
+We can then rank and choose genes which have a biological coefficient of variance greater than zero.
+
+```{r}
+dec <- decomposeVar(sce, fit)
+dec <- dec[order(dec$bio, decreasing = TRUE), ] # order by bio var
+```
+
+```{r, include=FALSE}
+dec <- as.data.frame(apply(dec, 2, round, digits = 3))
+```
+
+```{r}
+dec[1:5, ]
+```
+
+The total number of genes with biological variance greater than zero as `r sum(dec$bio > 0)`. 
+
+Alternatively, we could use the p-value/FDR as a way to rank our genes, but do note the following (from the [`simpleSingleCell` vignette](https://bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/var.html#23_testing_for_significantly_positive_biological_components): 
+
+> "Ranking based on p-value tends to prioritize HVGs that are more likely to be true positives but, at the same time, less likely to be interesting. This is because the ratio can be very large for HVGs that have very low total variance and do not contribute much to the cell-cell heterogeneity."
+
+However we choose, we can save these highly variable genes and use them for subsequent analyses:
+
+```{r}
+hvg_genes <- rownames(dec)[dec$bio > 0]
+```
+
+For the purpose of sharing and saving this list of genes, we can stash the result into the `metadata` component of our `sce` object as follows:
+
+```{r}
+metadata(sce)$hvg_genes <- hvg_genes
+metadata(sce)$hvg_genes[1:10]
+```
+
+The `metadata` component can hold any object, as it is a list container. Any results that you'd like to keep are safe to store here, and a great way to save or share intermediate results that would otherwise be kept in separate objects.
+
+
+### Dimensionality Reduction
+
+We now can perform dimensionality reduction using our highly variable genes (`hvg_genes`) subset. To do this, we will first calculate the PCA representation via the `runPCA()` function from the `scater` package. We will calculate 50 components on our highly variable genes:
+
+```{r}
+sce <- runPCA(sce, ncomponents = 50,
+              feature_set = hvg_genes)
+```
+
+The results of these calculations will be stored in the `reducedDims` component. This method saves  the percent variance explained per component as an attribute, which can be accessed as follows, and subsequently plot the "elbow plot":
+
+```{r}
+## access the attribute where percentVar is saved in reducedDim
+pct_var_explained <- attr(reducedDim(sce, 'PCA'), 'percentVar')
+
+plot(pct_var_explained) # elbow plot
+```
+
+To calculate a 2-dimensional representation of the data, we will use the top 20 components of our PCA result to compute the UMAP representation.
+
+```{r, fig.cap="UMAP plot."}
+sce <- runUMAP(sce, use_dimred = 'PCA', n_dimred = 20)
+
+plotUMAP(sce)
+```
+
+With that, we have a canvas on which to paint our downstream analyses.
+
+
+## Downstream Statistical Analyses
+
+There are a plethora of potential downstream analyses to run, the choice of which is highly dependent on the biological objective. For this example dataset, our aim will be to identify the key cell types via a combination of clustering and differential expression.
+
+
+### Clustering
+
+Based on our earlier UMAP plot, it appears that we have a few distinct clusters. To do this computationally, we can utilize the `scran` package to:
+
+* build a shared nearest neighbor (SNN) graph
+* calculate based on the SNN graph the most representative clusters
+
+In this first step, we will specify that we will consider `k` nearest neighbors, and `d` dimensions from the PCA calculation as follows:
+
+```{r}
+set.seed(1234) # to make results reproducible
+snng <- buildSNNGraph(sce, k = 50, d = 20)
+```
+
+Following the graph construction, we can calculate the clusters using a variety of different graph-based methods from the `igraph` package. Here, we use the louvain method to determine our cell's cluster memberships.
+
+```{r}
+snng_clusters <- igraph::cluster_louvain(snng)
+```
+
+We see that we have the following numbers of cells per cluster:
+
+```{r}
+table(snng_clusters$membership)
+```
+
+To view this result graphically on the UMAP plot, we first assign the result to the `colData` component as a new column, and specify this as our color variable in the `plotUMAP()` function:
+
+```{r, fig.cap="UMAP plot showing calculated clusters."}
+colData(sce)$clusters <- as.factor(snng_clusters$membership)
+plotUMAP(sce, colour_by = 'clusters')
+```
+
+Naturally, this result will change as we tweak the number of `k` neighbors to consider and with the specific clustering algorithm, but for now we will go onwards to find markers of each of our clusters.
+
+
+### Differential Expression
+
+In this section, we will look to identify genes that are unique to each of our clusters. To accomplish this, we will lean on the `scran` package to perform the analysis, and then the `scater` package to visualize the results.
+
+For this analysis, we will limit ourselves to a top subset of highly variable genes in our `hvg_genes` set, purely for the sake of computation time. Furthermore, we will limit our consideration to genes with an *increased* log fold-change of at least 1.5 versus other clusters. We will also use the `BiocParallel` package to parallelize the computation and speed up our processing via the `BPPARAM` argument.
+
+```{r}
+markers <- findMarkers(sce, clusters = colData(sce)$clusters,
+                       subset.row = hvg_genes[1:250],
+                       lfc = 1.5, direction = 'up', log.p = TRUE, 
+                       BPPARAM = BiocParallel::MulticoreParam())
+```
+
+```{r, include=FALSE}
+markers <- lapply(markers, function(x) {
+    as.data.frame(apply(x, 2, round, digits = 3))
+})
+```
+
+We can view the top 5 markers that are differentially expressed (by our specified metrics):
+
+```{r}
+markers[[1]][1:5, ]
+```
+
+We can see that CD3D, a marker of T cells, is one of our top differentially expressed genes in cluster 1. We can plot the expression of this gene across all our clusters as follows:
+
+```{r, fig.cap="Violin plots of CD3D expression across clusters."}
+plotExpression(sce, 'CD3D', x = 'clusters')
+```
+
+This plot highlights that CD3D is more highly expressed in cluster 1 relative to _some_ of the other clusters, but not all. This can also be seen from our raw output above, where the log fold-change is calculated with respect to each cluster. There, we see that the log fold-change for CD3D is very high only relative to clusters 2 and 3 (meeting our cutoff of 1.5). 
+
+
+### Annotation
+
+#### A Manual Approach
+
+To finish off our the downstream analysis section here, we will look to annotate our clusters with a cell type designation, based on publicly available knowledge.
+
+Before we do that, let's get a broader view of our top differentially expressed genes. To do this, we can iterate over the list-object returned by `findMarkers` to get the top 10 genes per cluster, and then plot these genes in a heatmap.
+
+```{r, fig.cap="Heatmap showing top differentially expressed genes across the clusters."}
+## grab the top 10 genes per cluster (e.g. within each list component)
+genes <- lapply(markers, function(x) {
+    rownames(x)[x$Top <= 10]
+})
+
+## uniqify the set of genes returned, after coercing to a vector
+genes <- unique(unlist(genes))
+
+plotHeatmap(sce, genes,
+            colour_columns_by = "clusters",
+            show_colnames = FALSE,
+            clustering_method = 'ward.D2',
+            fontsize_row = 6)
+```
+
+Based on the heatmap output (and *a priori* knowledge), we can make some observations:
+
+* CD79A/CD79B, markers of B cells, are uniquely and highly expressed in cluster 2
+* HLA genes, present on antigen presenting cells (APCs), are highly expressed across clusters 2 and 3
+* LYZ, a marker of dendritic cells (an APC), is highly expressed in cluster 3
+* Granzymes A and B (GZMA/GZMB), and NKG7, markers of cytotoxic cells such as CD8s and NK cells, are highly expressed within (a subset of cluster 4)
+* CD3D/CD3E, markers of T cells, are expressed across clusters 5, 1, and 4
+
+Finally, we can view a selection of the genes mentioned above on our previous UMAP plot:
+
+```{r, fig.cap="Various UMAP plots showing the expression of select cell-type specific genes."}
+plotUMAP(sce, colour_by = "CD79A")
+plotUMAP(sce, colour_by = "LYZ")
+plotUMAP(sce, colour_by = "NKG7")
+plotUMAP(sce, colour_by = "CD3D")
+```
+
+Combining the information derived from our heatmap and viewing these genes on our UMAP, we can come to the following conclusion:
+
+* Cluster 2 is likely to be B cells
+* Cluster 3 is likely to be dendritic cells
+* Clusters 1, 5, 4 appear to represent a spectrum of cells with cytotoxic capabilities, likely composed of a combination of T cells and NK cells,
+* Cluster 4 exhibits an strong NK cell signature on the basis of NKG7
+
+Now that we've manually sorted our dataset on the basis of prior knowledge, let's try a more automated approach using publicly available markers.
+
+
+#### An Automated Approach
+
+Manually classifying cell types present in an scRNA-seq experiment can be prone to bias in terms of how a label is selected. Thus have emerged automated classification approaches which take a measured approach to the labeling of cell types. 
+
+One such approach - `cellassign` - applies labels in a single-cell manner based on a gene by cell type "marker matrix". Here, we utilize an existing gene by cell type annotation from a publication by [Becht et al. (2016)](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-016-1070-5) which categorizes genes into cell types based on the specificity of their expression.
+
+Let's first construct a marker matrix loosely inspired by the [Seurat PBMC 3k tutorial](https://satijalab.org/seurat/v3.0/pbmc3k_tutorial.html):
+
+```{r}
+anno <- data.frame(
+    SYMBOL = c(
+        'IL7R', 'CCR7', 'CD4', 'CD3D', 'CD3E',
+        'CD14', 'LYZ',
+        'MS4A1', 'CD79A', 'CD79B',
+        'CD8A', 'CD8B', 'CD3D', 'CD3E',
+        'GNLY', 'NKG7',
+        'FCER1A', 'CST3', 'ITGAX'
+    ),
+    cell_type = c(
+        rep('CD4 T cell', 5),
+        rep('Monocyte', 2),
+        rep('B cell', 3),
+        rep('CD8 T cell', 4),
+        rep('NK cell', 2),
+        rep('Dendritic cell', 3)
+    )
+)
+```
+
+Lastly, we'll need to reformat this matrix to fit the expectations of `cellassign`, chiefly to convert the annotation into a binary matrix of genes (rows) by cell types (columns):
+
+```{r}
+## construct rho (binary marker matrix)
+tmp <- tidyr::spread(anno, cell_type, cell_type)
+rho <- ifelse(is.na(tmp[, -1]), 0, 1)
+rownames(rho) <- tmp$SYMBOL
+
+## remove entries that are not present in our dataset
+rho <- rho[rownames(rho) %in% rownames(sce), ]
+
+rho[1:3, ]
+```
+
+We can then run the `cellassign` method to produce cell type labels on a per cell basis:
+
+```{r}
+## devtools::install_github('Irrationone/cellassign')
+library(cellassign)
+library(tensorflow)
+
+set.seed(1234)
+reticulate::py_set_seed(1234)
+fit <- cellassign(sce[rownames(rho), ],
+                  marker_gene_info = rho,
+                  s = sizeFactors(sce))
+
+## add cell type info into colData
+colData(sce)$cellassign_type <- fit$cell_type
+```
+
+```{r, fig.cap="UMAP showing the results of automated label assignment as performed by cellassign."}
+## plot the cellassign results on UMAP
+plotUMAP(sce, colour_by = 'cellassign_type')
+```
+
+In practice, some combination of the above manual and automated classification schema will likely be necessary to properly annotate an scRNA-seq dataset.
+
+
+## Accessible & Reproducible Analysis
+
+In collaborative settings, it is essential to share data and analyses. Thanks to the `SingleCellExperiment` class, most of if not all analysis steps performed can be recorded. These outputs are accessible through not only R, but also via graphical user interfaces as well that broaden the potential viewing audience.
+
+
+### Interactive Data Visualization
+
+Interactive exploration and visualization is a great way for collaborators to learn more about scRNA-seq data and analyses. In particular the `iSEE` package has been especially designed for viewing and sharing scRNA-seq. 
+
+
+```{r, eval=FALSE}
+## not run
+library(iSEE)
+iSEE(sce)
+```
+
+Based on the example analyses, we task the interested reader to assess the previous section's automatic annotation relative to the clustering results using `iSEE`.

@@ -1,0 +1,101 @@
+# (PART) Workflows {-}
+
+# Analytical Workflow Overview
+
+![Figure 1. Overview of a typical scRNA-seq workflow.](images/Workflow.png)
+
+In this chapter, we will orient you to the framework of scRNA-seq, shown in the figure above. This chapter will primarily be textual to give a brief conceptual basis to each of the steps presented below. In the subsequent chapter we will walk through a minimal analysis of a simple scRNA-seq dataset to put code to the concepts presented here, before breaking down individual steps and highlighting alternate or more advanced ways of performing specific tasks.
+
+
+## Experimental Design
+
+Before getting started with actual code, a brief word on the importance of experimental design is warranted. This step is done prior to any sequencing, and involves the proper annotation of associated experimental metadata. This metadata is essential, if not for downstream analyses then at minimum for publication of the dataset and submission to public repositories such as [NCBI GEO](https://www.ncbi.nlm.nih.gov/geo/info/seq.html). 
+
+Some key metadata to record includes, but is not limited to:
+
+* *Experimental aspects*: batch, operator/author, date collected, date processed, date submitted for sequencing
+* *Biological traits*: organism, sex, age, tissue, isolate, disease
+* *Perturbations*: genotype, treatment
+* *Sequencing strategy*: molecule, source, strategy, target, instrument model, read length, single vs paired-end sequencing, barcodes
+
+And finally, long form descriptions should be provided alongside informative sample names that encompass the key variables of the experiment.
+
+This metadata will often be read in and supplied as `colData` into the constructed `SingleCellExperiment` class object.
+
+<!-- TODO: talk about choice of platform at some point in an expanded experimental design section? -->
+
+
+## Preprocessing
+
+Once an experiment has been processed and sequenced, scRNA-seq experiments must be aligned to the transcriptome, and subsequently the reads must be quantified into a counts matrix of expression values consisting of cells versus the features of interest (genes or transcripts). While the specific bioinformatic choices defining this preprocessing pipeline are often technology- or platform-dependent, they are worth discussing briefly. 
+
+Many popular preprocessing methods are available as command line software that is run outside of R:
+
+* For the 10X Genomics platform, 10X provides `Cell Ranger`, which executes a custom pipeline compatible with gene expression as well as feature barcoding techniques such as CITE-seq. Under the hood, it uses the STAR aligner.
+* For droplet-based scRNA-seq as well as 10X, `Salmon` - a tool originally designed for bulk RNA-seq processing - has a submodule specifically designed for scRNA-seq called `Alevin`. 
+* For other scRNA-seq platforms - most often plate-based methods that demultiplex into a directory per well -  methods first created for bulk RNA-seq such as `Salmon`, `Kallisto`, and `STAR` will work.
+
+In addition to the above, there also exist Bioconductor packages tailored for scRNA-seq processing *within* R. The `scPipe` package uses the `Rsubread` package under the hood to process droplet and plate-based protocols. In addition, the `scruff` Bioconductor package is especially designed for the processing of CEL-Seq/CEL-Seq2. 
+
+One important note: some software such as `Cell Ranger` automatically filters cells silently based on quality control metrics such as via the "knee plot" method (aka barcode ranks, log-counts by log-rank). Such algorithmic filtering methods may not always work. Thus, we recommend forcing an expected number of cells to be output. In `Cell Ranger`, this takes the form of supplying the additional argument `--force-cells`. That way, you can determine your own filtering criteria and assess its efficacy, as well as perform analyses on ambient RNA using empty droplets present in your raw data.
+
+
+## Import to R
+
+In all the cases of above, the end result is a counts matrix of expression values. For the command line preprocessing methods, this matrix will need to be imported into R. This can be done with the help of `DropletUtils` (which directly creates a `SingleCellExperiment` object from 10X data via the `read10xCounts()` function), or `tximeta`/`tximport`. In cases where the counts matrix is not directly instantiated into a `SingleCellExperiment` class object, a basic one can be created manually.
+
+
+## Data Processing
+
+Once the scRNA-seq data has been imported into R and a `SingleCellExperiment` class object constructed, the next step is to create a clean expression matrix and fundamental dimensionality reduced representations of the data that can together be used in subsequent downstream analyses. 
+
+### Quality Control Metrics
+
+Quality control metrics are utilized to assess not only the overall success of the experiment, but also to determine individual cell level reaction successes and failures. This step ultimately leads to the calculation of various quality control metrics, which can be used either to completely exclude poor-quality droplets/cells or be accounted for in downstream analyses. Some example metrics include total UMI counts, doublet identification, number of mitochondrial reads as a surrogate for cell damage, and complexity (number of genes assigned at least one read). 
+
+### Normalizing Data
+
+Transforming the counts data into a normalized representation allows for cell and gene-specific biases to be eliminated prior to downstream analyses that depend on explicit gene expression value comparisons. This transformation is important for visualizing gene expression data across clusters (where cells may be of different sizes, e.g. have different library sizes) and for tasks such as differential expression analyses.
+
+### Feature Selection
+
+In most experiments, only a subset of genes drive observed heterogeneity across the population of cells profiled in an scRNA-seq experiment. The aim of performing feature selection is to both reduce computational overhead and increase statistical power in downstream analyses. While it is possible to employ *supervised learning* approaches in experiments with labeled cells (via an input of sorted populations or other markers), most scRNA-seq experiments do not have *a priori* knowledge on the identity of the cells. Thus, this necessitates *unsupervised learning* approaches to identify informative features. Metrics such as variance, deviance, and dropout are often used and fitted against gene expression to select for highly informative genes relative to their expression level.
+
+### Imputation
+
+Imputation methods have been proposed to address the challenge of the large amount of zeros observed in data from scRNA-seq. In general, these methods rely on inherent structure in the dataset. However, extra care should be taken in applying these methods, as imputation has been shown to generative false signals and decrease the reproducibility of cell-type specific markers.
+
+### Dimensionality Reduction
+
+While feature selection can ameliorate the complexity of scRNA-seq to some extent, it is often insufficient to make many analyses tractable. Dimensionality reduction can thus be applied to create low-dimensional representations that nonetheless preserve meaningful structure. Principal components analysis (PCA) often serves as the first step, calculating a large number of components which are then trimmed down to those that explain a high amount of variance. Following this, the PCA results serve as the basis for other dimensionality reduction approaches that are often used to visualize the data in 2 or 3-dimensions, including t-SNE, UMAP, and diffusion maps. Alternative, more statistically oriented approaches such as the zero-inflated negative binomial (ZiNB) transform may also be used to produce dimensionality reduced representations that account for confounding factors.
+
+### Integrating Datasets
+
+In cases where its necessary to bring together multiple distinct scRNA-seq experiments, a new avenue of approaches specifically designed to solve this problem by leveraging the richness inherent to this high-dimensional data have emerged. These new approaches specifically bypass the assumption required by traditional statistical models that the composition of the populations is either known or identical across batches, thus improving the end result of integration. 
+
+Integration approaches provide a new (potentially dimensionality reduced) representation of the data that allows for the identification of biologically similar cells between batches. This improves the performance of clustering, annotation, and the consequently the interpretability of 2- or 3-dimensional visualizations. 
+
+
+## Downstream Statistical Analyses
+
+
+
+### Clustering
+
+
+### Differential Expression
+
+
+### Trajectory Analysis
+
+
+### Annotation
+
+
+
+
+## Accessible & Reproducible Analysis
+
+### Interactive Data Visualization
+
+### Report Generation
