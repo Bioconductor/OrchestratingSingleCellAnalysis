@@ -1,28 +1,22 @@
 # Normalization 
 
 ```{r setup, include=FALSE, results='asis'}
-knitr::opts_chunk$set(echo = TRUE,
-                      eval=TRUE, # NEEDS HOTFIX
-                      message = FALSE, warning = FALSE, error = FALSE,
-                      dev = 'CairoPNG',
-                      cache = TRUE)
-
 source("workflows/extractor.R")
+knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+library(BiocStyle)
 setupHTML()
-
-options(digits = 4)
 ```
 
 ## Motivation
 
 Systematic differences in coverage between libraries are often observed in single-cell RNA sequencing data.
-This typically arises from differences in cDNA capture or PCR amplification efficiency across cells, attributable to the difficulty of achieving consistent library preparation with minimal starting material^[Back in my day, we needed a million cells to do transcriptomics! When I first heard about single-cell RNA-seq, I remember thinking that this was nonsense and that it would never work. Ah, the confidence of a first year grad student... though I did have more hair back then.].
+This typically arises from differences in cDNA capture or PCR amplification efficiency across cells, attributable to the difficulty of achieving consistent library preparation with minimal starting material^["Back in my day, we needed a million cells to do transcriptomics! Kids these days, with their microfluidics... Hey! Get off my lawn!"].
 Normalization aims to remove these systematic differences such that they do not interfere with comparisons of the expression profiles between cells, e.g., during clustering or differential expression analyses.
 
 At this point, it's worth being clear on what we mean by "systematic differences".
 For the purposes of this chaper, systematic differences refer to biases that affect all genes in a predictable manner.
-This includes, for example, a change in sequencing depth that scales up the (average) coverage of all genes by a certain factor.
-One can also consider more complex scaling effects, e.g., with respect to gene abundance, which would require non-linear normalization methods reminiscent of microarray analyses^[I consider anyone born after the first microarray paper to be "young".].
+This includes, for example, a change in sequencing depth that scales the expected coverage of all genes by a certain factor.
+One can also consider more complex scaling effects, e.g., with respect to gene abundance, which would require non-linear normalization methods reminiscent of microarray^[Remember these?] analyses.
 In contrast, general batch correction methods aim to remove gene-specific differences between batches that may not follow any predictable pattern across genes, and thus will not be considered in this chapter.
 
 ## Setting up the data
@@ -52,17 +46,23 @@ The "library size factor" for each cell is then directly proportional to its lib
 The proportionality constant is defined such that the mean size factor across all cells is equal to 1.
 This ensures that the normalized expression values are on the same scale as the original counts, which is useful for interpretation
  - especially when dealing with transformed data (see below).
-In the Zeisel brain data, the library size factors differ by up to 10-fold across cells (Figure \@ref(fig:histlib)), which is typical of the variability in coverage in scRNA-seq data. 
 
-```{r histlib, fig.cap="Distribution of size factors derived from the library size in the Zeisel brain dataset."}
+```{r}
 library(scater)
 lib.sf.zeisel <- librarySizeFactors(sce.zeisel)
+summary(lib.sf.zeisel)
+```
+
+In the Zeisel brain data, the library size factors differ by up to 10-fold across cells (Figure \@ref(fig:histlib)).
+This is typical of the variability in coverage in scRNA-seq data. 
+
+```{r histlib, fig.cap="Distribution of size factors derived from the library size in the Zeisel brain dataset."}
 hist(log10(lib.sf.zeisel), xlab="Log10[Size factor]", col='grey80')
 ```
 
 Strictly speaking, the use of library size factors assumes that there is no "imbalance" in the differentially expressed (DE) genes between any pair of cells.
 That is, any upregulation for a subset of genes is cancelled out by the same magnitude of downregulation in a different subset of genes.
-This ensures that the library size is an unbiased estimate of the relative cell-specific bias^[Unbiased bias... now that's a Rumsfeldian turn of phrase.].
+This ensures that the library size is an unbiased estimate of the relative cell-specific bias^[Yes, "unbiased bias" is a bit Rumsfeldian.].
 (Otherwise, the estimate would be compromised by composition biases, as discussed in @robinson2010scaling.)
 This may not be true in scRNA-seq applications, which means that library size normalization may not yield accurate normalized expression values for downstream analyses.
 
@@ -72,24 +72,62 @@ As such, library size normalization is usually sufficient in many applications w
 
 ## Normalization by deconvolution
 
+As previously mentioned, composition biases will be present when any unbalanced differential expression exists between samples.
+Consider the simple example of two cells where a single gene $X$ is upregulated in one cell $A$ compared to the other cell $B$.
+This upregulation means that either (i) more sequencing resources are devoted to $X$ in $A$, thus decreasing coverage of all other non-DE genes when the total library size of each cell is experimentally fixed (e.g., due to library quantification);
+or (ii) the library size of $A$, increasing its library size factor and yielding smaller normalized expression values for all non-DE genes.
+In both cases, the net effect is that non-DE genes in $A$ will incorrectly appear to be downregulated compared to $B$.
+
+The removal of composition biases is a well-studied problem for bulk RNA sequencing data analysis.
+Normalization can be performed with the `estimateSizeFactorsFromMatrix` function in the `r Biocpkg("DESeq2")` package [@anders2010differential;@love2014moderated] or with the `calcNormFactors` function [@robinson2010scaling] in the `r Biocpkg("edgeR")` package.
+These assume that most genes are not DE between cells.
+Any systematic difference in count size across the non-DE majority of genes between two cells is assumed to represent bias that is used to compute an appropriate size factor for its removal.
+
+However, single-cell data can be problematic for these bulk normalization methods due to the dominance of low and zero counts.
+To overcome this, we pool counts from many cells to increase the size of the counts for accurate size factor estimation [@lun2016pooling].
+Pool-based size factors are then "deconvolved" into cell-based factors for normalization of each cell's expression profile.
+This is performed using the `computeSumFactors()` function from `r Biocpkg("scran")`, as shown below.
+
 ```{r}
 library(scran)
 set.seed(100)
-clust.zeisel <- quickCluster(sce.zeisel)
+clust.zeisel <- quickCluster(sce.zeisel) 
 table(clust.zeisel)
+
+deconv.sf.zeisel <- computeSumFactors(sce.zeisel, 
+    cluster=clust.zeisel, sf.out=TRUE, min.mean=0.1)
+summary(deconv.sf.zeisel)
 ```
 
-```{r deconv, fig.cap="Deconvolution size factor for each cell in the Zeisel brain dataset, compared to the equivalent size factor derived from the library size. The red line corresponds to identity between the two size factors."}
-deconv.sf.zeisel <- computeSumFactors(sce.zeisel, 
-    cluster=clust.zeisel, sf.out=TRUE)
+The above code contains several points worth elaborating on:
+
+- We use a pre-clustering step with `quickCluster()` where cells in each cluster are normalized separately and the size factors are rescaled to be comparable across clusters.
+This avoids the need to assume that most genes are non-DE across the entire population - only a non-DE majority is required between pairs of clusters, which is a weaker assumption for highly heterogeneous populations.
+- By default, `quickCluster()` will use an approximate algorithm for PCA based on methods from the `r CRANpkg("irlba")` package.
+The approximation relies on stochastic initialization so we need to set the random seed (via `set.seed()`) for reproducibility.
+- `sf.out=TRUE` simply instructs the function to return the size factors directly, rather than a `SingleCellExperiment` containing the size factors.
+In the latter case, the size factors can be easily extracted with the `sizeFactors()` function.
+- The deconvolution approach will eventually fail if too many counts are zero, manifesting as nonsensical negative size factors.
+To avoid this, `computeSumFactors()` will automatically remove low-abundance genes with average counts below `min.mean`. 
+For read count data, the default value of 1 is usually satisfactory, but UMI counts are naturally lower so we set `min.mean=0.1`.
+
+We see that the deconvolution size factors exhibit cell type-specific deviations from the library size factors in Figure \@ref(deconv-zeisel).
+This is consistent with the presence of composition biases that are introduced by strong differential expression between cell types.
+Use of the deconvolution size factors adjusts for these biases to improve normalization accuracy for downstream applications.
+
+```{r deconv-zeisel, fig.cap="Deconvolution size factor for each cell in the Zeisel brain dataset, compared to the equivalent size factor derived from the library size. The red line corresponds to identity between the two size factors."}
 plot(lib.sf.zeisel, deconv.sf.zeisel, xlab="Library size factor",
-    ylab="Deconvolution size factor", log='xy', pch=16)
+    ylab="Deconvolution size factor", log='xy', pch=16,
+    col=as.integer(factor(sce.zeisel$level1class)))
 abline(a=0, b=1, col="red")
 ```
 
-## Normalization by spike-ins
+Accurate normalization is most important for procedures that involve estimation and interpretation of per-gene statistics.
+For example, composition biases can compromise DE analyses by systematically shifting the log-fold changes in one direction or another.
+However, it tends to be less useful for cell-based analyses such as clustering.
+The presence of composition biases already implies strong differences in expression profiles, so changing the normalization strategy is unlikely to affect the outcome of a clustering procedure.
 
-### Differences in total RNA content
+## Normalization by spike-ins
 
 Spike-in normalization is based on the assumption that the same amount of spike-in RNA was added to each cell [@lun2017assessing].
 Systematic differences in the coverage of the spike-in transcripts can only be due to cell-specific biases, e.g., in capture efficiency or sequencing depth.
@@ -124,9 +162,10 @@ sce.islam
 
 We apply the `computeSpikeFactors()` method to estimate size factors for all cells.
 This method computes the total count over all spike-in transcripts in each cell, and calculates size factors to equalize the total spike-in count across cells.
+It assumes that the relevant rows of the `SingleCellExperiment` have been marked as spike-ins with the `isSpike()<-` function.
+Again, we set `sf.out=TRUE` to return the spike-in size factors directly for simplicity.
 
 ```{r}
-library(scran)
 spike.sf.islam <- computeSpikeFactors(sce.islam, sf.out=TRUE)
 ```
 
@@ -148,17 +187,32 @@ In most cases, changes in total RNA content are not interesting and can be norma
 However, this may not always be appropriate if differences in total RNA are associated with a biological process of interest, e.g., cell cycle activity or T cell activation [@richard2018tcell].
 Spike-in normalization will preserve these differences such that any changes in expression between biological groups have the correct sign.
 
-### Differences in cell damage
+**However!** 
+Regardless of whether we care about total RNA content, it is critical that the spike-in transcripts are normalized using the spike-in size factors.
+Size factors computed from the counts for endogenous genes should not be applied to the spike-in transcripts, precisely because the former captures differences in total RNA content that are not experienced by the latter.
+Attempting to normalize the spike-in counts with the gene-based size factors will lead to over-normalization and incorrect quantification.
+Thus, whenever spike-in data is present, we must compute a separate set of size factors for the spike-in set.
+This is discussed below for the Zeisel dataset.
 
-```{r spikein, fig.cap="Spike-in size factor for each cell in the Zeisel brain dataset, compared to the equivalent size factor derived from the library size. The red line corresponds to identity between the two size factors."}
-spike.sf.zeisel <- computeSpikeFactors(sce.zeisel, sf.out=TRUE)
-plot(lib.sf.zeisel, spike.sf.zeisel, xlab="Library size factor",
-    ylab="Deconvolution size factor", log='xy', pch=16)
-abline(a=0, b=1, col="red")
+## Putting it all together
+
+We calculate all necessary size factors as shown below.
+Each of the `compute*Factors()` functions now returns a `SingleCellExperiment` containing the computed size factors.
+We set `general.use=FALSE` in `computeSpikeFactors()` to indicate that the spike-in size factors are only to be used for the spike-in transcripts and not for all genes in `sce.zeisel`.
+
+```{r}
+set.seed(100)
+clust.zeisel <- quickCluster(sce.zeisel) 
+sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clust.zeisel, min.mean=0.1)
+sce.zeisel <- computeSpikeFactors(sce.zeisel, general.use=FALSE)
 ```
 
-```{r spikeinbox, fig.cap="Distributions of the ratios of spike-in size factors to library size factors across cells for each cell type, as defined in the published annotations by @zeisel2015brain."}
-boxplot(split(spike.sf.zeisel/lib.sf.zeisel, sce.zeisel$level1class))
+Inspection of the `SingleCellExperiment` indicates that, indeed, two different sets of spike-ins have been added.
+We will use these for normalization of the respective features through the `normalize()` function in the next section.
+
+```{r}
+summary(sizeFactors(sce.zeisel))
+summary(sizeFactors(sce.zeisel, "ERCC")) # for spike-ins.
 ```
 
 ## Transformation
