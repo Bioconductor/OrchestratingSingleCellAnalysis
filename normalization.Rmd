@@ -208,11 +208,43 @@ sce.zeisel <- computeSpikeFactors(sce.zeisel, general.use=FALSE)
 ```
 
 Inspection of the `SingleCellExperiment` indicates that, indeed, two different sets of spike-ins have been added.
-We will use these for normalization of the respective features through the `normalize()` function in the next section.
 
 ```{r}
 summary(sizeFactors(sce.zeisel))
 summary(sizeFactors(sce.zeisel, "ERCC")) # for spike-ins.
 ```
 
-## Transformation
+We then use the `normalize()` function from `r Biocpkg("scater")` to compute normalized expression values for each cell.
+This is done by dividing the count for each gene/spike-in transcript with the appropriate size factor for that cell.
+The function also log-transforms the normalized values, creating a new assay called `"logcounts"`^[Technically, these are "log-transformed normalized expression values", but that's too much of a mouthful to fit into the assay name.].
+These log-values will be the basis of our downstream analyses in the following chapters.
+
+```{r}
+sce.zeisel <- normalize(sce.zeisel)
+assayNames(sce.zeisel)
+```
+
+## Why (log-)transform?
+
+The log-transformation is useful as differences in the log-values represent log-fold changes in expression.
+This is important in downstream procedures based on Euclidean distances, which includes many forms of clustering of dimensionality reduction.
+By operating on log-transformed data, we ensure that these procedures are measuring distances between cells based on log-fold changes in expression.
+Or in other words, which is more interesting - a gene that is expressed at an average count of 50 in cell type $A$ and 10 in cell type $B$, or a gene that is expressed at an average count of 1100 in $A$ and 1000 in $B$?
+Log-transformation focuses on the former by promoting contributions from genes with strong relative differences.
+
+When log-transforming, we need to consider the pseudo-count that is added to avoid undefined values at zero.
+Larger pseudo-counts will effectively shrink the log-fold changes between cells towards zero for low-abundance genes, meaning that downstream analyses will be driven more by differences in expression for high-abundance genes.
+Conversely, smaller pseudo-counts will increase the contribution of low-abundance genes.
+Common practice is to use a pseudo-count of 1, for the simple pragmatic reason^[It's also easy to remember.] that it preserves sparsity in the original matrix (i.e., zeroes in the input remain zeroes after transformation).
+This works well in all but the most pathological scenarios [@lun2018pseudocount].
+
+(Incidentally, the addition of the pseudo-count is the motivation for the centering of the size factors at unity.
+This ensures that both the pseudo-count and the normalized expression values are on the same scale.
+A pseudo-count of 1 can then be interpreted as an extra read or UMI for each gene.
+In practical terms, this means that the shrinkage effect of the pseudo-count diminishes as sequencing depth improves.
+This is the correct behavior as it allows log-fold change estimates to become increasingly accurate with deeper coverage.
+In contrast, if we had simply divided each cell's counts by its library size before log-transformation, accuracy of the log-fold changes would never improve regardless of how much additional sequencing we performed.)
+
+Of course, log-transformation is not the only possible transformation. 
+More sophisticated approaches can be used such as dedicated variance stabilizing transformations (e.g., from the `r Biocpkg("DESeq2")` or `r CRANpkg("sctransform")` packages), which out-perform the log-transformation for removal of the mean-variance trend.
+In practice, though, the log-transformation is a good default choice due its simplicity (a.k.a., reliability^[If a log-transformation is giving you errors, there's probably something seriously wrong with your system's math libraries.], predictability and computational efficiency) and interpretability.
