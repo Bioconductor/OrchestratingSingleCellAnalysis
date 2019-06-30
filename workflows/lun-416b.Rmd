@@ -2,25 +2,23 @@
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
 
-Obtaining a `SingleCellExperiment` object.
-
-```{r download}
-# NOTE: to be moved to ExperimentHub. 
+```{r loading}
+# NOTE: to be moved to ExperimentHub.
 # Bear with it for now.
 
 library(BiocFileCache)
 bfc <- BiocFileCache("raw_data", ask = FALSE)
-lun.zip <- bfcrpath(bfc, 
+lun.zip <- bfcrpath(bfc,
     file.path("https://www.ebi.ac.uk/arrayexpress/files",
         "E-MTAB-5522/E-MTAB-5522.processed.1.zip"))
-lun.sdrf <- bfcrpath(bfc, 
+lun.sdrf <- bfcrpath(bfc,
     file.path("https://www.ebi.ac.uk/arrayexpress/files",
         "E-MTAB-5522/E-MTAB-5522.sdrf.txt"))
 unzip(lun.zip, exdir=tempdir())
 
-plate1 <- read.delim(file.path(tempdir(), "counts_Calero_20160113.tsv"), 
+plate1 <- read.delim(file.path(tempdir(), "counts_Calero_20160113.tsv"),
     header=TRUE, row.names=1, check.names=FALSE)
-plate2 <- read.delim(file.path(tempdir(), "counts_Calero_20160325.tsv"), 
+plate2 <- read.delim(file.path(tempdir(), "counts_Calero_20160325.tsv"),
     header=TRUE, row.names=1, check.names=FALSE)
 
 gene.lengths <- plate1$Length # First column is the gene length.
@@ -51,7 +49,43 @@ levels(pheno) <- c("induced", "control")
 colData(sce.416b)$Oncogene <- pheno
 table(colData(sce.416b)$Oncogene, colData(sce.416b)$Plate)
 
-# library(scRNAseq)
-# sce.416b <- LunSpikeInData(type="416B") # TODO: this will replace the above.
+#library(scRNAseq)
+#sce.416b <- LunSpikeInData(which="416B") 
 ```
+
+```{r gene-annotation}
+library(org.Mm.eg.db)
+symb <- mapIds(org.Mm.eg.db, keys=rownames(sce.416b), keytype="ENSEMBL", column="SYMBOL")
+rowData(sce.416b)$ENSEMBL <- rownames(sce.416b)
+rowData(sce.416b)$SYMBOL <- symb
+
+library(scater)
+rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL, rowData(sce.416b)$SYMBOL)
+
+library(TxDb.Mmusculus.UCSC.mm10.ensGene)
+location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, keys=rowData(sce.416b)$ENSEMBL, 
+    column="CDSCHROM", keytype="GENEID")
+rowData(sce.416b)$CHR <- location
+```
+
+```{r quality-control}
+mito <- which(rowData(sce.416b)$CHR=="chrM")
+sce.416b <- calculateQCMetrics(sce.416b, feature_controls=list(Mt=mito))
+libsize.drop <- isOutlier(sce.416b$total_counts, nmads=3, type="lower", 
+    log=TRUE, batch=sce.416b$PlateOnco)
+feature.drop <- isOutlier(sce.416b$total_features_by_counts, nmads=3, type="lower", 
+    log=TRUE, batch=sce.416b$PlateOnco)
+spike.drop <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher",
+    batch=sce.416b$PlateOnco)
+keep <- !(libsize.drop | feature.drop | spike.drop)
+sce.416b <- sce.416b[,keep]
+```
+
+```{r normalization}
+library(scran)
+sce.416b <- computeSumFactors(sce.416b)
+sce.416b <- computeSpikeFactors(sce.416b, general.use=FALSE)
+sce.416b <- normalize(sce.416b)
+```
+
 
