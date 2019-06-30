@@ -45,8 +45,79 @@ sce.416b
 
 ### Variance of the log-counts
 
+The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as "log-counts" for simplicity) for each gene across all cells in the population.
+This has an advantage in that the feature selection is based on the same log-values that are used for later downstream steps.
+Genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells.
+By using log-values here, we ensure that our quantitative definition of heterogeneity is consistent throughout the entire analysis.
+
+Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. 
+As discussed briefly in the last chapter, the log-transformation does not achieve perfect variance stabilization.
+This means that the variance of a gene is more affected by its abundance than the underlying biological heterogeneity. 
+To account for this effect, we use the `trendVar()` function to fit a trend to the variance with respect to abundance across all genes (Figure \@ref(fig:trend-plot-pbmc)).
+
+```{r trend-plot-pbmc, fig.cap="Variance in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the trend fitted to all genes."}
+library(scran)
+
+# No spike-ins, so setting 'use.spikes=FALSE'.
+fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE, parametric=TRUE)
+
+plot(fit.pbmc$mean, fit.pbmc$var, xlab="Mean of log-expression",
+    ylab="Variance of log-expression")
+curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
+```
+
+We assume that most genes at any given abundance are dominated by technical noise - or, at least, uninteresting biological noise.
+Under this assumption, our trend represents an estimate of the technical noise as a function of abundance.
+We then use the `decomposeVar()` function to break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene's abundance;
+and the biological component, defined as the difference between the total variance and the technical component.
+This biological component represents the "interesting" variation for each gene and can be used as the metric for HVG selection.
+
+```{r}
+dec.pbmc <- decomposeVar(fit=fit.pbmc)
+
+# Ordering by most interesting genes.
+dec.pbmc <- dec.pbmc[order(dec.pbmc$bio, decreasing=TRUE),] 
+head(dec.pbmc, 10)
+```
+
+(Careful readers will notice that some genes have negative biological components.
+Negative components of variation have no obvious interpretation and can be ignored for most applications.
+They are inevitable when fitting a trend to the per-gene variances, as approximately half of the genes will lie below the trend.)
 
 ### Coefficient of variation
+
+An alternative approach to quantification uses the squared coefficient of variation (CV^2^) of the normalized expression values prior to log-transformation.
+The CV^2^ is a widely used metric for describing variation in non-negative data and is closely related to the dispersion parameter of the negative binomial distribution in packages like `r Biocpkg("edgeR")` and `r Biocpkg("DESeq2")`.
+We compute the CV^2^ for each gene in the PBMC dataset using the `improvedCV2()` function, which provides a more robust implementation of the approach described by @brennecke2013accounting.
+
+```{r}
+# No spike-ins, so setting 'spike.type=NA'.
+cv2.pbmc <- improvedCV2(sce.pbmc, spike.type=NA, parametric=TRUE)
+```
+
+This allows us to model the mean-variance relationship when considering the relevance of each gene (Figure \@ref(fig:cv2-pbmc)).
+Again, our assumption is that most genes contain random noise and that the trend captures mostly technical variation.
+Large CV$^2$ values that deviate strongly from the trend are likely to represent genes affected by biological structure.
+
+```{r cv2-pbmc, fig.cap="CV^2^ in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the fitted trend."}
+plot(cv2.pbmc$mean, cv2.pbmc$cv2, log="xy")
+o <- order(cv2.pbmc$mean)
+lines(cv2.pbmc$mean[o], cv2.pbmc$trend[o], col="dodgerblue", lwd=2)
+```
+
+For each gene, we quantify the deviation from the trend in terms of the ratio of its CV^2^ to the fitted value of trend at its abundance.
+This is more appropriate than the directly subtracting the trend from the CV^2^, as the magnitude of the ratio is not affected by the mean.
+
+```{r}
+diff <- cv2.pbmc$cv2 - cv2.pbmc$trend
+cv2.pbmc <- cv2.pbmc[order(diff, decreasing=TRUE),]
+head(cv2.pbmc, 10)
+```
+
+Both the CV^2^ and the variance of log-counts are effective metrics for quantifying variation in gene expression.
+The CV^2^ tends to give higher rank to low-abundance genes, which are implicitly penalized by pseudo-count shrinkage when computing the variance of log-counts.
+However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the use of the ratio can give high rank to genes with low absolute variance.
+We generally prefer the use of the variance of log-counts and will use it in the following sections, though the many of the same principles apply to procedures based on the CV^2^.
 
 ### Accounting for blocking factors
 
@@ -54,7 +125,6 @@ sce.416b
 
 ## Selecting highly variable genes
 
-
 ## With principal components analysis
 
-## Putting it together
+## Putting it all together
