@@ -1,0 +1,60 @@
+# Feature selection 
+
+```{r setup, echo=FALSE, results='asis'}
+source("workflows/extractor.R")
+knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+library(BiocStyle)
+setupHTML()
+```
+
+## Motivation
+
+We often use scRNA-seq data in exploratory analyses to characterize heterogeneity across cells.
+Procedures like clustering and dimensionality reduction compare cells based on their gene expression profiles, which involves aggregating per-gene differences into a single (dis)similarity metric between a pair of cells.
+The choice of genes to use in this calculation has a major impact on the behavior of the metric and the performance of downstream methods.
+We want to select genes that contain useful information about the biology of the system while removing genes that contain random noise.
+This aims to preserve interesting biological structure without the variance that obscures that structure.
+It also reduces the size of the dataset to improve computational efficiency of later steps.
+
+The simplest approach to feature selection is to select the most variable genes based on their expression across the population.
+This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise (or "uninteresting" biological variation, e.g., transcriptional bursting^[Of course, if this is interesting, then you'll have to do something else.]).
+Several methods are available to quantify the variation per gene and to select the highly variable genes (HVGs), which we will discuss below.
+This is often complemented by a more sophisticated PCA-based approach that compresses multiple features into a single "eigengene" [@langfelder2007eigengene].
+
+To demonstrate the various feature selection strategies, we will use the 10X PBMC dataset:
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/tenx-pbmc4k", "normalization", "sce.pbmc")
+```
+
+```{r}
+sce.pbmc
+```
+
+As well as the 416B dataset:
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/lun-416b", "normalization", "sce.416b")
+```
+
+```{r}
+sce.416b
+```
+
+## Quantifying per-gene variation
+
+### Variance of the log-counts
+
+
+### Coefficient of variation
+
+### Accounting for blocking factors
+
+### Quantifying technical noise
+
+## Selecting highly variable genes
+
+
+## With principal components analysis
+
+## Putting it together
