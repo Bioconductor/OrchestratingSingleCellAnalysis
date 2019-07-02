@@ -18,4 +18,13 @@ Robert Amezquita is a Postdoctoral Fellow in the Immunotherapy Integrated Resear
 
 ### *Aaron Lun, PhD*
 
-Aaron Lun enjoys long walks on the beach, and is "just a regular guy who likes developing software to solve biological problems. [He] also lives vicariously through collaborations with actual biologists." Throughout such adventures, Aaron has been a continual contributor to Bioconductor, and is a thought leader in the field of single-cell genomic analysis. He has developed and contributed to a wide array of popular packages for scRNA-seq analysis such as *scater*, *scran*, *iSEE*, amongst countless more. One of the top contributors to the Bioconductor forums, Aaron has guided many aspiring bioinformaticians. Aaron Lun is currently a Scientist at Genentech, coming from being a Research Associate at the Cancer Research UK Cambridge Institute in the John Marioni group.
+When one thinks of single-cell bioinformatics, one thinks of several titans who bestride the field.
+Unfortunately, they weren't available, so we had to make do with Aaron instead.
+He likes long walks on the beach (as long as there's Wifi) and travelling (but only in business class).
+His friends say that he is "absolutely insane" and "needs to get a life", or they would if they weren't mostly imaginary.
+His GitHub account is his Facebook and his Slack is his Twitter.
+He maintains more Bioconductor packages than he has phone numbers on his cell.
+He has a recurring event on his Google Calender to fold his laundry.
+He is - the most boring man in the world.
+("I don't often cry when I watch anime, but when I do, my tears taste like Dos Equis.")
+He currently works as a Scientist at Genetech after a stint as a research associate in John Marioni's group at the CRUK Cambridge Institute, which was preceded by a PhD with Gordon Smyth at the Walter and Eliza Hall Institute for Medical Research.
