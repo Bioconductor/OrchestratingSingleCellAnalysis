@@ -42,7 +42,7 @@ For a more R centric look at using Git (and Github), we highly recommend checkin
 
 ### Other Languages
 
-A frequent question that comes up is "What else should I learn besides R?" Firstly, we believe that [honing your R skills](#getting-started-with-r) is first and foremost, and beyond just R, learning Shell/Bash and Git covered in the [_Nice Friends for R_](#nice-friends-for-r) section are already a great start. For those just getting started, these skills should become comfortable in practice before moving on.
+A frequent question that comes up is "What else should I learn besides R?" Firstly, we believe that [honing your R skills](#getting-started-with-r) is first and foremost, and beyond just R, learning Shell/Bash and Git covered in the [_Nice Companions for R_](#nice-companions-for-r) section are already a great start. For those just getting started, these skills should become comfortable in practice before moving on.
 
 However, there are indeed benefits to going beyond just R. At a basic level, learning other programming languages helps broaden one's perspective - similar to learning multiple spoken or written languages, learning about other programming languages (even if only in a cursory manner) helps one identify broader patterns that may be applicable across languages. 
 
