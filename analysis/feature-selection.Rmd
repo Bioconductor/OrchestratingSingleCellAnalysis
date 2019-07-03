@@ -92,7 +92,7 @@ We compute the CV^2^ for each gene in the PBMC dataset using the `improvedCV2()`
 
 ```{r}
 # No spike-ins, so setting 'spike.type=NA'.
-cv2.pbmc <- improvedCV2(sce.pbmc, spike.type=NA, parametric=TRUE)
+cv2.pbmc <- improvedCV2(sce.pbmc, spike.type=NA) 
 ```
 
 This allows us to model the mean-variance relationship when considering the relevance of each gene (Figure \@ref(fig:cv2-pbmc)).
@@ -119,9 +119,68 @@ The CV^2^ tends to give higher rank to low-abundance genes, which are implicitly
 However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the use of the ratio can give high rank to genes with low absolute variance.
 We generally prefer the use of the variance of log-counts and will use it in the following sections, though the many of the same principles apply to procedures based on the CV^2^.
 
+### Quantifying technical noise
+
 ### Accounting for blocking factors
 
-### Quantifying technical noise
+#### Fitting block-specific trends
+
+Data containing multiple batches will often exhibit batch effects (see Chapter ??? for more details).
+We are usually not interested in HVGs that are driven by batch effects.
+Rather, we want to focus on genes that are highly variable within each batch.
+This is naturally achieved by performing trend fitting and variance decomposition separately for each batch.
+We demonstrate this approach by treating each plate in the 416B dataset as a different batch, using the `multiBlockVar()` function.
+
+```{r}
+sce.416b.2 <- multiBlockNorm(sce.416b, block=sce.416b$Plate)
+dec.416b <- multiBlockVar(sce.416b.2, block=sce.416b$Plate)
+head(dec.416b[order(dec.416b$bio, decreasing=TRUE),1:6])
+```
+
+The use of a batch-specific trend fit is useful as it accommodates differences in the mean-variance trends between batches.
+This is especially important if batches exhibit systematic technical differences, e.g., differences in coverage or in the amount of spike-in RNA added.
+In this case, there are only minor differences between the trends in Figure \@ref(fig:blocked-fit), which indicates that the experiment was tightly replicated across plates.
+The analysis of each plate yields estimates of the biological and technical components for each gene, which are averaged across plates to take advantage of information from multiple batches. 
+
+```{r blocked-fit, fig.asp=0.5, fig.wide=TRUE, fig.cap="Variance in the 416B data set as a function of the mean after blocking on the plate of origin. Each plot represents the results for a single plate, each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
+par(mfrow=c(1,2))
+blocked.stats <- dec.416b$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    is.spike <- isSpike(sce.416b.2)
+    points(current$mean[is.spike], current$total[is.spike], col="red", pch=16)
+    curve(metadata(current)$trend(x), col='dodgerblue', add=TRUE, lwd=2) 
+}
+```
+
+Incidentally, we run `multiBlockNorm()` to adjust the size factors within each level of the blocking factor.
+Specifically, the spike-in size factors across cells in a given batch is scaled so that the mean is equal to that of the gene-based size factors for the same set of cells.
+Log-normalized expression values are then recalculated using these centred size factors.
+This procedure ensures that the average abundances of the spike-in transcripts are comparable to the endogenous genes,
+avoiding problems due to differences in the quantity of spike-in RNA between batches.
+Of course, this is not necessary if no spike-ins were available, in which case we should set `trend.var=list(use.spikes=FALSE)` in the `multiBlockVar()` call.
+
+#### Using a design matrix
+
+The use of block-specific trends is the recommended approach for experiments with a single blocking factor.
+However, this is not practical for studies involving a large number of blocking factors and/or covariates.
+In such cases, we can use the `design=` argument to specify a design matrix with uninteresting factors of variation.
+`decomposeVar()` will then focus on genes with large residual variances, i.e., beyond that explained by the design matrix.
+We illustrate again with the 416B data set, blocking on the plate of origin and oncogene induction.
+
+```{r}
+design <- model.matrix(~Plate + Oncogene, colData(sce.416b))
+fit.416b <- trendVar(sce.416b, design=design)
+dec.416b <- decomposeVar(sce.416b, fit.416b)
+dec.416b[order(dec.416b$bio, decreasing=TRUE),]
+```
+
+This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level.
+Briefly, the technical component is estimated as the fitted value of the trend at the average abundance for each gene.
+However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships.
+The `multiBlockVar()` approach is safer in situations where it is applicable.
 
 ## Selecting highly variable genes
 
