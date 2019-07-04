@@ -59,14 +59,14 @@ To account for this effect, we use the `trendVar()` function to fit a trend to t
 library(scran)
 
 # No spike-ins, so setting 'use.spikes=FALSE'.
-fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE, parametric=TRUE)
+fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE)
 
 plot(fit.pbmc$mean, fit.pbmc$var, xlab="Mean of log-expression",
     ylab="Variance of log-expression")
 curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
-We assume that most genes at any given abundance are dominated by technical noise - or, at least, uninteresting biological noise.
+At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see \@ref(sec:spikeins) for details).
 Under this assumption, our trend represents an estimate of the technical noise as a function of abundance.
 We then use the `decomposeVar()` function to break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene's abundance;
 and the biological component, defined as the difference between the total variance and the technical component.
@@ -115,11 +115,54 @@ head(cv2.pbmc, 10)
 ```
 
 Both the CV^2^ and the variance of log-counts are effective metrics for quantifying variation in gene expression.
-The CV^2^ tends to give higher rank to low-abundance genes, which are implicitly penalized by pseudo-count shrinkage when computing the variance of log-counts.
-However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the use of the ratio can give high rank to genes with low absolute variance.
+The CV^2^ tends to give higher rank to low-abundance HVGs driven by upregulation in rare subpopulations, for which the increase in variance on the raw scale is stronger than that on the log-scale.
+However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the reliance on the ratio can assign high rank to genes with low absolute variance.
 We generally prefer the use of the variance of log-counts and will use it in the following sections, though the many of the same principles apply to procedures based on the CV^2^.
 
-### Quantifying technical noise
+### Quantifying technical noise {#sec:spikeins}
+
+The use of a trend fitted to endogenous genes assumes that the expression profiles of most genes are dominated by random technical noise.
+In practice, all expressed genes will exhibit some non-zero level of biological variability due to events like transcriptional bursting.
+This suggests that our estimates of the technical component are likely to be inflated. 
+It would be more appropriate to consider these estimates as technical noise plus "uninteresting" biological variation, under the assumption that most genes are unaffected by the relevant heterogeneity in the population.
+
+This assumption is generally reasonable but may be problematic in some scenarios where many genes at a particular abundance are affected by a biological process.
+For example, strong upregulation of cell type-specific genes may result in an enrichment of HVGs at high abundances.
+This would inflate the fitted trend at high abundances and compromise the detection of the affected genes.
+We can avoid this problem by fitting a mean-dependent trend to the variance of the spike-in transcripts, if they are available (Figure \@ref(fig:spike-416b)).
+The premise here is that spike-ins should not be affected by biological variation, so the fitted value of the spike-in trend should represent a better estimate of the technical component for each gene.
+
+```{r spike-416b, fig.cap="Variance in the 416B data set as a function of the mean. Each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
+fit.416b <- trendVar(sce.416b)
+dec.416b <- decomposeVar(sce.416b, fit.416b)
+dec.416b <- dec.416b[order(dec.416b$bio, decreasing=TRUE),]
+head(dec.416b, 10)
+
+plot(dec.416b$mean, dec.416b$total, xlab="Mean of log-expression",
+    ylab="Variance of log-expression")
+is.spike <- isSpike(sce.416b)
+points(dec.416b$mean[is.spike], dec.416b$total[is.spike], col="red", pch=16)
+curve(fit.416b$trend(x), col="dodgerblue", add=TRUE, lwd=2)
+```
+
+In the absence of spike-in data, one can attempt to create a trend by making some distributional assumptions about the noise.
+For example, UMI counts typically exhibit near-Poisson noise when only technical effects are considered.
+This can be used to construct a mean-variance trend in the log-counts (Figure \@ref(fig:tech-pbmc)) with the `makeTechTrend()` function.
+Note the increased residuals of the high-abundance genes, which can be interpreted as the amount of biological variation that was assumed to be "uninteresting" when fitting the gene-based trend in Figure \@ref(fig:trend-plot-pbmc).
+
+```{r tech-pbmc, fig.cap="Variance of normalized log-expression values for each gene in the PBMC dataset, plotted against the mean log-expression. The blue line represents the mean-dependent trend fitted to the variances, while the red line represents the Poisson noise."}
+tech.trend <- makeTechTrend(x=sce.pbmc)
+
+fit.pbmc2 <- fit.pbmc
+fit.pbmc2$trend <- tech.trend # overwrite trend.
+dec.pbmc2 <- decomposeVar(fit=fit.pbmc2) 
+dec.pbmc2 <- dec.pbmc2[order(dec.pbmc2$bio, decreasing=TRUE),]
+head(dec.pbmc2)
+
+plot(dec.pbmc2$mean, dec.pbmc2$total, pch=16, xlab="Mean of log-expression",
+    ylab="Variance of log-expression")
+curve(fit.pbmc2$trend(x), col="dodgerblue", add=TRUE)
+```
 
 ### Accounting for blocking factors
 
@@ -180,7 +223,7 @@ dec.416b[order(dec.416b$bio, decreasing=TRUE),]
 This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level.
 Briefly, the technical component is estimated as the fitted value of the trend at the average abundance for each gene.
 However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships.
-The `multiBlockVar()` approach is safer in situations where it is applicable.
+The `multiBlockVar()` approach is safer and should be preferred in all situations where it is applicable.
 
 ## Selecting highly variable genes
 
