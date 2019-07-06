@@ -1,0 +1,39 @@
+# Dimensionality reduction
+
+```{r setup, echo=FALSE, results='asis'}
+source("workflows/extractor.R")
+knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+library(BiocStyle)
+setupHTML()
+```
+
+## Overview
+
+Many scRNA-seq analysis procedures involve comparing cells based on their expression values across multiple genes.
+For example, clustering aims to identify cells with similar transcriptomic profiles by computing Euclidean distances across genes.
+In these applications, each individual gene represents a dimension of the data.
+More intuitively, if we had a scRNA-seq data set with two genes, we could make a two-dimensional plot where each axis represents the expression of one gene and each point in the plot represents a cell.
+This concept can be extended to data sets with thousands of genes where each cell's expression profile defines its location in the high-dimensional expression space.
+
+Dimensionality reduction aims to reduce the number of separate dimensions^[Duh.] in the data.
+This is possible because different genes are correlated if they are affected by the same biological process.
+Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
+This reduces computational work in downstream analyses as calculations only need to be performed for a few dimensions rather than thousands of genes.
+It also reduces noise by averaging across multiple genes to obtain a more precise representation of the patterns in the data.
+Certain methods can reduce the number of dimensions down to 2 or 3 for visualization of the data.
+
+We will use the @zeisel2015brain dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/zeisel-brain", "variance-modelling", c("sce.zeisel", "chosen.hvgs"))
+```
+
+```{r}
+sce.zeisel
+```
+
+## Principal components analysis
+
+## t-SNE
+
+## UMAP
