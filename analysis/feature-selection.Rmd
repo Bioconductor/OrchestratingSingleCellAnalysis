@@ -307,3 +307,24 @@ The obvious cost is that more noise is also captured, which can reduce the resol
 From a practical perspective, the use of more genes involves more computational work in each downstream step.
 
 ## Putting it all together
+
+The few lines of code below will select the top 10% of genes with the highest biological components.
+
+```{r}
+fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE)
+dec.pbmc <- decomposeVar(fit=fit.pbmc)
+chosen <- rownames(dec.pbmc)[order(dec.pbmc$bio, decreasing=TRUE)]
+chosen <- head(chosen, nrow(dec.pbmc) * 0.1)
+length(chosen)
+```
+
+We can then subset the `SingleCellExperiment` to only retain our selection of HVGs.
+This ensures that downstream methods will only use these genes for their calculations.
+
+```{r}
+sce.pbmc <- sce.pbmc[chosen,]
+dim(sce.pbmc)
+```
+
+Alternatively, some methods may allow users to pass in the full `SingleCellExperiment` object and specify the genes to use via an extra argument like `subset.row=`.
+This may be more convenient in the context of the overall analysis, where genes outside of this subset may still be of interest during DE analyses or for visualization.
