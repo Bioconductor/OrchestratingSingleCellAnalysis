@@ -70,7 +70,13 @@ reducedDimNames(sce.zeisel)
 
 The PCA is based on a mathematical technique called the singular decomposition decomposition (SVD).
 By default, `runPCA()` will use an exact SVD based on base R's `svd()` function.
-For large data sets, greater efficiency is obtained by using approximate SVD algorithms.
+It then only keeps the first 50 PCs for downstream analysis.
+
+```{r}
+dim(reducedDim(sce.zeisel, "PCA"))
+```
+
+For large data sets, greater efficiency is obtained by using approximate SVD algorithms that only compute the top PCs.
 For example, we can use methods from the `r CRANpkg("irlba")` package:
 
 ```{r}
@@ -83,7 +89,7 @@ reducedDimNames(sce.zeisel)
 
 The `BSPARAM=` argument from `r Biocpkg("BiocSingular")` provides a flexible interface for specifying different SVD algorithms. 
 Any function that accepts a `BSPARAM=` argument can often be sped up by using an alternative SVD algorithm.
-Another example is to perform SVD using methods from the `r CRANpkg("rsvd")` package:
+Another strategy is to perform the SVD using methods from the `r CRANpkg("rsvd")` package:
 
 ```{r, eval=FALSE}
 set.seed(1001) # Slightly different seed to add some variety!
@@ -92,12 +98,92 @@ sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
 reducedDimNames(sce.zeisel)
 ```
 
-The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results^[Some of us leave coded messages in binary via the seeds.].
+The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results^[Some of us leave coded messages in binary via the seeds. Just so you know.].
 
 ### Choosing the number of PCs
 
+#### Motivation
 
+How many of the top PCs should we retain for downstream analyses?
+The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
+Using more PCs will avoid discarding biological signal in later PCs, at the cost of retaining more noise.
+Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
+This is often satisfactory provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
+Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of $d$.
 
-## t-SNE
+#### Using the elbow point
+
+A simple heuristic for choosing $d$ involves identifying the elbow point in the percentage of variance explained by successive PCs.
+This refers to the "elbow" in the curve of a scree plot as shown in Figure \@ref(fig:elbow).
+
+```{r elbow, fig.cap="Percentage of variance explained by successive PCs in the Zeisel brain data. The identified elbow point is marked with a red line."}
+# Hoping to find this guy a better home.
+elbowFinder <- function(var.exp) {
+    var.exp <- sort(var.exp, decreasing=TRUE)
+
+    dy <- -diff(range(var.exp))
+    dx <- length(var.exp) - 1
+    l2 <- sqrt(dx^2 + dy^2)
+    dx <- dx/l2
+    dy <- dy/l2
+
+    dy0 <- var.exp - var.exp[1]
+    dx0 <- seq_along(var.exp) - 1
+
+    parallel.l2 <- sqrt((dx0 * dx)^2 + (dy0 * dy)^2)
+    normal.x <- dx0 - dx * parallel.l2
+    normal.y <- dy0 - dy * parallel.l2
+    normal.l2 <- sqrt(normal.x^2 + normal.y^2)
+
+    which.max(normal.l2)
+}
+
+# Percentage of variance explained is tucked away in the attributes.
+percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
+chosen.elbow <- elbowFinder(percent.var)
+chosen.elbow
+
+plot(percent.var, xlab="PC", ylab="Variance explained (%)")
+abline(v=chosen.elbow, col="red")
+```
+
+Our assumption is that each of the top PCs capturing biological signal should explain much more variance than the remaining PCs.
+Thus, there should be a sharp drop in the percentage of variance explained when we move past the last "biological" PC.
+This manifests as an elbow in the scree plot, the location of which serves as a natural choice for $d$.
+
+From a practical perspective, the use of the elbow point tends to retain fewer PCs compared to other methods.
+The definition of "much more variance" is relative so, in order to be retained, later PCs must explain a amount of variance that is comparable to that explained by the first few PCs.
+Strong biological variation in the early PCs will shift the elbow to the left, potentially excluding weaker (but still interesting) variation in the next PCs immediately following the elbow.
+
+#### Using the technical noise
+
+Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
+For example, one might retain the top set of PCs that explains 80% of the total variation in the data.
+Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
+Instead, we define $T$ as the proportion of variance in the data that is attributed to the biological component.
+This is done using the `denoisePCA()` function, which uses our estimates from `decomposeVar()` to determine $d$.
+
+```{r}
+# Setting value="n" to just report the number.
+# Setting max.rank=200 to avoid it maxing out at 100.
+# Also setting BSPARAM to perform a fast SVD.
+set.seed(001001001)
+denoised.n <- denoisePCA(sce.zeisel, technical=dec.zeisel, value='n',
+    subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
+as.integer(denoised.n)
+```
+
+This choice of $d$ represents the lower bound on the number of PCs required to retain all biological variation.
+Any fewer PCs will definitely discard variance in the biological component.
+In reality, the choice returned by `denoisePCA()` will only be optimal if the early PCs capture all the biological signal with minimal noise.
+This is unlikely to be true as the PCA cannot distinguish between technical noise and weak biological signal in the later PCs.
+
+From a practical perspective, the `denoisePCA()` approach retains more PCs than the elbow point method.
+This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
+Whether this is a "better" outcome depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+
+### Visualizing the PCs
+
+## t-stochastic neighbor embedding
 
 ## UMAP

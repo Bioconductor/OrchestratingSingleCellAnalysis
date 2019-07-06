@@ -39,10 +39,10 @@ sce.zeisel <- normalize(sce.zeisel)
 ```
 
 ```{r variance-modelling}
-var.fit <- trendVar(sce.zeisel)
-var.out <- decomposeVar(sce.zeisel, var.fit)
+fit.zeisel <- trendVar(sce.zeisel)
+dec.zeisel <- decomposeVar(sce.zeisel, fit.zeisel)
 
 # Taking 10% of the genes with the top biological components.
-ordered.genes <- rownames(var.out)[order(var.out$bio, decreasing=TRUE)]
-chosen.hvgs <- head(ordered.genes, 0.1 * nrow(var.out))
+ordered.genes <- rownames(dec.zeisel)[order(dec.zeisel$bio, decreasing=TRUE)]
+chosen.hvgs <- head(ordered.genes, 0.1 * nrow(dec.zeisel))
 ```
