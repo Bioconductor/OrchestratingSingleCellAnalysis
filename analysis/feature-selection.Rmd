@@ -19,9 +19,7 @@ It also reduces the size of the dataset to improve computational efficiency of l
 The simplest approach to feature selection is to select the most variable genes based on their expression across the population.
 This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise (or "uninteresting" biological variation, e.g., transcriptional bursting^[Of course, if this is interesting, then you'll have to do something else.]).
 Several methods are available to quantify the variation per gene and to select the highly variable genes (HVGs), which we will discuss below.
-This is often complemented by a more sophisticated PCA-based approach that compresses multiple features into a single "eigengene" [@langfelder2007eigengene].
-
-To demonstrate the various feature selection strategies, we will use the 10X PBMC dataset:
+For demonstration, we will use the 10X PBMC dataset:
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/tenx-pbmc4k", "normalization", "sce.pbmc")
@@ -75,9 +73,8 @@ This biological component represents the "interesting" variation for each gene a
 ```{r}
 dec.pbmc <- decomposeVar(fit=fit.pbmc)
 
-# Ordering by most interesting genes.
-dec.pbmc <- dec.pbmc[order(dec.pbmc$bio, decreasing=TRUE),] 
-head(dec.pbmc, 10)
+# Ordering by most interesting genes for inspection.
+dec.pbmc[order(dec.pbmc$bio, decreasing=TRUE),] 
 ```
 
 (Careful readers will notice that some genes have negative biological components.
@@ -109,14 +106,13 @@ For each gene, we quantify the deviation from the trend in terms of the ratio of
 This is more appropriate than the directly subtracting the trend from the CV^2^, as the magnitude of the ratio is not affected by the mean.
 
 ```{r}
-diff <- cv2.pbmc$cv2 - cv2.pbmc$trend
-cv2.pbmc <- cv2.pbmc[order(diff, decreasing=TRUE),]
-head(cv2.pbmc, 10)
+diff <- cv2.pbmc$cv2/cv2.pbmc$trend
+cv2.pbmc[order(diff, decreasing=TRUE),]
 ```
 
 Both the CV^2^ and the variance of log-counts are effective metrics for quantifying variation in gene expression.
 The CV^2^ tends to give higher rank to low-abundance HVGs driven by upregulation in rare subpopulations, for which the increase in variance on the raw scale is stronger than that on the log-scale.
-However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the reliance on the ratio can assign high rank to genes with low absolute variance.
+However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the reliance on the ratio can assign high rank to uninteresting genes with low absolute variance.
 We generally prefer the use of the variance of log-counts and will use it in the following sections, though the many of the same principles apply to procedures based on the CV^2^.
 
 ### Quantifying technical noise {#sec:spikeins}
@@ -135,8 +131,7 @@ The premise here is that spike-ins should not be affected by biological variatio
 ```{r spike-416b, fig.cap="Variance in the 416B data set as a function of the mean. Each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
 fit.416b <- trendVar(sce.416b)
 dec.416b <- decomposeVar(sce.416b, fit.416b)
-dec.416b <- dec.416b[order(dec.416b$bio, decreasing=TRUE),]
-head(dec.416b, 10)
+dec.416b[order(dec.416b$bio, decreasing=TRUE),]
 
 plot(dec.416b$mean, dec.416b$total, xlab="Mean of log-expression",
     ylab="Variance of log-expression")
@@ -215,9 +210,9 @@ We illustrate again with the 416B data set, blocking on the plate of origin and 
 
 ```{r}
 design <- model.matrix(~Plate + Oncogene, colData(sce.416b))
-fit.416b <- trendVar(sce.416b, design=design)
-dec.416b <- decomposeVar(sce.416b, fit.416b)
-dec.416b[order(dec.416b$bio, decreasing=TRUE),]
+fit.416b.2 <- trendVar(sce.416b, design=design)
+dec.416b.2 <- decomposeVar(sce.416b, fit.416b.2)
+dec.416b.2[order(dec.416b.2$bio, decreasing=TRUE),]
 ```
 
 This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level.
@@ -227,6 +222,88 @@ The `multiBlockVar()` approach is safer and should be preferred in all situation
 
 ## Selecting highly variable genes
 
-## With principal components analysis
+### Based on the largest metrics
+
+Once we have quantified the per-gene variation, the next step is to select the subset of HVGs to use in downstream analyses.
+The simplest approach is to simply take the top $X$ genes with the largest values for the relevant measure of variation.
+For `decomposeVar()`,  this would be the genes with the largest biological components:
+
+```{r}
+hvg.pbmc.var <- head(order(dec.pbmc$bio, decreasing=TRUE), 1000)
+hvg.pbmc.var <- rownames(dec.pbmc)[hvg.pbmc.var]
+```
+
+For `improvedCV2()`, this would instead be the genes with the largest ratios:
+
+```{r}
+hvg.pbmc.cv2 <- head(order(diff, decreasing=TRUE), 1000)
+hvg.pbmc.cv2 <- rownames(dec.pbmc)[hvg.pbmc.cv2]
+```
+
+The main advantage of this approach is that the user can easily control the number of genes retained.
+This ensures that the computational complexity of downstream calculations is easily predicted.
+It is also fairly easy to translate the choice of $X$ into a biological statement.
+Recall our trend-fitting assumption that most genes are not differentially expressed between cell types or states in our population.
+If we quantify this assumption into a statement that, e.g., no more than 5% of genes are differentially expressed, we can simply take the top 5% of genes with the largest variance.
+
+The main disadvantage of this approach that it turns HVG selection into a competition between genes, whereby a subset of very highly variable genes can push other informative genes out of the top set.
+This can be problematic if a single subpopulation is very different from the others.
+In such cases, the top set will be dominated by differentially expressed genes involving the outlier subpopulation, compromising resolution of heterogeneity between the other populations.
+Similar problems are encountered when the magnitude of the chosen variance measure varies with abundance.
+
+The choice of $X$ is also fairly arbitrary, with any value from 500 to 5000 being considered "reasonable". 
+We have chosen $X=1000$ in the code above though there is no particular _a priori_ reason for doing so.
+A larger $X$ will reduce the risk of discarding signal at the cost of increasing noise that obscures signal.
+Our recommendation is to simply pick an arbitrary $X$ and proceed with the rest of the analysis, with the intention of testing other choices later, rather than spending much time worrying about obtaining the "optimal" value^[When everything's said and done, the "optimal" value is one that gets you a figure for your manuscript.].
+
+### Based on a fixed threshold
+
+Another approach to feature selection is to set a fixed threshold of one of the metrics.
+This is most commonly done with the (adjusted) $p$-value reported by each of the above methods.
+The $p$-value for each gene is generated by testing against the null hypothesis that the variance is equal to the trend.
+For example, we might define our HVGs as all genes that have adjusted $p$-values below 0.05.
+
+```{r}
+hvg.pbmc.var.2 <- rownames(dec.pbmc)[dec.pbmc$FDR <= 0.05]
+length(hvg.pbmc.var.2)
+```
+
+This approach is simple to implement and - if the test holds its size - it controls the false discovery rate (FDR).
+That is, it returns a subset of genes where the proportion of false positives is expected to be below the specified threshold.
+This can occasionally be useful in applications where the HVGs themselves are of interest.
+For example, if a collaborator were to take a list of HVGs back to the bench to verify the existence of heterogeneous expression for some of the genes, we would want to control the FDR in that list.
+
+The downside of this approach is that it is less predictable than the top $X$ strategy.
+The number of genes returned depends on the type II error rate of the test and the severity of the multiple testing correction.
+One might obtain no genes or every gene at a given FDR threshold, depending on the circumstances.
+Moreover, control of the FDR is usually not helpful at this stage of the analysis.
+We are not interpreting the individual HVGs themselves but are only using them for feature selection prior to downstream steps.
+There is no reason to think that a 5% threshold on the FDR yields a more suitable compromise between bias and noise.
+
+### Keeping all genes above the trend
+
+As the title suggests, this involves keeping all genes above the trend.
+The rationale is to only remove the obviously uninteresting genes with variances below the trend.
+By doing so, we avoid the need to make any judgement calls regarding what level of variation is interesting enough to retain.
+This approach represents one extreme of the bias-variance trade-off where bias is minimized at the cost of maximizing noise.
+For `decomposeVar()`, it equates to keeping all positive biological components:
+
+```{r}
+hvg.pbmc.var.3 <- rownames(dec.pbmc)[dec.pbmc$bio > 0]
+length(hvg.pbmc.var.3)
+```
+
+For `improvedCV2()`, this involves keeping all ratios above 1:
+
+```{r}
+hvg.pbmc.cv2.3 <- rownames(cv2.pbmc)[diff > 0]
+length(hvg.pbmc.cv2.3)
+```
+
+This strategy is the most conservative as it does not discard any potential biological signal.
+Weak or secondary population structure is given the chance to manifest as the affected genes are retained.
+This makes it useful for reliable automated processing of diverse data sets where the primary factor of variation in one data set is a secondary factor in another data set (and thus overlooked by the top $X$ approach).
+The obvious cost is that more noise is also captured, which can reduce the resolution of otherwise well-separated populations.
+From a practical perspective, the use of more genes involves more computational work in each downstream step.
 
 ## Putting it all together
