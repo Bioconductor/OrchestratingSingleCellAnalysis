@@ -34,6 +34,70 @@ sce.zeisel
 
 ## Principal components analysis
 
+### Background
+
+Principal components analysis (PCA) discovers axes in high-dimensional space that capture the largest amount of variation.
+This is best understood by imagining each axis as a line.
+Say we draw a line anywhere, and we move all cells in our data set onto this line by the shortest path.
+The variance captured by this axis is defined as the variance across cells along that line.
+In PCA, the first axis (or "principal component", PC) is chosen such that it captures the greatest variance across cells.
+The next PC is chosen such that it is orthogonal to the first and captures the greatest remaining amount of variation, and so on.
+
+By definition, the top PCs capture the dominant factors of heterogeneity in the data set.
+Thus, we can perform dimensionality reduction by restricting downstream analyses to the top PCs.
+This strategy is simple, highly effective and widely used throughout the data sciences.
+It takes advantage of the well-studied theoretical properties of the PCA - namely, that a low-rank approximation formed from the top PCs is the optimal approximation of the original data for a given matrix rank.
+It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.
+
+When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner.
+This means the the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
+By comparison, random (technical) noise is expected to affect each gene independently.
+There is unlikely to be an axis that can capture random variation across many genes, suggesting that noise is mostly concentrated in the later PCs.
+This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise. 
+
+### Performing the PCA
+
+We perform the PCA on the log-normalized expression values using the HVGs we selected earlier.
+By restricting to the HVGs, we reduce computational work and noise to improve the performance of the PCA.
+(While PCA is robust to noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure.)
+The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and store the coordinates in the output object.
+
+```{r}
+library(scater)
+sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE)
+reducedDimNames(sce.zeisel)
+```
+
+The PCA is based on a mathematical technique called the singular decomposition decomposition (SVD).
+By default, `runPCA()` will use an exact SVD based on base R's `svd()` function.
+For large data sets, greater efficiency is obtained by using approximate SVD algorithms.
+For example, we can use methods from the `r CRANpkg("irlba")` package:
+
+```{r}
+library(BiocSingular)
+set.seed(1000)
+sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
+    BSPARAM=IrlbaParam(), name="IRLBA")
+reducedDimNames(sce.zeisel)
+```
+
+The `BSPARAM=` argument from `r Biocpkg("BiocSingular")` provides a flexible interface for specifying different SVD algorithms. 
+Any function that accepts a `BSPARAM=` argument can often be sped up by using an alternative SVD algorithm.
+Another example is to perform SVD using methods from the `r CRANpkg("rsvd")` package:
+
+```{r, eval=FALSE}
+set.seed(1001) # Slightly different seed to add some variety!
+sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
+    BSPARAM=RandomParam(), name="RSVD")
+reducedDimNames(sce.zeisel)
+```
+
+The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results^[Some of us leave coded messages in binary via the seeds.].
+
+### Choosing the number of PCs
+
+
+
 ## t-SNE
 
 ## UMAP
