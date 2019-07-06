@@ -17,7 +17,7 @@ This aims to preserve interesting biological structure without the variance that
 It also reduces the size of the dataset to improve computational efficiency of later steps.
 
 The simplest approach to feature selection is to select the most variable genes based on their expression across the population.
-This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise (or "uninteresting" biological variation, e.g., transcriptional bursting^[Of course, if this is interesting, then you'll have to do something else.]).
+This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise or a baseline level of "uninteresting" biological variation (e.g., from transcriptional bursting).
 Several methods are available to quantify the variation per gene and to select the highly variable genes (HVGs), which we will discuss below.
 For demonstration, we will use the 10X PBMC dataset:
 
