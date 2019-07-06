@@ -1,0 +1,48 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r loading}
+library(scRNAseq)
+sce.zeisel <- ZeiselBrainData()
+
+# Removing repeats.
+sce.zeisel <- sce.zeisel[rowData(sce.zeisel)$featureType!="repeat",]
+
+# Merging together redundant rows for the same gene.
+raw.names <- sub("_loc[0-9]+$", "", rownames(sce.zeisel))
+new.counts <- rowsum(counts(sce.zeisel), group=raw.names, reorder=FALSE)
+sce.zeisel <- sce.zeisel[match(rownames(new.counts), raw.names),]
+counts(sce.zeisel) <- new.counts
+rownames(sce.zeisel) <- rownames(new.counts)
+```
+
+```{r gene-annotation}
+# Adding Ensembl IDs.
+library(org.Mm.eg.db)
+ensembl <- mapIds(org.Mm.eg.db, keys=rownames(sce.zeisel), 
+    keytype="SYMBOL", column="ENSEMBL")
+rowData(sce.zeisel)$ENSEMBL <- ensembl
+```
+
+```{r quality-control}
+# Skipping: assuming that QC was performed by the original authors.
+```
+
+```{r normalization}
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.zeisel)
+sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clusters, min.mean=0.1)
+sce.zeisel <- computeSpikeFactors(sce.zeisel, general.use=FALSE)
+sce.zeisel <- normalize(sce.zeisel)
+```
+
+```{r variance-modelling}
+var.fit <- trendVar(sce.zeisel)
+var.out <- decomposeVar(sce.zeisel, var.fit)
+
+# Taking 10% of the genes with the top biological components.
+ordered.genes <- rownames(var.out)[order(var.out$bio, decreasing=TRUE)]
+chosen.hvgs <- head(ordered.genes, 0.1 * nrow(var.out))
+```
