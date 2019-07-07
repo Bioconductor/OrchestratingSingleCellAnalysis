@@ -200,14 +200,16 @@ This aims to achieve self-consistency in the number of PCs and clusters based on
 pcs <- reducedDim(sce.zeisel)
 n <- seq(10, 20, by=1)
 collected <- integer(0)
+
+# Using graph-based clustering here, but this can be
+# replaced with any clustering method of choice, provided
+# that the method determines the number of clusters by itself.
 for (i in n) {
-    # Using graph-based clustering here, but this can be
-    # replaced with any clustering method of choice, provided
-    # that the method chooses its own number of clusters.
     g <- buildSNNGraph(pcs[,seq_len(i)], transposed=TRUE)
     clust <- igraph::cluster_walktrap(g)$membership
     collected <- c(collected, length(unique(clust)))
 }
+
 data.frame(n.pcs=n, n.clusters=collected)
 n[collected-1==n]
 ```
@@ -215,6 +217,27 @@ n[collected-1==n]
 This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
 There is no need to preserve biological signal beyond what is distinguishable in later steps.
 However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
+
+### Putting it together
+
+Once we have chosen $d$, enforcing it is as simple as subsetting the PC matrix by column.
+We then use the `reducedDim()<-` command to reassign the subsetted matrix back into the `SingleCellExperiment` object.
+For example, if we were to take the top 20 PCs, we would do:
+
+```{r}
+reducedDim(sce.zeisel, "PCA") <- reducedDim(sce.zeisel, "PCA")[,1:20]
+ncol(reducedDim(sce.zeisel, "PCA"))
+```
+
+Downstream applications that use the `"PCA"` dimensionality reduction results in `sce.zeisel` will subsequently operate on the first 20 PCs only.
+Alternatively, some users may prefer to keep the full set of PCs, in which case the top set can be assigned to another name:
+
+```{r}
+reducedDim(sce.zeisel, "PCA_20") <- reducedDim(sce.zeisel, "PCA")[,1:20]
+reducedDimNames(sce.zeisel)
+```
+
+## Dimensionality reduction for visualization
 
 ### Visualizing the PCs
 
