@@ -24,7 +24,8 @@ It also reduces noise by averaging across multiple genes to obtain a more precis
 We will use the @zeisel2015brain dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/zeisel-brain", "variance-modelling", c("sce.zeisel", "chosen.hvgs"))
+extractCached("workflows/zeisel-brain", "variance-modelling", 
+    c("sce.zeisel", "chosen.hvgs", "dec.zeisel"))
 ```
 
 ```{r}
@@ -90,7 +91,7 @@ The `BSPARAM=` argument from `r Biocpkg("BiocSingular")` provides a flexible int
 Any function that accepts a `BSPARAM=` argument can often be sped up by using an alternative SVD algorithm.
 Another strategy is to perform the SVD using methods from the `r CRANpkg("rsvd")` package:
 
-```{r, eval=FALSE}
+```{r}
 set.seed(1001) # Slightly different seed to add some variety!
 sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
     BSPARAM=RandomParam(), name="RSVD")
@@ -163,10 +164,12 @@ Instead, we define $T$ as the proportion of variance in the data that is attribu
 This is done using the `denoisePCA()` function, which uses our estimates from `decomposeVar()` to determine $d$.
 
 ```{r}
+library(scran)
+set.seed(001001001)
+
 # Setting value="n" to just report the number of PCs.
 # Setting max.rank=200 to circumvent the default max of 100.
 # Also setting BSPARAM to perform a fast SVD with IRLBA.
-set.seed(001001001)
 denoised.n <- denoisePCA(sce.zeisel, technical=dec.zeisel, value='n',
     subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
 as.integer(denoised.n)
@@ -190,12 +193,12 @@ By doing so, we guarantee separation of all subpopulations while retaining as fe
 
 The number of subpopulations is usually not known in advance so instead we use the number of clusters as a proxy.
 However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (see Chapter ???).
-To handle this circularity, we test multiple choices for $d$ and we pick a value that is close to the number of clusters minus 1.
-The analysis below suggests that 20-25 PCs would be the most suitable for the @zeisel2015brain data.
+To handle this circularity, we test multiple choices for $d$ and we pick a value that is closest to the number of clusters minus 1.
+This aims to achieve self-consistency in the number of PCs and clusters based on the reasoning above.
 
 ```{r}
 pcs <- reducedDim(sce.zeisel)
-n <- seq(5, 50, by=5)
+n <- seq(10, 20, by=1)
 collected <- integer(0)
 for (i in n) {
     # Using graph-based clustering here, but this can be
@@ -206,6 +209,7 @@ for (i in n) {
     collected <- c(collected, length(unique(clust)))
 }
 data.frame(n.pcs=n, n.clusters=collected)
+n[collected-1==n]
 ```
 
 This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
