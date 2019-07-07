@@ -20,7 +20,6 @@ This is possible because different genes are correlated if they are affected by 
 Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
 This reduces computational work in downstream analyses as calculations only need to be performed for a few dimensions rather than thousands of genes.
 It also reduces noise by averaging across multiple genes to obtain a more precise representation of the patterns in the data.
-Certain methods can reduce the number of dimensions down to 2 or 3 for visualization of the data.
 
 We will use the @zeisel2015brain dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.
 
@@ -108,7 +107,7 @@ How many of the top PCs should we retain for downstream analyses?
 The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
 Using more PCs will avoid discarding biological signal in later PCs, at the cost of retaining more noise.
 Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
-This is often satisfactory provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
+This is often satisfactory^[Or in other words: if the choice of $d$ is your biggest concern, you must lead a blessed life.] provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
 Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of $d$.
 
 #### Using the elbow point
@@ -164,9 +163,9 @@ Instead, we define $T$ as the proportion of variance in the data that is attribu
 This is done using the `denoisePCA()` function, which uses our estimates from `decomposeVar()` to determine $d$.
 
 ```{r}
-# Setting value="n" to just report the number.
-# Setting max.rank=200 to avoid it maxing out at 100.
-# Also setting BSPARAM to perform a fast SVD.
+# Setting value="n" to just report the number of PCs.
+# Setting max.rank=200 to circumvent the default max of 100.
+# Also setting BSPARAM to perform a fast SVD with IRLBA.
 set.seed(001001001)
 denoised.n <- denoisePCA(sce.zeisel, technical=dec.zeisel, value='n',
     subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
@@ -181,6 +180,37 @@ This is unlikely to be true as the PCA cannot distinguish between technical nois
 From a practical perspective, the `denoisePCA()` approach retains more PCs than the elbow point method.
 This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
 Whether this is a "better" outcome depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+
+#### Based on population structure
+
+Yet another choice for $d$ uses information about the number of subpopulations in the data.
+We assume that each subpopulation differs from the others along a different axis in the high-dimensional space.
+This suggests that we should set $d$ to the number of unique subpopulations minus 1.
+By doing so, we guarantee separation of all subpopulations while retaining as few dimensions (and noise) as possible.
+
+The number of subpopulations is usually not known in advance so instead we use the number of clusters as a proxy.
+However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (see Chapter ???).
+To handle this circularity, we test multiple choices for $d$ and we pick a value that is close to the number of clusters minus 1.
+The analysis below suggests that 20-25 PCs would be the most suitable for the @zeisel2015brain data.
+
+```{r}
+pcs <- reducedDim(sce.zeisel)
+n <- seq(5, 50, by=5)
+collected <- integer(0)
+for (i in n) {
+    # Using graph-based clustering here, but this can be
+    # replaced with any clustering method of choice, provided
+    # that the method chooses its own number of clusters.
+    g <- buildSNNGraph(pcs[,seq_len(i)], transposed=TRUE)
+    clust <- igraph::cluster_walktrap(g)$membership
+    collected <- c(collected, length(unique(clust)))
+}
+data.frame(n.pcs=n, n.clusters=collected)
+```
+
+This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
+There is no need to preserve biological signal beyond what is distinguishable in later steps.
+However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
 
 ### Visualizing the PCs
 
