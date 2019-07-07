@@ -18,8 +18,9 @@ This concept can be extended to data sets with thousands of genes where each cel
 Dimensionality reduction aims to reduce the number of separate dimensions^[Duh.] in the data.
 This is possible because different genes are correlated if they are affected by the same biological process.
 Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
-This reduces computational work in downstream analyses as calculations only need to be performed for a few dimensions rather than thousands of genes.
-It also reduces noise by averaging across multiple genes to obtain a more precise representation of the patterns in the data.
+This reduces computational work in downstream analyses, as calculations only need to be performed for a few dimensions rather than thousands of genes;
+reduces noise by averaging across multiple genes to obtain a more precise representation of the patterns in the data;
+and enables effective plotting of the data, for those of us who are not capable of visualizing more than 3 dimensions.
 
 We will use the @zeisel2015brain dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.
 
@@ -239,8 +240,59 @@ reducedDimNames(sce.zeisel)
 
 ## Dimensionality reduction for visualization
 
-### Visualizing the PCs
+### Motivation
 
-## t-stochastic neighbor embedding
+Another application of dimensionality reduction is to compress the data into 2 (sometimes 3) dimensions for plotting.
+This serves a separate purpose to the PCA-based dimensionality reduction described above.
+Algorithms are more than happy to operate on 10-50 PCs, but these are still too many dimensions for human comprehension.
+Further dimensionality reduction strategies are required to pack the most salient features of the data into 2 or 3 dimensions, which we will discuss below.
 
-## UMAP
+### Visualizating with PCA
+
+The simplest visualization approach is to plot the top 2 PCs (Figure \@ref(fig:zeisel-pca)):
+
+```{r zeisel-pca, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
+plotReducedDim(sce.zeisel, use_dimred="PCA", colour_by="level1class")
+```
+
+The problem is that PCA is a linear technique, i.e., only variation along a line in high-dimensional space is captured by each PC.
+As such, it cannot efficiently pack differences in $d$ dimensions into the first 2 PCs.
+This is demonstrated in Figure \@ref(fig:zeisel-pca) where the top two PCs fail to resolve some subpopulations identified by @zeisel2015brain.
+If the first PC is devoted to resolving the biggest difference between subpopulations, and the second PC is devoted to resolving the next biggest difference, then the remaining differences will not be visible in the plot.
+
+One workaround is to plot several of the top PCs against each other in pairwise plots (Figure \@ref(fig:zeisel-pca-multi)).
+However, it is difficult to interpret multiple plots simultaneously, and even this approach is not sufficient to separate some of the annotated subpopulations.
+
+```{r zeisel-pca, fig.wide=TRUE, fig.asp=1, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
+plotReducedDim(sce.zeisel, use_dimred="PCA", ncomponents=4,
+    colour_by="level1class")
+```
+
+There are some advantages to the PCA for visualization.
+It is predictable and will not introduce artificial structure in the visualization.
+It is also deterministic and robust to small changes in the input values.
+However, as shown above, PCA is usually not satisfactory for visualization of complex populations.
+
+### t-stochastic neighbor embedding
+
+```{r}
+set.seed(00101001101)
+sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA")
+plotReducedDim(sce.zeisel, use_dimred="TSNE", colour_by="level1class")
+```
+
+### Uniform manifold approximation and projection
+
+
+### Interpreting the plots
+
+Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells.
+One might then ask whether the results of such extreme data compression can be trusted.
+Indeed, it would probably be unwise to directly analyze or interpret the low-dimensional coordinates used for plotting.
+Rather, the plots are intended to be used to communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
+
+To illustrate, consider the interaction between clustering and $t$-SNE.
+As a general rule, we would not perform clustering on the $t$-SNE coordinates.
+Rather, we would cluster on the first 10-50 PCs (see Chapter ???) and then visualize the cluster identities on the $t$-SNE plot.
+This ensures that clustering makes use of the information that was lost during compression into two dimensions.
+Given a discrepancy between the visible clusters on a $t$-SNE plot and those identified by our clustering, we would be inclined to favour the latter.
