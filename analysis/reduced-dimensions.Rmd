@@ -263,7 +263,7 @@ If the first PC is devoted to resolving the biggest difference between subpopula
 One workaround is to plot several of the top PCs against each other in pairwise plots (Figure \@ref(fig:zeisel-pca-multi)).
 However, it is difficult to interpret multiple plots simultaneously, and even this approach is not sufficient to separate some of the annotated subpopulations.
 
-```{r zeisel-pca, fig.wide=TRUE, fig.asp=1, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
+```{r zeisel-pca-multi, fig.wide=TRUE, fig.asp=1, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
 plotReducedDim(sce.zeisel, use_dimred="PCA", ncomponents=4,
     colour_by="level1class")
 ```
@@ -275,21 +275,84 @@ However, as shown above, PCA is usually not satisfactory for visualization of co
 
 ### t-stochastic neighbor embedding
 
-```{r}
+The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbour embedding ($t$-SNE) method [@van2008visualizing].
+This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbours in the high-dimensional space. 
+Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distance populations.
+This means that it has much more freedom in how it arranges cells in low-dimensional space, enabling it to separate many distinct clusters in a complex population (Figure \@ref(fig:tsne-brain)).
+
+```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(00101001101)
 sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA")
 plotReducedDim(sce.zeisel, use_dimred="TSNE", colour_by="level1class")
 ```
 
+One of the main disadvantages of $t$-SNE is that it is much more computationally intensive than other visualization methods.
+We mitigate this effect by performing the calculations on the top PCs with `use_dimred="PCA"` in `runtTSNE()`.
+This takes advantage of the PCA to compact the data and remove noise, followed by $t$-SNE to create the visualization.
+It is possible to run $t$-SNE on the original expression matrix but this is less efficient.
+
+Another issue with $t$-SNE is that it requires the user to be aware of additional parameters (discussed [here](http://distill.pub/2016/misread-tsne/) in some depth).
+It involves a random initialization so we need to set the seed to ensure that the chosen results are reproducible.
+The "perplexity" is another important parameter that determines the granularity of the visualization (Figure \@ref(fig:tsne-perplexity)).
+Low perplexities will favour resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
+Thus, it is advisable to test different perplexity values to ensure that the choice of perplexity does not drive the interpretation of the plot.
+
+```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.5}
+set.seed(100)
+sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=5)
+out5 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+    colour_by="level1class") + ggtitle("perplexity = 5")
+
+set.seed(100)
+sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=20)
+out20 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+    colour_by="level1class") + ggtitle("perplexity = 20")
+
+set.seed(100)
+sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=80)
+out80 <- plotReducedDim(sce.zeisel, use_dimred="TSNE", 
+    colour_by="level1class") + ggtitle("perplexity = 80")
+
+multiplot(out5, out20, out80, cols=3)
+```
+
+Despite its shortcomings, $t$-SNE is proven tool for general-purpose visualization of scRNA-seq data.
+It sees routine use in many analysis pipelines and will likely continue to do so for some time.
+
 ### Uniform manifold approximation and projection
 
+The uniform manifold approximation and projection (UMAP) method [@mcinnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
+It is roughly similar to $t$-SNE in that it also tries to find a low-dimensional representation that preserves relationships between neighbors in high-dimensional space.
+However, the two methods are based on different theory, represented by differences in the various graph weighting equations^[That we will not discuss here, thank god.].
+This manifests as a different visualization as shown in Figure \@ref(fig:umap-brain).
+
+```{r umap-brain, fig.cap="UMAP plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
+set.seed(1100101001)
+sce.zeisel <- runUMAP(sce.zeisel, use_dimred="PCA")
+plotReducedDim(sce.zeisel, use_dimred="UMAP", colour_by="level1class")
+```
+
+Compared to $t$-SNE, the UMAP visualization tends to have more compact visual clusters with more empty space between them.
+It also attempts to preserve more of the global structure than $t$-SNE.
+From a practical perspective, UMAP is much faster than $t$-SNE, which may be an important consideration for large datasets.
+(Nonetheless, we have still run UMAP on the top 20 PCs here for consistency.)
+UMAP also involves a series of randomization steps so setting the seed is critical.
+
+Like $t$-SNE, UMAP has its own suite of hyperparameters that affect the visualization.
+Of these, the number of neighbours (`n_neighbors`) and the minimum distance between embedded points (`min_dist`) have the greatest effect on the granularity of the output.
+If these values are too low, random noise will be incorrectly treated as high-resolution structure, while values that are too high will discard fine structure altogether in favour of obtaining an accurate overview of the entire dataset.
+Again, it is a good idea to test a range of values for these parameters to ensure that they do not compromise any conclusions drawn from a UMAP plot.
+
+It is arguable whether the UMAP or $t$-SNE visualizations are more useful or aesthetically pleasing.
+However, it is clear that UMAP is much faster.
+For that reason alone, it is increasingly displacing $t$-SNE as the method of choice for visualizing large scRNA-seq data sets.
 
 ### Interpreting the plots
 
 Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells.
 One might then ask whether the results of such extreme data compression can be trusted.
-Indeed, it would probably be unwise to directly analyze or interpret the low-dimensional coordinates used for plotting.
-Rather, the plots are intended to be used to communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
+Indeed, it would probably be unwise to directly analyze the low-dimensional coordinates used for plotting.
+Rather, the plots should be used to interpret/communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
 
 To illustrate, consider the interaction between clustering and $t$-SNE.
 As a general rule, we would not perform clustering on the $t$-SNE coordinates.
