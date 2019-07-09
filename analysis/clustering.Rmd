@@ -1,73 +1,46 @@
 # Clustering
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      eval=TRUE, # NEEDS HOTFIX
-                      message = FALSE, warning = FALSE, error = FALSE,
-                      dev = 'CairoPNG',
-                      cache = TRUE)
+source("workflows/extractor.R")
+setupHTML()
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, eval=FALSE)
 options(digits = 4)
 ```
 
-Data derived from single-cell assays have enabled researchers to unravel tissue heterogeneity at unprecedented levels of detail, enabling the identification of novel cell types, as well as rare cell populations that were previously unidentifiable using bulk assays. Clustering - the process of grouping cells - is a fundamental step in deconvoluting heterogeneous single-cell data into distinct groups of cells with similar expression profiles. These clusters are interpreted as proxies for more abstract biological concepts such as discrete cell types or cell states.
+## Motivation
 
-<!-- Here we will work with a dataset that contains labeled cell type populations to highlight different approaches to clustering scRNA-seq data. -->
+Clustering is an unsupervised learning procedure that is used in scRNA-seq data analysis to empirically define groups of cells with similar expression profiles.
+Its primary purpose is to summarize the data in a digestible format for human interpretation. 
+This allows us to describe population heterogeneity in terms of discrete labels that are easily understood, rather than attempting to comprehend the high-dimensional manifold on which the cells truly reside.
+After annotation based on marker genes, the clusters can be treated as proxies for more abstract biological concepts such as cell types or states.
+Clustering is thus a critical step for extracting biological insights from scRNA-seq data.
+Here, we demonstrate the application of several commonly used methods with the 10X PBMC dataset. 
 
-
-## Loading the Data
-
-<!-- To follow along with this chapter, we will be using the 5 cell line data from the [*CellBench_data*](https://github.com/LuyiTian/CellBench_data) repository. We will load the original dataset, and then subsample down to 1000 cells to make performing downstream calculations faster: -->
-
-```{r}
-## library(TENxBrainData)  # would be neat to try on this
-## sce <- TENxBrainData()
-library(TENxPBMCData)
-sce <- TENxPBMCData('pbmc4k')
-
-set.seed(1234)
-sce <- sce[, sample(ncol(sce), 1000)]
-sce
-```
-
-<!-- The per cell labels pertaining to the 5 cell lines assayed can be found within the `colData` component under the column name `cell_line`. We can count the number of instances of each cell line present in our subsampled dataset as follows: -->
-
-<!-- ```{r} -->
-<!-- table(sce$cell_line) -->
-<!-- ``` -->
-
-Before continuing, we will perform normalization, feature selection, and dimensionality reduction that will be used downstream by the clustering methods and visualizations. 
-
-```{r}
-library(BiocSingular)
-library(scater)
-library(scran)
-
-## normalization
-sce <- normalize(sce)
-
-## feature selection
-fit <- trendVar(sce, use.spikes = FALSE)
-dec <- decomposeVar(sce, fit)
-hvg <- rownames(dec[dec$bio > 0, ]) # ~4k genes
-
-## dimensionality reduction
-set.seed(1234)
-sce <- runPCA(sce, 
-              feature_set = hvg)
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/tenx-pbmc4k", "download", "sce.pbmc")
 ```
 
 ```{r}
-sce <- runUMAP(sce)
+sce.pbmc
 ```
 
-We can now visualize the data prior to clustering via UMAP:
+## Comments on truth
 
-```{r}
-plotUMAP(sce)
-```
+At this point^[Pretty deep title here. I'm not a Doctor of Philosophy for nothing, y'know.], it is worth stressing the distinction between clusters and cell types.
+The former is an empirical construct while the latter is a biological truth (albeit a vaguely defined one).
+For this reason, questions like "what is the true number of clusters?" are usually meaningless.
+We can define as many clusters as we like, with whatever algorithm we like - each clustering will represent its own partitioning of the high-dimensional expression space, and is as "real" as any other clustering.
 
-<!-- One thing to note is that, per our UMAP visualization, cell line H1975 appears to be two primary clusters, with some cells resembling the H838 cell line. -->
+A more relevant question is "how well do the clusters approximate the cell types?"
+Unfortunately, this is difficult to answer given the context-dependent interpretation of biological truth.
+Some analysts will be satisfied with resolution of the major cell types; other analysts may want resolution of subtypes; and others still may require resolution of different states (e.g., metabolic activity, stress) within those subtypes.
+Two clusterings can also be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
+Indeed, asking for an unqualified "best" clustering is akin to asking for the best magnification on a microscope without any context.
 
+It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data.
+We can zoom in and out by changing the resolution of the clustering parameters, and we can experiment with different clustering algorithms to obtain alternative perspectives of the data.
+This iterative approach is entirely permissible for data exploration, which constitutes the majority of all scRNA-seq data analysis.
+Now, if we were operating in a formal hypothesis testing framework, this parameter fiddling would constitute data dredging and be penalized by the multiple testing correction - but we can afford to be more relaxed for exploratory data analysis, given that we did not have a firm quantitative hypothesis in the first place^["Oh!", you say, "But my null hypothesis is that T cell abundance is the same before and after drug treatment! Sounds pretty clear to me." Sure, if you can define what a T cell is. Quantitatively, mind you - what is the minimum CD3 read/UMI count required for a cell to be a T cell? If you can do that, you don't need clustering - head straight to Chapter ??? for cell annotation. (Do not pass GO. Do not collect \$200.)]!
 
 ## Manual Clustering
 
