@@ -4,20 +4,23 @@ knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 
 ```{r loading}
 library(scRNAseq)
-sce.416b <- LunSpikeInData(which="416B") 
+sce.416b <- LunSpikeInData(which="416b") 
 ```
 
 ```{r gene-annotation}
 library(org.Mm.eg.db)
-symb <- mapIds(org.Mm.eg.db, keys=rownames(sce.416b), keytype="ENSEMBL", column="SYMBOL")
+symb <- mapIds(org.Mm.eg.db, keys=rownames(sce.416b), 
+    keytype="ENSEMBL", column="SYMBOL")
 rowData(sce.416b)$ENSEMBL <- rownames(sce.416b)
 rowData(sce.416b)$SYMBOL <- symb
 
 library(scater)
-rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL, rowData(sce.416b)$SYMBOL)
+rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL, 
+    rowData(sce.416b)$SYMBOL)
 
 library(TxDb.Mmusculus.UCSC.mm10.ensGene)
-location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, keys=rowData(sce.416b)$ENSEMBL, 
+location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, 
+    keys=rowData(sce.416b)$ENSEMBL, 
     column="CDSCHROM", keytype="GENEID")
 rowData(sce.416b)$CHR <- location
 ```
@@ -27,8 +30,8 @@ mito <- which(rowData(sce.416b)$CHR=="chrM")
 sce.416b <- calculateQCMetrics(sce.416b, feature_controls=list(Mt=mito))
 libsize.drop <- isOutlier(sce.416b$total_counts, nmads=3, type="lower", 
     log=TRUE, batch=sce.416b$PlateOnco)
-feature.drop <- isOutlier(sce.416b$total_features_by_counts, nmads=3, type="lower", 
-    log=TRUE, batch=sce.416b$PlateOnco)
+feature.drop <- isOutlier(sce.416b$total_features_by_counts, nmads=3, 
+    type="lower", log=TRUE, batch=sce.416b$PlateOnco)
 spike.drop <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher",
     batch=sce.416b$PlateOnco)
 keep <- !(libsize.drop | feature.drop | spike.drop)
