@@ -3,12 +3,7 @@
 ```{r setup, echo=FALSE, results='asis'}
 source("workflows/extractor.R")
 setupHTML()
-
-knitr::opts_chunk$set(echo = TRUE,
-                      eval = FALSE, ## Skip for now..
-                      message = FALSE, warning = FALSE, error = FALSE,
-                      dev = 'CairoPNG',
-                      cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
 options(digits = 4)
 ```
 
@@ -34,12 +29,8 @@ Similarly, genes with the largest variances will be driven by differences betwee
 To avoid - or at least mitigate - these problems, we need to remove these cells at the start of the analysis.
 This step is commonly referred to as quality control (QC) on the cells.
 (We will use "library" and "cell" rather interchangeably here, though the distinction will become important when dealing with droplet-based data.)
-
-## Introducing the dataset
-
-We will demonstrate the application of various QC procedures using a small scRNA-seq dataset from @lun2017assessing.
-This dataset contains SMART-seq2 data with spike-ins from two 96-well plates of 416B cells with and without induction of the _CBFB-MYH11_ oncogene.
-All libraries are provided with no prior quality control, allowing us to apply our own procedures as desired.
+We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, which contains SMART-seq2 data with spike-ins from two 96-well plates of 416B cells with and without induction of the _CBFB-MYH11_ oncogene.
+Importantly, the data is provided with no prior QC, allowing us to apply our own procedures as desired.
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/lun-416b", "download", "sce.416b")
