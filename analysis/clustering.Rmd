@@ -5,6 +5,7 @@ source("workflows/extractor.R")
 setupHTML()
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, eval=FALSE)
 options(digits = 4)
+library(BiocStyle)
 ```
 
 ## Motivation
@@ -46,20 +47,20 @@ Now, if we were operating in a formal hypothesis testing framework, this paramet
 
 ### Background
 
-Popularized by its use in `r CRANpkg("seurat")`, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets.
+Popularized by its use in `r CRANpkg("Seurat")`, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets.
 We first build a graph where each node is a cell that is connected to its nearest neighbours in the high-dimensional space.
 Edges are weighted based on the similarity between the cells involved, with higher weight given to cells that are more closely related.
 We then apply algorithms to identify "communities" of cells that are more connected to cells in the same community than they are to cells of different communities.
 Each community represents a cluster that we can use for downstream interpretation.
 
 The major advantage of graph-based clustering lies in its scalability.
-It only requires a $k$-nearest neighbor search that can be done in log-linear time on average, in contrast to hierachical clustering methods that are quadratic with respect to the number of cells.
-Graph construction also avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster.
-From a practical perspective, each cell is forcibly connected to at least $k$ other neighboring cells, which reduces the risk of generating many clusters consisting of one or two outlier cells.
+It only requires a $k$-nearest neighbor search that can be done in log-linear time (on average), in contrast to hierachical clustering methods that are quadratic with respect to the number of cells.
+Graph construction avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster, compared to other methods like $k$-means (that favor spherical clusters) or Gaussian mixture models (that require normality).
+From a practical perspective, each cell is forcibly connected to a minimum number of neighboring cells, which reduces the risk of generating many uninformative clusters consisting of one or two outlier cells.
 
 The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighbouring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
 This has some practical consequences in datasets that exhibit differences in cell density, as more steps through the graph are required to move the same distance through a region of higher cell density.
-From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause a formation of subclusters.
+From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause formation of subclusters.
 The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if overstates the heterogeneity in the data.
 
 
