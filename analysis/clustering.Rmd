@@ -42,7 +42,42 @@ We can zoom in and out by changing the resolution of the clustering parameters, 
 This iterative approach is entirely permissible for data exploration, which constitutes the majority of all scRNA-seq data analysis.
 Now, if we were operating in a formal hypothesis testing framework, this parameter fiddling would constitute data dredging and be penalized by the multiple testing correction - but we can afford to be more relaxed for exploratory data analysis, given that we did not have a firm quantitative hypothesis in the first place^["Oh!", you say, "But my null hypothesis is that T cell abundance is the same before and after drug treatment! Sounds pretty clear to me." Sure, if you can define what a T cell is. Quantitatively, mind you - what is the minimum CD3 read/UMI count required for a cell to be a T cell? If you can do that, you don't need clustering - head straight to Chapter ??? for cell annotation. (Do not pass GO. Do not collect \$200.)]!
 
-## Manual Clustering
+## Graph-based clustering
+
+### Background
+
+Popularized by its use in `r CRANpkg("seurat")`, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets.
+We first build a graph where each node is a cell that is connected to its nearest neighbours in the high-dimensional space.
+Edges are weighted based on the similarity between the cells involved, with higher weight given to cells that are more closely related.
+We then apply algorithms to identify "communities" of cells that are more connected to cells in the same community than they are to cells of different communities.
+Each community represents a cluster that we can use for downstream interpretation.
+
+The major advantage of graph-based clustering lies in its scalability.
+It only requires a $k$-nearest neighbor search that can be done in log-linear time on average, in contrast to hierachical clustering methods that are quadratic with respect to the number of cells.
+Graph construction also avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster.
+From a practical perspective, each cell is forcibly connected to at least $k$ other neighboring cells, which reduces the risk of generating many clusters consisting of one or two outlier cells.
+
+The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighbouring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
+This has some practical consequences in datasets that exhibit differences in cell density, as more steps through the graph are required to move the same distance through a region of higher cell density.
+From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause a formation of subclusters.
+The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if overstates the heterogeneity in the data.
+
+
+```{r, echo=FALSE, eval=FALSE}
+set.seed(999)
+
+# For contributors who don't believe me, try this out.
+a <- matrix(rnorm(100000, 10), ncol=10)
+b <- matrix(rnorm(100, 0), ncol=10)
+x <- rbind(a, b)
+
+library(scran)
+g <- buildSNNGraph(x, transposed=TRUE, type="jaccard")
+out <- igraph::cluster_louvain(g)$membership
+table(out)
+```
+
+### Using shared nearest neighbors
 
 Low-level clustering relies on building the shared- or k-nearest neighbors graphs manually, and thenppppppppp applying a graph-based clustering algorithm based on the resulting graph. One such wrapper to construct the SNN/KNN graph comes from the `scran` package's `buildSNNGraph()` and `buildKNNGraph()` functions, respectively. The resulting `igraph` object from these functions can then be fed into any number of clustering algorithms provided by `igraph`. For example, louvain clustering is a popular algorithm that is implemented in the `cluster_louvain()` function.
 
