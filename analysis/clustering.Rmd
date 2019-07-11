@@ -1,9 +1,9 @@
 # Clustering
 
-```{r setup, include=FALSE}
+```{r setup, echo=FALSE}
 source("workflows/extractor.R")
 setupHTML()
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, eval=FALSE)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
 options(digits = 4)
 library(BiocStyle)
 ```
@@ -18,7 +18,7 @@ Clustering is thus a critical step for extracting biological insights from scRNA
 Here, we demonstrate the application of several commonly used methods with the 10X PBMC dataset. 
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-pbmc4k", "download", "sce.pbmc")
+extractCached("workflows/tenx-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 ```
 
 ```{r}
@@ -63,7 +63,6 @@ This has some practical consequences in datasets that exhibit differences in cel
 From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause formation of subclusters.
 The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if overstates the heterogeneity in the data.
 
-
 ```{r, echo=FALSE, eval=FALSE}
 set.seed(999)
 
@@ -78,105 +77,140 @@ out <- igraph::cluster_louvain(g)$membership
 table(out)
 ```
 
-### Using shared nearest neighbors
+### Implementation
 
-Low-level clustering relies on building the shared- or k-nearest neighbors graphs manually, and thenppppppppp applying a graph-based clustering algorithm based on the resulting graph. One such wrapper to construct the SNN/KNN graph comes from the `scran` package's `buildSNNGraph()` and `buildKNNGraph()` functions, respectively. The resulting `igraph` object from these functions can then be fed into any number of clustering algorithms provided by `igraph`. For example, louvain clustering is a popular algorithm that is implemented in the `cluster_louvain()` function.
+There are several considerations in the practical execution of a graph-based clustering method:
 
-Further, one additional parameter to note in the `buildSNNGraph()` function below is the `BNPARAM`, which provides even finer control over nearest-neighbors detection via the `BiocNeighbors` package. This parameter allows the user to specify an implementation from `BiocNeighbors` to use that has been designed for high-dimensional data. Here, we highlight the use of an approximate method via the Annoy algorithm by way of providing `AnnoyParam()`.
+- How many neighbors are considered when constructing the graph.
+- What scheme is used to weight the edges.
+- Which community detection algorithm is used to define the clusters.
 
-
-```{r}
-g <- buildSNNGraph(sce, k = 50, use.dimred = 'PCA')
-louvain_clusters <- igraph::cluster_louvain(g)$membership
-
-sce$louvain_clusters <- as.factor(louvain_clusters)
-```
-
-We can then inspect the results of our clustering both on the UMAP as well as via a confusion matrix:
-
-```{r, fig.cap="Louvain clustering applied to an SNN graph constructed with k=50."}
-plotUMAP(sce, colour_by = 'louvain_clusters')
-```
-
-<!-- table(sce$louvain_clusters, sce$cell_line) -->
-
-
-<!-- Overall at this k, we see that the clusters align very sensibly with the cell lines of origins. -->
-
-
-### Varying `k`
-
-While our first try appeared to work fairly well, this may not always be the case. Furthermore, checking the stability of clustering is sensible to ensure that a clustering result is robust. 
-
-To iterate over the varying `k` parameter (the number of nearest neighbors to draw the graph with), we utilize the `purrr` functional programming library in this example, but note that `lapply` works equally well.
+For example, the following code uses the 10 nearest neighbors of each cell to construct a shared nearest neighbor graph.
+Two cells are connected by an edge if any of their nearest neighbors are shared,
+with the edge weight defined from the highest average rank of the shared neighbors [@xu2015identification].
+The Walktrap method from the `r CRANpkg("igraph")` package is then used to identify communities.
+All calculations are performed using the top PCs to take advantage of data compression and denoising.
 
 ```{r}
-library(purrr)
-
-## Iterate over varying k for SNNGraph construction
-k_v <- seq(5, 50, by = 15)
-g_l <- map(k_v, function(x) {
-    buildSNNGraph(sce, k = x, use.dimred = 'PCA')
-})
-names(g_l) <- paste0('k_', k_v)
-
-## Iterate over resulting graphs to apply louvain clustering
-lc_l <- map(g_l, function(g) {
-    igraph::cluster_louvain(g)$membership
-})
-names(lc_l) <- paste0('k_', k_v)
-
-## Coerce louvain cluster results list to dataframe of factors
-lc_df <- data.frame(do.call(cbind, lc_l))
-lc_df <- apply(lc_df, 2, as.factor)
-
-## Append results to colData for plotting
-colData(sce) <- cbind(colData(sce), lc_df)
+library(scran)
+g <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust <- igraph::cluster_walktrap(g)$membership
+table(clust)
 ```
 
-Now we can plot across our various k's on the UMAP for ease of interpretation. Note that we use the *patchwork* package to combine the multiple `ggplot` objects that are generated by the `plotUMAP()` function.
+We assign the cluster assignments back into our `SingleCellExperiment` object as a factor in the column metadata.
+This allows us to conveniently visualize the distribution of clusters in a $t$-SNE plot (Figure \@ref(fig:tsne-clust)).
 
-```{r, fig.cap="Varying k, from top left clockwise, k is set to 5, 20, 50, and 35."}
-library(patchwork)
-p_l <- map(colnames(lc_df), ~ plotUMAP(sce, colour_by = .))
-wrap_plots(p_l, ncol = 2)
+```{r tsne-clust, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster."}
+library(scater)
+sce.pbmc$cluster <- factor(clust)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 ```
 
-
-### Varying Clustering Algorithms
-
-Another area for tweaking is in the clustering algorithm applied, as there are various community detection methods available through packages such as `igraph`. Here, we demonstrate a few select clustering methods - louvain, walktrap, and fast/greedy - across two different sets of graphs generated above, where k equaled 5 or 20:
+The most important parameter is `k`, i.e., the number of nearest neighbors used to construct the graph.
+This controls the resolution of the clustering, with higher `k` yielding a more inter-connected graph and larger clusters.
+Users can exploit this by experimenting with different values of `k` to obtain a satisfactory resolution.
 
 ```{r}
-## Clustering functions (cf)
-cf_l <- list(louvain = igraph::cluster_louvain,
-             walktrap = igraph::cluster_walktrap,
-             fastgreedy = igraph::cluster_fast_greedy)
+# More resolved.
+g.5 <- buildSNNGraph(sce.pbmc, k=5, use.dimred = 'PCA')
+clust.5 <- igraph::cluster_walktrap(g.5)$membership
+table(clust.5)
 
-## Cluster assignments (ca) per function with k_5 and k_20 graphs
-ca_l <- map2(c(cf_l, cf_l),
-     c(g_l[rep(c(1:2), each = length(cf_l))]),
-     function(f, g) {
-         f(g)$membership
-})
-names(ca_l) <- paste0(rep(names(cf_l), 2), '__',
-                      rep(names(g_l)[1:2], each = 3))
-
-## Coerce clustering results list to dataframe of factors
-ca_df <- data.frame(do.call(cbind, ca_l))
-ca_df <- apply(ca_df, 2, as.factor)
-
-## Append results to colData for plotting
-colData(sce) <- cbind(colData(sce), ca_df)
+# Less resolved.
+g.50 <- buildSNNGraph(sce.pbmc, k=50, use.dimred = 'PCA')
+clust.50 <- igraph::cluster_walktrap(g.50)$membership
+table(clust.50)
 ```
 
-```{r, fig.cap="Three clustering methods (by row, top to bottom: louvain, walktrap, and fast/greedy) were applied to two graphs (by column, left to right: k=5, k=20). Clustering results are shown as different colors on the UMAP projection."}
-p_l <- map(colnames(ca_df), ~ plotUMAP(sce, colour_by = .))
-wrap_plots(p_l, ncol = 2, byrow = FALSE)
+### Other parameters
+
+Further tweaking can be done by changing the weighting scheme.
+Setting `type="number"` will weight edges based on the number of nearest neighbors that are shared between two cells.
+Similarly, `type="jaccard"` will weight edges according to the Jaccard index of the two sets of neighbors.
+We can also disable weighting altogether by using `buildKNNGraph()`, which is occasionally useful for downstream graph operations that do not support weights.
+
+```{r}
+g.num <- buildSNNGraph(sce.pbmc, use.dimred="PCA", type="number")
+g.jaccard <- buildSNNGraph(sce.pbmc, use.dimred="PCA", type="jaccard")
+g.none <- buildKNNGraph(sce.pbmc, use.dimred="PCA")
 ```
 
-We can see from this result that the choice of clustering method was largely a non-factor in the k=20 case, whereas the more granular clustering method of k=5 did indeed produce some variation, particularly between the louvain/walktrap vs the fast-greedy.
+All of these `g` variables are `graph` objects from the `r CRANpkg("igraph")` package.
+They can be used with any of the community detection algorithms provided by `r CRANpkg("igraph")`.
+We have already mentioned the Walktrap approach, but many others are available to choose from:
 
+```{r}
+clust.louvain <- igraph::cluster_louvain(g)$membership
+clust.infomap <- igraph::cluster_infomap(g)$membership
+clust.fast <- igraph::cluster_fast_greedy(g)$membership
+clust.labprop <- igraph::cluster_label_prop(g)$membership
+clust.eigen <- igraph::cluster_leading_eigen(g)$membership
+```
+
+It is then straightforward to compare two clustering strategies to see how they differ.
+For example, the results below suggest that Louvain is similar to Walktrap;
+fast-greedy yields coarser clusters; and Infomap provides higher resolution.
+
+```{r}
+table(Louvain=clust.louvain, Walktrap=clust)
+table(Infomap=clust.infomap, Walktrap=clust)
+table(Fast=clust.fast, Walktrap=clust)
+```
+
+Pipelines involving `r Biocpkg("scran")` default to rank-based weights followed by Walktrap clustering.
+In contrast, `r CRANpkg("Seurat")` uses Jaccard-based weights followed by Louvain clustering.
+Both of these strategies work well, and it is likely that the same could be said for many other combinations of weighting schemes and community detection algorithms^[In any case, the biggest effect lies in varying `k`, so if you're fiddling with these other choices, you should probably do something else that's more productive. Like folding your socks.].
+
+### Assessing cluster separation
+
+When dealing with graphs, the modularity is a natural metric for evaluating the separation between communities/clusters.
+This is defined as the (scaled) difference between the observed total weight of edges between nodes in the same cluster and the expected total weight if edge weights were randomly distributed across all pairs of nodes.
+Larger modularity values indicate that there most edges occur within clusters, suggesting that the clusters are sufficiently well separated to avoid edges forming between neighboring cells in different clusters.
+
+The standard approach is to report a single modularity value for a clustering on a given graph.
+This is useful for comparing different clusterings on the same graph - and indeed, some community detection algorithms are designed with the aim of maximizing the modularity - but it is less helpful for interpreting a given clustering.
+Rather, we use the `clusterModularity()` function, which returns modularity scores for each cluster and cluster pair.
+More precisely, when `get.values=TRUE`, it returns the observed and expected sum of weights that are used to compute the standard modularity score.
+
+```{r}
+mod <- clusterModularity(g, clust, get.values=TRUE)
+names(mod)
+```
+
+In each matrix, each row/column corresponds to a cluster, and each entry of the matrix contains the total weight of edges between cells in the respective clusters.
+A dataset containing well-separated clusters should contain most of the observed total weight on the diagonal entries, i.e., most edges occur between cells in the same cluster.
+We visualize this by computing the log-ratio of observed to expected weights (Figure \@ref(fig:cluster-mod)).
+(We use the log-ratio instead of the difference as the latter's scale depends on the number of cells in each cluster, meaning that any visualization would be dominated by large differences for large clusters.)
+
+```{r cluster-mod, fig.cap="Heatmap of the log~2~-ratio of the total weight between nodes in the same cluster or in different clusters, relative to the total weight expected under a null model of random links."}
+ratio <- mod$observed/mod$expected
+
+library(pheatmap)
+pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
+    color=colorRampPalette(c("white", "blue"))(100))
+```
+
+Figure \@ref(fig:cluster-mod) shows that the weight is mostly concentrated on the diagonal.
+The few off-diagonal contributions represent closely related clusters with (relatively) many inter-connecting edges.
+This is not a problem, as poorer separation is to be expected when resolution increases.
+In fact, this can assist interpretation by knowing which clusters are more closely related to each other.
+
+One useful approach is to use the `ratio` matrix to form another graph where the nodes are clusters rather than cells.
+Edges between nodes are weighted according to the ratio of observed to expected edge weights between cells in those clusters.
+We can then repeat our graph operations on this new cluster-level graph.
+For example, we could obtain clusters of clusters, or we could simply create a new cluster-based layout for visualization (Figure \@ref(fig:cluster-graph)).
+This is analogous to the "graph abstraction" approach described by @wolf2017graph.
+
+```{r cluster-graph, fig.cap="Force-directed layout showing the relationships between clusters based on the ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding ratio."}
+cluster.gr <- igraph::graph_from_adjacency_matrix(ratio, 
+    mode="undirected", weighted=TRUE, diag=FALSE)
+plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*10)  
+```
+
+Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` commands were prefixed with `igraph::`.
+We have done this deliberately to avoid bringing `igraph::normalize` into the global namespace.
+Rather unfortunately, this `normalize` function accepts any argument and returns `NULL`, which causes difficult-to-diagnose bugs when it overwrites our intended `normalize` from `r Biocpkg("scater")`.
 
 ## Automated Clustering
 
