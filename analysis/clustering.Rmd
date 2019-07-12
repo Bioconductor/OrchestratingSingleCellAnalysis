@@ -212,7 +212,34 @@ Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` comma
 We have done this deliberately to avoid bringing `igraph::normalize` into the global namespace.
 Rather unfortunately, this `normalize` function accepts any argument and returns `NULL`, which causes difficult-to-diagnose bugs when it overwrites our intended `normalize` from `r Biocpkg("scater")`.
 
-## Automated Clustering
+## $k$-means clustering 
+
+### Background
+
+$k$-means clustering is a classic technique that aims to partition cells into $k$ clusters.
+Each cell is assigned to the cluster with the closest centroid, which is done by minimizing the within-cluster sum of squares using a random starting configuration for the $k$ centroids.
+The main advantage of this approach lies in its speed, given the simplicity and ease of implementation of the algorithm.
+However, it has a number of serious shortcomings:
+
+- It implicitly favours spherical clusters of equal radius.
+This can result in inappropriate partitionings on real datasets that contain groupings with irregular sizes and shapes.
+- The number of clusters $k$ must be specified beforehand.
+This strongly affects the algorithm such that an inappropriate choice will inevitably lead to a poor clustering.
+(For example, setting $k$ to be below the number of cell types will always lead to co-clustering of two cell types, regardless of how well separated they are.
+In contrast, other methods like graph-based clustering will respect strong separation even if the resolution is set to a low value.)
+- It is dependent on the randomly chosen initial coordinates.
+This requires multiple runs to verify that the clustering is stable.
+
+These issues reduce the appeal of $k$-means clustering for scRNA-seq data analysis.
+Despite this, it is still used widely as it is fast and - frankly - often good enough.
+
+Even if we were to forgo $k$-means as our clustering method of choice, it is still one of the best approaches for sample-based data compression. 
+In this application, we set $k$ to a large value such as the square root of the number of cells to obtain fine-grained clusters.
+These are not meant to be interpreted directly, but rather, the centroids are treated as "samples" for further analyses.
+The idea here is to obtain a single representative of each region of the expression space, reducing the number of samples and computational work in later steps like, e.g., trajectory reconstruction.
+This approach will also eliminate differences in cell density across the expression space, ensuring that the most abundant cell type does not dominate downstream results. 
+
+### Implementation
 
 _NOTE: not run in current book build due to error. However, the code below can likely be run locally without problem._
 
