@@ -325,5 +325,64 @@ The dendrogram is also a natural representation of the data in situations where 
 In practice, hierachical clustering is too slow to be used for anything but the smallest scRNA-seq datasets.
 Most variants require a cell-cell distance matrix that is prohibitively expensive to compute for many cells.
 Greedy agglomeration is also likely to result in a quantitatively suboptimal partitioning (as defined by the agglomeration measure) at higher levels of the dendrogram when the number of cells and merge steps is high.
-Despite these issues, we will still demonstrate the application of hierarchical clustering as it is useful for squeezing as much information as possible from datasets with very few cells^[And, hey, this book isn't going to add padding to itself. Gotta write something to look productive.].
+Nonetheless, we will still demonstrate the application of hierarchical clustering here, as it is useful for squeezing more information out of datasets with very few cells^[And, hey, this book isn't going to add padding to itself. Gotta write something to look productive.].
 
+### Implementation
+
+As the PBMC dataset is too large, we will demonstrate on the 416B dataset instead.
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/lun-416b", "dimensionality-reduction", "sce.416b")
+```
+
+```{r}
+sce.416b
+```
+
+We compute a cell-cell distance matrix using the top PCs and we apply hierarchical clustering with Ward's method.
+This aims to minimize the increase in the intra-cluster variance at each merge step.
+The resulting tree in Figure \@ref(fig:dend-416b) shows a clear split in the population caused by oncogene induction. 
+
+```{r dend-416b, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its oncogene induction status (red is induced, blue is control) and plate of origin (light or dark)."}
+dist.416b <- dist(reducedDim(sce.416b, "PCA"))
+tree.416b <- hclust(dist.416b, "ward.D2")
+
+# Making a prettier plot.
+library(dendextend)
+tree.416b$labels <- seq_along(tree.416b$labels)
+dend <- as.dendrogram(tree.416b, hang=0.1)
+
+combined.fac <- paste0(sce.416b$Plate, ".", sce.416b$Oncogene)
+labels_colors(dend) <- c(
+    `20160113.control`="blue",
+    `20160113.induced`="red",
+    `20160325.control`="dodgerblue",
+    `20160325.induced`="salmon"
+)[combined.fac][order.dendrogram(dend)]
+
+plot(dend)
+```
+
+To obtain explicit clusters, we "cut" the tree by removing internal branches such that every subtree represents a distinct cluster.
+This is most simply done by removing internal branches above a certain height of the tree, as performed by the `cutree()` function.
+We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(dend-cluster)).
+
+```{r dend-cluster, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its assigned cluster identity from a dynamic tree cut."}
+library(dynamicTreeCut)
+
+# minClusterSize needs to be turned down for small datasets.
+# deepSplit controls the resolution of the partitioning.
+clust.416b <- cutreeDynamic(tree.416b, distM=as.matrix(dist.416b),
+    minClusterSize=10, deepSplit=1)
+table(clust.416b)
+
+labels_colors(dend) <- clust.416b[order.dendrogram(dend)]
+plot(dend)
+```
+
+This generally corresponds well to the grouping of cells on a $t$-SNE plot (Figure \@ref(fig:tsne-416b)).
+
+```{r tsne-416b, fig.cap="$t$-SNE plot of the 416B dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from hierarchical clustering."}
+sce.416b$cluster <- factor(clust.416b)
+plotReducedDim(sce.416b, "TSNE", colour_by="cluster")
+```
