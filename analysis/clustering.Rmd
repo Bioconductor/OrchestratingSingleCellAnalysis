@@ -1,11 +1,11 @@
 # Clustering
 
-```{r setup, echo=FALSE}
-source("workflows/extractor.R")
-setupHTML()
+```{r setup, echo=FALSE, results="asis"}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
 options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
 ```
 
 ## Motivation
@@ -99,9 +99,9 @@ table(clust)
 ```
 
 We assign the cluster assignments back into our `SingleCellExperiment` object as a factor in the column metadata.
-This allows us to conveniently visualize the distribution of clusters in a $t$-SNE plot (Figure \@ref(fig:tsne-clust)).
+This allows us to conveniently visualize the distribution of clusters in a $t$-SNE plot (Figure \@ref(fig:tsne-clust-graph)).
 
-```{r tsne-clust, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster."}
+```{r tsne-clust-graph, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from graph-based clustering."}
 library(scater)
 sce.pbmc$cluster <- factor(clust)
 plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
@@ -239,11 +239,79 @@ These are not meant to be interpreted directly, but rather, the centroids are tr
 The idea here is to obtain a single representative of each region of the expression space, reducing the number of samples and computational work in later steps like, e.g., trajectory reconstruction.
 This approach will also eliminate differences in cell density across the expression space, ensuring that the most abundant cell type does not dominate downstream results. 
 
-### Implementation
+### Base implementation 
 
-_NOTE: not run in current book build due to error. However, the code below can likely be run locally without problem._
+Base R provides the `kmeans()` function that does as its name suggests.
+We call this on our top PCs to obtain a clustering for a specified number of clusters in the `centers=` argument.
+This requires a random seed to ensure that the results are reproducible.
+In general, the $k$-means clusters correspond to the visual clusters on the $t$-SNE plot in Figure \@ref(fig:tsne-clust-kmeans), though there are some divergences that are not apparent in, e.g., Figure \@ref(fig:tsne-clust-graph).
+(This is at least partially due to the fact that $t$-SNE is itself graph-based and so will naturally agree more with a graph-based clustering strategy.)
 
-Automated clustering frameworks seek to find an "optimal" number of clusters. The *SC3* package provides a simple framework that allows users to test for a variable number of clusters. Additionally, the *SC3* package provides handy visualizations to qualitatively assess the clustering results.
+```{r tsne-clust-kmeans, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering."}
+set.seed(100)
+clust.kmeans <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=10)
+table(clust.kmeans$cluster)
+
+sce.pbmc$cluster <- factor(clust.kmeans$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+```
+
+We obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
+This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributingn cells throughout high-dimensional space using the bounding box of the original data.
+A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
+Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters results in a large choice $k$ to capture different cluster shapes.
+Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
+
+```{r kmeans-gp, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
+library(cluster)
+gaps <- clusGap(reducedDim(sce.pbmc, "PCA"), kmeans, K.max=20)
+best.k <- maxSE(gaps$Tab[,"gap"], gaps$Tab[,"SE.sim"])
+best.k
+
+plot(gaps$Tab[,"gap"], xlab="Number of clusters", ylab="Gap statistic")
+abline(v=best.k, col="red")
+```
+
+It is then straightforwad to repeat the clustering with the `best.k` (Figure \@ref(fig:tsne-clust-kmeans-best).
+
+```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering. Here, $k$ is chosen based on the gap statistic."}
+set.seed(100)
+clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=best.k)
+table(clust.kmeans2$cluster)
+
+sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+```
+
+### Assessing cluster separation
+
+It is informative to examine the within-cluster sum of squares for each cluster.
+Clusters are more likely to have low sum of squares if they have no internal structure and are separated from other clusters (such that there are not many cells on the boundaries between clusters, which results in a higher sum of squares from the centroid).
+As an aside, clusters with the largest sum of squares do not appear to be the most dispersed in Figure \@ref(fig:pbmc-kmeans-best), which highlights the risks of attempting to quantitatively interpret $t$-SNE plots.
+
+```{r}
+tab <- data.frame(WithinSS=clust.kmeans2$withinss, 
+    NCells=tabulate(clust.kmeans2$cluster))
+tab
+```
+
+```{r, echo=FALSE}
+# Content checking for the above text statement.
+stopifnot(identical(tab$WithinSS > 1e5, tab$NCells < 30))
+```
+
+To explore the relationships between $k$-means clusters, a natural approach is to compute distances between their centroids.
+This directly lends itself to visualization as a tree after hierarchical clustering (Figure \@ref(fig:kmeans-tree)). 
+
+```{r kmeans-tree, fig.cap="Hierarchy of $k$-means cluster centroids, using Ward's minimum variance method."}
+cent.tree <- hclust(dist(clust.kmeans2$centers), "ward.D2")
+plot(cent.tree)
+```
+
+### Consensus clustering
+
+The `r Biocpkg("SC3")` package provides a simple framework for consensus clustering based on $k$-means.
+
 
 Before we use the *SC3* package, we first set a required `rowData` column for *SC3* to work:
 
