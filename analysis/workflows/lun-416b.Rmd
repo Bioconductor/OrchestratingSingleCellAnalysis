@@ -45,4 +45,17 @@ sce.416b <- computeSpikeFactors(sce.416b, general.use=FALSE)
 sce.416b <- normalize(sce.416b)
 ```
 
+```{r variance-modelling}
+fit.416b <- trendVar(sce.416b, block=sce.416b$Plate)
+dec.416b <- decomposeVar(sce.416b, fit.416b)
 
+# Taking all of the genes with positive biological components.
+chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
+```
+
+```{r dimensionality-reduction}
+sce.416b <- denoisePCA(sce.416b, technical=dec.416b, subset.row=chosen.hvgs)
+
+set.seed(1010)
+sce.416b <- runTSNE(sce.416b, use_dimred="PCA", perplexity=10)
+```
