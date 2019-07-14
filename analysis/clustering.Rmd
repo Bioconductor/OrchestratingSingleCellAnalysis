@@ -386,3 +386,32 @@ This generally corresponds well to the grouping of cells on a $t$-SNE plot (Figu
 sce.416b$cluster <- factor(clust.416b)
 plotReducedDim(sce.416b, "TSNE", colour_by="cluster")
 ```
+
+### Assessing cluster separation
+
+We check the separation of the clusters using the silhouette width (Figure \@ref(fig:silhouette416b)).
+For each cell, we compute the average distance to cells in each other cluster.
+We then compute the minimum of these average distances across all clusters, as well as the average distance to cells in the same cluster.
+The silhouette width for each cell is defined as the difference between these two values divided by their maximum.
+Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters.
+
+Each cluster would ideally contain large positive silhouette widths, indicating that it is well-separated from other clusters.
+In Figure \@ref(fig:silhouette416b), some clusters are well-separated while others have a substantial proportion of negative widths.
+These can arise from the presence of internal subclusters, which inflates the within-cluster distance; or overclustering, where cells at the boundary of a partition are closer to the neighboring cluster than their own cluster.
+
+```{r silhouette416b, fig.cap="Silhouette widths for cells in each cluster in the 416B dataset. Each bar represents a cell, grouped by the cluster to which it is assigned."}
+sil <- silhouette(clust.416b, dist = dist.416b)
+plot(sil)
+```
+
+For a more detailed examination, we identify the closest neighboring cluster for cells with negative widths.
+This provides a perspective on the relationships between clusters that is closer to the raw data than the dendrogram in Figure \@ref(fig:dend-cluster).
+
+```{r}
+neg.widths <- sil[,3] < 0
+table(Cluster=sil[neg.widths,1], Neighbor=sil[neg.widths,2])
+```
+
+The average silhouette width across all cells can also be used to choose clustering parameters.
+The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
+This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
