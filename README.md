@@ -20,7 +20,7 @@ The repository subdirectories reflect the structure of the book:
 
 Within `analysis`, there is an additional `workflows` subdirectory.
 This contains end-to-end analysis Rmarkdown reports with minimal text and the bare minimum of code.
-We will refer to these `analysis/workflows` files as "workflows", in contrast to the chapters in `analysis`.
+We will refer to these `analysis/workflows` files as "workflows", in contrast to the "chapters" in `analysis` itself.
 
 ## Using cached objects
 
@@ -38,5 +38,32 @@ Also note the `setupHTML()` code chunk that is required at the top of each chapt
 
 ## Instructions
 
+### To build the reports
+
+Before compilation of the chapters, the workflows must be compiled:
+
+```r
+all.workflows <- list.files('analysis/workflows', pattern="Rmd$", full=TRUE)
+for (x in all.workflows) {
+    rmarkdown::render(x)
+}
+```
+
+Each chapter should be compilable as a standalone unit, depending only on the workflows and not on other chapters.
+As such, there is no need to compile chapters in any chronological order.
+
+```{r}
+rmarkdown::render("analysis/clustering.Rmd")
+rmarkdown::render("analysis/quality-control.Rmd")
+rmarkdown::render("analysis/reduced-dimensions.Rmd")
+```
+
+### To contribute reports
+
 Standard procedure: fork and PR.
+
+- All chapters must start from a `SingleCellExperiment` object.
+- All workflows should use a `SingleCellExperiment` object throughout the various chunks.
+This allows chapters to pick up the SCE at any point.
+
 @LTLA will review all incoming PRs for `analysis/`-related code.
