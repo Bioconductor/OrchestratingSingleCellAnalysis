@@ -1,0 +1,73 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Marker gene detection
+
+```{r setup, echo=FALSE, results='asis'}
+source("workflows/extractor.R")
+setupHTML()
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
+options(digits = 4)
+```
+
+## Motivation
+
+To interpret our clustering results from Chapter ???, we identify the genes that drive separation between clusters.
+These marker genes allow us to assign biological meaning to each cluster based on their functional annotation.
+In the most obvious case, the marker genes for each cluster are _a priori_ associated with particular cell types, allowing us to treat the clustering as a proxy for cell type identity.
+The same principle can be applied to more subtle differences in activation status or differentiation state.
+
+Identification of marker genes is usually based around the retrospective detection of differential expression between clusters.
+Genes that are more strongly DE are more likely to have driven cluster separation in the first place.
+Several different statistical tests are available to quantify the differences in expression profiles, and different approaches can be used to consolidate test results into a single ranking of genes for each cluster.
+These choices parametrize the theroetical differences between the various marker detection strategies presented in this chapter.
+We will demonstrate using the 10X PBMC dataset:
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/tenx-pbmc4k", "clustering", "sce.pbmc")
+```
+
+```{r}
+sce.pbmc
+```
+
+## Invalidity of $p$-values
+
+### From data snooping
+
+All of our DE strategies for detecting marker genes between clusters are statistically flawed to some extent.
+The DE analysis is performed on the same data used to obtain the clusters, which represents "data dredging" (also known as fishing or data snooping).
+The hypothesis of interest - that are there differences between clusters? - is formulated from the data, so we are more likely to get a positive result when we re-use the data set to test that hypothesis.
+
+The practical effect of data dredging is best illustrated with a simple simulation.
+We simulate i.i.d. normal values, perform $k$-means clustering and test for DE between clusters of cells with `findMarkers()`.
+The resulting distribution of $p$-values is heavily skewed towards low values (Figure \@ref(fig:pval-dist)).
+Thus, we can detect "significant" differences between clusters even in the absence of any real substructure in the data.
+This effect arises from the fact that clustering, by definition, yields groups of cells that are separated in expression space.
+Testing for DE genes between clusters will inevitably yield some significant results as that is how the clusters were defined.
+
+```{r pval-dist, fig.cap="Distribution of $p$-values from a DE analysis between two clusters in a simulation with no true subpopulation structure."}
+library(scran)
+set.seed(0)
+y <- matrix(rnorm(100000), ncol=200)
+clusters <- kmeans(t(y), centers=2)$cluster
+out <- findMarkers(y, clusters)
+hist(out[[1]]$p.value, col="grey80", xlab="p-value")
+```
+
+For marker gene detection, this effect is largely harmless as the $p$-values are used only for ranking.
+However, it becomes an issue when the $p$-values are used to define "significant differences" between clusters with respect to an error rate threshold.
+Meaningful interpretation of error rates require consideration of the long-run behaviour, i.e., the rate of incorrect rejections if the experiment were repeated many times.
+The concept of statistical significance for differences between clusters is not applicable if clusters and their interpretations are not stably reproducible across (hypothetical) replicate experiments.
+
+### Nature of replication
+
+The naive application of DE analysis methods will treat counts from the same cluster of cells as replicate observations.
+This is not the most relevant level of replication when cells are derived from the same biological sample (i.e., cell culture, animal or patient).
+DE analyses that treat cells as replicates fail to properly model the sample-to-sample variability [@lun2017overcoming].
+The latter is arguably the more important level of replication as different samples will necessarily be generated if the experiment is to be replicated.
+Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
+This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
