@@ -101,7 +101,13 @@ extractCached <- function(prefix, chunk, objects)
 <div class="aaron-content">
    
 ```r\n')
+    first <- TRUE
     for (x in names(chunks)) {
+        if (!first) {
+            cat("\n")
+        } else {
+            first <- FALSE
+        }
         cat(sprintf("### %s ###\n", x))
         cat(chunks[[x]], sep="\n")
     }
