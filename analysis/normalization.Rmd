@@ -108,7 +108,7 @@ summary(deconv.sf.zeisel)
 The above code contains several points worth elaborating on:
 
 - We use a pre-clustering step with `quickCluster()` where cells in each cluster are normalized separately and the size factors are rescaled to be comparable across clusters.
-This avoids the need to assume that most genes are non-DE across the entire population - only a non-DE majority is required between pairs of clusters, which is a weaker assumption for highly heterogeneous populations.
+This avoids the assumption that most genes are non-DE across the entire population - only a non-DE majority is required between pairs of clusters, which is a weaker assumption for highly heterogeneous populations.
 - By default, `quickCluster()` will use an approximate algorithm for PCA based on methods from the `r CRANpkg("irlba")` package.
 The approximation relies on stochastic initialization so we need to set the random seed (via `set.seed()`) for reproducibility.
 - `sf.out=TRUE` simply instructs the function to return the size factors directly, rather than a `SingleCellExperiment` containing the size factors.
@@ -130,7 +130,7 @@ abline(a=0, b=1, col="red")
 
 Accurate normalization is most important for procedures that involve estimation and interpretation of per-gene statistics.
 For example, composition biases can compromise DE analyses by systematically shifting the log-fold changes in one direction or another.
-However, it tends to be less useful for cell-based analyses such as clustering.
+However, it tends to provide less benefit over simple library size normalization for cell-based analyses such as clustering.
 The presence of composition biases already implies strong differences in expression profiles, so changing the normalization strategy is unlikely to affect the outcome of a clustering procedure.
 
 ## Normalization by spike-ins
