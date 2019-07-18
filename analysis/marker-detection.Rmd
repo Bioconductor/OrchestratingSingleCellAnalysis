@@ -1,0 +1,200 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Marker gene detection
+
+```{r setup, echo=FALSE, results='asis'}
+source("workflows/extractor.R")
+setupHTML()
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
+options(digits = 4)
+```
+
+## Motivation
+
+To interpret our clustering results from Chapter ???, we identify the genes that drive separation between clusters.
+These marker genes allow us to assign biological meaning to each cluster based on their functional annotation.
+In the most obvious case, the marker genes for each cluster are _a priori_ associated with particular cell types, allowing us to treat the clustering as a proxy for cell type identity.
+The same principle can be applied to more subtle differences in activation status or differentiation state.
+
+Identification of marker genes is usually based around the retrospective detection of differential expression between clusters.
+Genes that are more strongly DE are more likely to have driven cluster separation in the first place.
+Several different statistical tests are available to quantify the differences in expression profiles, and different approaches can be used to consolidate test results into a single ranking of genes for each cluster.
+These choices parametrize the theroetical differences between the various marker detection strategies presented in this chapter.
+We will demonstrate using the 10X PBMC dataset:
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/tenx-pbmc4k", "clustering", "sce.pbmc")
+```
+
+```{r}
+sce.pbmc
+```
+
+## Using pairwise $t$-tests
+
+### Basic application
+
+The Welch $t$-test is an obvious choice to test for differences in expression between clusters.
+It is quickly computed and has good statistical properties for large numbers of cells [soneson2018bias].
+We use the `findMarkers()` function to perform pairwise comparisons between clusters for each gene.
+This yields a list of `DataFrame`s contained ranked candidate markers for each cluster.
+
+```{r}
+library(scran)
+markers.pbmc <- findMarkers(sce.pbmc, sce.pbmc$cluster)
+markers.pbmc
+```
+
+```{r, echo=FALSE}
+chosen <- 9
+```
+
+To demonstrate, we use cluster `r chosen` as our cluster of interest for this section.
+The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values across the pairwise comparisons involving `r chosen`.
+
+```{r}
+chosen <- "9"
+interesting <- markers.pbmc[[chosen]]
+colnames(interesting)
+```
+
+Of particular interest is the `Top` field, which contains the highest^[That is, the lowest rank value. So 1st is 1, and 2nd is 2, so 1 is higher than 2. Geez.] rank for each gene across all pairwise comparisons involving cluster `r chosen`.
+The set of genes with `Top` values of 1 contains the gene with the lowest $p$-value from each comparison.
+Similarly, the set of genes with `Top` values less than or equal to 10 contains the top 10 genes from each comparison.
+Each `DataFrame` produced by `findMarkers()` will order genes based on the `Top` value.
+
+```{r}
+interesting[1:20,1:3]
+```
+
+```{r, echo=FALSE}
+# This had better be TRUE!
+platelets <- markers.pbmc[[chosen]]
+stopifnot(all(unlist(platelets["PF4",-(1:3)]) > 0))
+```
+
+We use the `Top` value to identify a set of genes that is guaranteed to distinguish cluster `r chosen` from any other cluster.
+Here, we examine the top 5 genes from each pairwise comparison (Figure \@ref(fig:heat-basic-pbmc)).
+Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (_PF4_) and pro-platelet basic protein (_PPBP_).
+
+```{r heat-basic-pbmc, fig.asp=2, fig.cap="Heatmap of log-fold changes for cluster `r chosen` over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range."}
+best.set <- interesting[interesting$Top <= 5,]
+logFCs <- as.matrix(best.set[,-(1:3)])
+colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+
+library(pheatmap)
+pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+```
+
+### Using the log-fold change 
+
+Our previous `findMarkers()` call considers both up- and downregulated genes to be potential markers.
+However, downregulated genes are less appealing as markers as it is more difficult to interpret and experimentally validate an absence of expression.
+To focus on up-regulated markers, we can instead perform a one-sided $t$-test to identify genes that are upregulated in each cluster compared to the others.
+This is achieved by setting `direction="up"` in the `findMarkers()` call.
+
+```{r}
+markers.pbmc.up <- findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up")
+interesting.up <- markers.pbmc.up[[chosen]]
+interesting.up[1:20,1:3]
+```
+
+The $t$-test also allows us to specify a non-zero log-fold change as the null hypothesis.
+This allows us to consider the magnitude of the log-fold change in our $p$-value calculations, in a manner that is more rigorous than simply filtering directly on the log-fold changes [@mccarthy2009treat].
+(Specifically, a simple threshold does not consider the variance and can enrich for genes that have both large log-fold changes and large variances.) 
+We perform this by setting `lfc=` in our `findMarkers()` call - when combined with `direction=`, this tests for genes with log-fold changes that are significantly greater than 1:
+
+```{r}
+markers.pbmc.up2 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
+    direction="up", lfc=1)
+interesting.up2 <- markers.pbmc.up2[[chosen]]
+interesting.up2[1:20,1:3]
+```
+
+These two settings yield a more focused set of candidate marker genes that are upregulated in cluster `r chosen` (Figure \@ref(heat-focused-pbmc)).
+
+```{r heat-focused-pbmc, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
+best.set <- interesting.up2[interesting.up2$Top <= 5,]
+logFCs <- as.matrix(best.set[,-(1:3)])
+colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+
+library(pheatmap)
+pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+```
+
+Of course, this increased stringency is not without cost.
+If only upregulated genes are requested from `findMarkers()`, any cluster defined by downregulation of a marker gene will not contain that gene among the top set of features in its `DataFrame`.
+This is occasionally relevant for subtypes or other states that are distinguished by high versus low expression of particular genes^[Standard operating procedure is to (i) experience a brief but crushing bout of disappointment due to the poor quality of upregulated candidate markers, (ii) rage-quit, and (iii) remember to check the genes that are changing in the other direction.].
+Similarly, setting an excessively high log-fold change threshold may discard otherwise useful genes.
+For example, a gene upregulated in a small proportion of cells of a cluster will have a small log-fold change but can still be an effective marker if the focus is on specificity rather than sensitivity.
+
+### Finding cluster-specific markers 
+
+By default, `findMarkers()` will give a high ranking to genes that are differentially expressed in any pairwise comparison.
+This is because a gene only needs a very low $p$-value in a single pairwise comparison to achieve a low `Top` value.
+A more stringent approach would onlly consider genes that are differentially expressed in all pairwise comparisons involving the cluster of interest.
+To achieve this, we set `pval.type="all"` in `findMarkers()` to use an intersection-union test [@berger1996bioequivalence] where the combined $p$-value for each gene is the maximum of the $p$-values from all pairwise comparisons.
+A gene will only achieve a low combined $p$-value if it is strongly DE in all comparisons to other clusters.
+
+```{r}
+# We can combine this with 'direction='.
+markers.pbmc.up3 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
+    pval.type="all", direction="up")
+interesting.up3 <- markers.pbmc.up3[[chosen]]
+interesting.up3[1:30,1:2]
+```
+
+This strategy will only report genes that are highly specific to the cluster of interest.
+When it works, it can be highly effective as it generates a small focused set of candidate markers. 
+However, any gene that is expressed at the same level in two or more clusters will simply not be detected. 
+This is likely to discard many interesting genes, especially if the clusters are finely resolved with weak separation.
+To give a concrete example, consider a mixed population of CD4^+^-only, CD8^+^-only, double-positive and double-negative T cells.
+With `pval.type="all"`, neither _Cd4_ or _Cd8_ would be detected as subpopulation-specific markers because each gene is expressed in two subpopulations.
+In comparison, `pval.type="any"` will detect both of these genes as they will be DE between at least one pair of subpopulations.
+This reliability motivates the use of the latter setting as the default in `findMarkers()`.
+
+## Alternative testing regimes
+
+## Handling blocking factors
+
+## Invalidity of $p$-values
+
+### From data snooping
+
+All of our DE strategies for detecting marker genes between clusters are statistically flawed to some extent.
+The DE analysis is performed on the same data used to obtain the clusters, which represents "data dredging" (also known as fishing or data snooping).
+The hypothesis of interest - that are there differences between clusters? - is formulated from the data, so we are more likely to get a positive result when we re-use the data set to test that hypothesis.
+
+The practical effect of data dredging is best illustrated with a simple simulation.
+We simulate i.i.d. normal values, perform $k$-means clustering and test for DE between clusters of cells with `findMarkers()`.
+The resulting distribution of $p$-values is heavily skewed towards low values (Figure \@ref(fig:pval-dist)).
+Thus, we can detect "significant" differences between clusters even in the absence of any real substructure in the data.
+This effect arises from the fact that clustering, by definition, yields groups of cells that are separated in expression space.
+Testing for DE genes between clusters will inevitably yield some significant results as that is how the clusters were defined.
+
+```{r pval-dist, fig.cap="Distribution of $p$-values from a DE analysis between two clusters in a simulation with no true subpopulation structure."}
+library(scran)
+set.seed(0)
+y <- matrix(rnorm(100000), ncol=200)
+clusters <- kmeans(t(y), centers=2)$cluster
+out <- findMarkers(y, clusters)
+hist(out[[1]]$p.value, col="grey80", xlab="p-value")
+```
+
+For marker gene detection, this effect is largely harmless as the $p$-values are used only for ranking.
+However, it becomes an issue when the $p$-values are used to define "significant differences" between clusters with respect to an error rate threshold.
+Meaningful interpretation of error rates require consideration of the long-run behaviour, i.e., the rate of incorrect rejections if the experiment were repeated many times.
+The concept of statistical significance for differences between clusters is not applicable if clusters and their interpretations are not stably reproducible across (hypothetical) replicate experiments.
+
+### Nature of replication
+
+The naive application of DE analysis methods will treat counts from the same cluster of cells as replicate observations.
+This is not the most relevant level of replication when cells are derived from the same biological sample (i.e., cell culture, animal or patient).
+DE analyses that treat cells as replicates fail to properly model the sample-to-sample variability [@lun2017overcoming].
+The latter is arguably the more important level of replication as different samples will necessarily be generated if the experiment is to be replicated.
+Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
+This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.

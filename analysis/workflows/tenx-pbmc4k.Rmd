@@ -62,3 +62,8 @@ set.seed(1000000)
 sce.pbmc <- runUMAP(sce.pbmc, use_dimred="PCA")
 ```
 
+```{r clustering}
+g <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust <- igraph::cluster_walktrap(g)$membership
+sce.pbmc$cluster <- factor(clust)
+```
