@@ -59,7 +59,7 @@ The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `
 ```{r}
 chosen <- "9"
 interesting <- markers.pbmc[[chosen]]
-names(interesting)
+colnames(interesting)
 ```
 
 Of particular interest is the `Top` field, which contains the highest^[That is, the lowest rank value. So 1st is 1, and 2nd is 2, so 1 is higher than 2. Geez.] rank for each gene across all pairwise comparisons involving cluster `r chosen`.
@@ -90,7 +90,7 @@ library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 ```
 
-### Controlling the direction
+### Using the log-fold change 
 
 Our previous `findMarkers()` call considers both up- and downregulated genes to be potential markers.
 However, downregulated genes are less appealing as markers as it is more difficult to interpret and experimentally validate an absence of expression.
@@ -126,16 +126,36 @@ library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 ```
 
-Of course, this increased stringency does not come for free.
+Of course, this increased stringency is not without cost.
 If only upregulated genes are requested from `findMarkers()`, any cluster defined by downregulation of a marker gene will not contain that gene among the top set of features in its `DataFrame`.
 This is occasionally relevant for subtypes or other states that are distinguished by high versus low expression of particular genes^[Standard operating procedure is to (i) experience a brief but crushing bout of disappointment due to the poor quality of upregulated candidate markers, (ii) rage-quit, and (iii) remember to check the genes that are changing in the other direction.].
 Similarly, setting an excessively high log-fold change threshold may discard otherwise useful genes.
 For example, a gene upregulated in a small proportion of cells of a cluster will have a small log-fold change but can still be an effective marker if the focus is on specificity rather than sensitivity.
 
-### Controlling the consolidation
+### Finding cluster-specific markers 
 
+By default, `findMarkers()` will give a high ranking to genes that are differentially expressed in any pairwise comparison.
+This is because a gene only needs a very low $p$-value in a single pairwise comparison to achieve a low `Top` value.
+A more stringent approach would onlly consider genes that are differentially expressed in all pairwise comparisons involving the cluster of interest.
+To achieve this, we set `pval.type="all"` in `findMarkers()` to use an intersection-union test [@berger1996bioequivalence] where the combined $p$-value for each gene is the maximum of the $p$-values from all pairwise comparisons.
+A gene will only achieve a low combined $p$-value if it is strongly DE in all comparisons to other clusters.
 
+```{r}
+# We can combine this with 'direction='.
+markers.pbmc.up3 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
+    pval.type="all", direction="up")
+interesting.up3 <- markers.pbmc.up3[[chosen]]
+interesting.up3[1:30,1:2]
+```
 
+This strategy will only report genes that are highly specific to the cluster of interest.
+When it works, it can be highly effective as it generates a small focused set of candidate markers. 
+However, any gene that is expressed at the same level in two or more clusters will simply not be detected. 
+This is likely to discard many interesting genes, especially if the clusters are finely resolved with weak separation.
+To give a concrete example, consider a mixed population of CD4^+^-only, CD8^+^-only, double-positive and double-negative T cells.
+With `pval.type="all"`, neither _Cd4_ or _Cd8_ would be detected as subpopulation-specific markers because each gene is expressed in two subpopulations.
+In comparison, `pval.type="any"` will detect both of these genes as they will be DE between at least one pair of subpopulations.
+This reliability motivates the use of the latter setting as the default in `findMarkers()`.
 
 ## Alternative testing regimes
 
