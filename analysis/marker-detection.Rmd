@@ -36,9 +36,9 @@ sce.pbmc
 
 ## Using pairwise $t$-tests
 
-### Basic application
+### Standard application
 
-The Welch $t$-test is an obvious choice to test for differences in expression between clusters.
+The Welch $t$-test is an obvious choice of statistical method to test for differences in expression between clusters.
 It is quickly computed and has good statistical properties for large numbers of cells [soneson2018bias].
 We use the `findMarkers()` function to perform pairwise comparisons between clusters for each gene.
 This yields a list of `DataFrame`s contained ranked candidate markers for each cluster.
@@ -54,7 +54,7 @@ chosen <- 9
 ```
 
 To demonstrate, we use cluster `r chosen` as our cluster of interest for this section.
-The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values across the pairwise comparisons involving `r chosen`.
+The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values [@simes1986improved] across the pairwise comparisons involving `r chosen`.
 
 ```{r}
 chosen <- "9"
@@ -158,6 +158,54 @@ In comparison, `pval.type="any"` will detect both of these genes as they will be
 This reliability motivates the use of the latter setting as the default in `findMarkers()`.
 
 ## Alternative testing regimes
+
+### Using the Wilcoxon rank sum test
+
+The Wilcoxon rank sum test (also known as the Wilcoxon-Mann-Whitney test, or WMW test) is another widely used method for pairwise comparisons between groups of observations.
+Its strength lies in the fact that it directly assesses separation between the expression distributions of different clusters.
+The WMW test statistic is proportional to the area-under-the-curve (AUC), i.e., the concordance probability, which is the probability of a random cell from one cluster having higher expression than a random cell from another cluster.
+In a pairwise comparison, AUCs of 1 or 0 indicate that the two clusters have perfectly separated expression distributions.
+Thus, the WMW test directly addresses the most desirable property of a candidate marker gene, while the $t$ test only does so indirectly via the difference in the means and the intra-group variance.
+
+We perform WMW tests using the `overlapExprs()` function.
+This returns a list of `DataFrame`s containing ranked candidate markers for each cluster.
+The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have the same interpretation as described for $t$ tests.
+We demonstrate below by detecting upregulated genes in each cluster with `direction="up"`.
+
+```{r}
+# TODO: make findMarkers() accept a method= option that
+# switches between these things, rather than having a 
+# different function altogether. Also need a lfc= option.
+markers.pbmc.wmw <- overlapExprs(sce.pbmc, sce.pbmc$cluster, direction="up")
+names(markers.pbmc.wmw)
+```
+
+To explore the results in more detail, we focus on the `DataFrame` for cluster `r chosen`.
+The interpretation of `Top` is the same as described for $t$ tests, and Simes' method is again used to combine $p$-values across pairwise comparisons.
+
+```{r}
+interesting.wmw <- markers.pbmc.wmw[[chosen]]
+interesting.wmw[1:30,1:3]
+```
+
+The `DataFrame` contains the AUCs from comparing cluster `r chosen` to every other cluster (Figure \@ref(fig:heat-wmw-pbmc)).
+A value greater than 0.5 indicates that the gene is upregulated in the current cluster compared to the other cluster,
+while values less than 0.5 correspond to downregulation.
+We would typically expect AUCs of 0.7-0.8 for a strongly upregulated candidate marker.
+
+```{r heat-wmw-pbmc, fig.asp=2, fig.cap="Heatmap of AUCs for cluster `r chosen` over all other clusters."}
+best.set <- interesting.wmw[interesting.wmw$Top <= 5,]
+AUCs <- as.matrix(best.set[,-(1:3)])
+colnames(AUCs) <- sub("AUC.", "", colnames(AUCs))
+
+library(pheatmap)
+pheatmap(AUCs, breaks=seq(0, 1, length.out=21),
+    color=viridis::viridis(21))
+```
+
+The main disadvantage of the WMW test is that the AUCs are much slower to compute compared to $t$-statistics.
+This may be inconvenient for interactive analyses involving multiple iterations of marker detection.
+We can mitigate this to some extent by parallelizing these calculations using the `BPPARAM=` argument in `overlapExprs()`.
 
 ## Handling blocking factors
 
