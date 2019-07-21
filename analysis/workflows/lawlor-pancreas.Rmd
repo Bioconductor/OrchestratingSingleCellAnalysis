@@ -1,0 +1,33 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r loading}
+library(scRNAseq)
+sce.lawlor <- LawlorPancreasData()
+```
+
+```{r quality-control}
+library(scater)
+sce.lawlor <- calculateQCMetrics(sce.lawlor, compact=TRUE)
+NFeatures <- isOutlier(sce.lawlor$scater_qc$all$total_features_by_counts, 
+    log=TRUE, type="lower", nmads=3)
+LibSize <- isOutlier(sce.lawlor$scater_qc$all$total_counts, 
+    log=TRUE, type="lower", nmads=3)
+discard <- NFeatures | LibSize
+sce.lawlor <- sce.lawlor[,!discard]
+```
+
+```{r normalization}
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.lawlor)
+sce.lawlor <- computeSumFactors(sce.lawlor, clusters=clusters)
+sce.lawlor <- normalize(sce.lawlor)
+```
+
+```{r variance-modelling}
+fit <- trendVar(sce.lawlor, use.spikes=FALSE,
+    block=sce.lawlor$Donor, loess.args=list(span=0.05))
+dec.lawlor <- decomposeVar(sce.lawlor, fit)
+```
