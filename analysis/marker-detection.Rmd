@@ -11,6 +11,7 @@ source("workflows/extractor.R")
 setupHTML()
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
 options(digits = 4)
+library(BiocStyle)
 ```
 
 ## Motivation
@@ -253,6 +254,80 @@ Another property of the binomial test is that it will not respond to scaling nor
 Systematic differences in library size between clusters will not be considered when computing $p$-values or effect sizes.
 This is not necessarily problematic for marker gene detection -
 users can treat this as retaining information about the total RNA content, analogous to spike-in normalization.
+
+### Using custom DE methods
+
+It is possible to perform marker gene detection based on precomputed DE statistics.
+This allows us to take advantage of more sophisticated tests in dedicated DE analysis packages.
+To demonstrate, consider the `voom()` approach from the `r Biocpkg("limma")` package [@law2014voom].
+We first process our `SingleCellExperiment` to obtain a `fit` object as shown below.
+
+```{r}
+library(limma)
+design <- model.matrix(~0 + cluster, data=colData(sce.pbmc))
+colnames(design)
+
+# Removing very low-abundance genes.
+keep <- calculateAverage(sce.pbmc) > 0.1 
+summary(keep)
+
+y <- convertTo(sce.pbmc, subset.row=keep)
+v <- voom(y, design)
+fit <- lmFit(v, design)
+```
+
+We then perform pairwise comparisons between clusters using the TREAT strategy [@mccarthy2009treat] to test for log-fold changes that are significantly greater than 0.5.
+For each comparison, we store the corresponding data frame of statistics in `all.results`, along with the identities of the clusters involved in `all.pairs`.
+
+```{r}
+nclust <- length(unique(sce.pbmc$cluster))
+all.results <- all.pairs <- list()
+counter <- 1L
+
+# Iterating across the first 'nclust' coefficients in design,
+# and comparing them to each other in a pairwise manner.
+for (x in seq_len(nclust)) {
+    for (y in seq_len(x-1L)) {
+        con <- integer(ncol(design))
+        con[x] <- 1
+        con[y] <- -1
+        fit2 <- contrasts.fit(fit, con)
+        fit2 <- treat(fit2, robust=TRUE, lfc=0.5)
+
+        res <- topTreat(fit2, n=Inf, sort.by="none")
+        all.results[[counter]] <- res
+        all.pairs[[counter]] <- colnames(design)[c(x, y)]
+        counter <- counter+1L
+
+        # Also filling the reverse comparison.
+        res$logFC <- -res$logFC
+        all.results[[counter]] <- res
+        all.pairs[[counter]] <- colnames(design)[c(y, x)]
+        counter <- counter+1L
+    }
+}
+```
+
+These custom results are consolidated into a single marker list for each cluster with the `combineMarkers()` function.
+This combines test statistics across all pairwise comparisons involving a single cluster,
+yielding a per-cluster `DataFrame` that can be interpreted in the same manner as discussed previously.
+
+```{r}
+all.pairs <- do.call(rbind, all.pairs)
+combined <- combineMarkers(all.results, all.pairs, pval.field="P.Value")
+
+# Inspecting results for our cluster of interest again.
+interesting.voom <- combined[[paste0("cluster", chosen)]] 
+colnames(interesting.voom)
+head(interesting.voom[,1:3])
+```
+
+By default, we do not use custom DE methods to perform marker detection, for several reasons.
+Many of these methods rely on empirical Bayes shrinkage to share information across genes in the presence of limited replication. 
+However, this is unnecessary when one treats the many cells in a group as "replicates" of each other (see Section ???).
+These methods also make stronger assumptions about the data (e.g., equal variances for linear models, the distribution of variances during empirical Bayes) that are more likely to be violated in noisy scRNA-seq contexts.
+From a practical perspective, they require more work to set up and take more time to run.
+Nonetheless, some custom methods (e.g., `r Biocpkg("MAST")`) may provide a useful point of difference from the simpler tests, in which case they can be converted into a marker detection scheme as described above.
 
 ## Handling blocking factors
 
