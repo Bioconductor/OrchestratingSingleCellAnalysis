@@ -7,14 +7,25 @@ library(scRNAseq)
 sce.lawlor <- LawlorPancreasData()
 ```
 
+```{r gene-annotation}
+library(AnnotationHub)
+edb <- AnnotationHub()[["AH73881"]]
+anno <- select(edb, keys=rownames(sce.lawlor), keytype="GENEID", 
+    columns=c("SYMBOL", "SEQNAME"))
+rowData(sce.lawlor) <- anno[match(rownames(sce.lawlor), anno[,1]),-1]
+```
+
 ```{r quality-control}
 library(scater)
-sce.lawlor <- calculateQCMetrics(sce.lawlor, compact=TRUE)
+sce.lawlor <- calculateQCMetrics(sce.lawlor, compact=TRUE,
+    feature_controls=list(Mito=which(rowData(sce.lawlor)$SEQNAME=="MT")))
 NFeatures <- isOutlier(sce.lawlor$scater_qc$all$total_features_by_counts, 
     log=TRUE, type="lower", nmads=3)
 LibSize <- isOutlier(sce.lawlor$scater_qc$all$total_counts, 
     log=TRUE, type="lower", nmads=3)
-discard <- NFeatures | LibSize
+Mito <- isOutlier(sce.lawlor$scater_qc$feature_control_Mito$pct_counts,
+    type="higher", nmads=3)
+discard <- NFeatures | LibSize | Mito
 sce.lawlor <- sce.lawlor[,!discard]
 ```
 

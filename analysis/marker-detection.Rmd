@@ -68,7 +68,7 @@ Similarly, the set of genes with `Top` values less than or equal to 10 contains 
 Each `DataFrame` produced by `findMarkers()` will order genes based on the `Top` value.
 
 ```{r}
-interesting[1:20,1:3]
+interesting[1:10,1:3]
 ```
 
 ```{r, echo=FALSE}
@@ -100,7 +100,7 @@ This is achieved by setting `direction="up"` in the `findMarkers()` call.
 ```{r}
 markers.pbmc.up <- findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up")
 interesting.up <- markers.pbmc.up[[chosen]]
-interesting.up[1:20,1:3]
+interesting.up[1:10,1:3]
 ```
 
 The $t$-test also allows us to specify a non-zero log-fold change as the null hypothesis.
@@ -112,7 +112,7 @@ We perform this by setting `lfc=` in our `findMarkers()` call - when combined wi
 markers.pbmc.up2 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
     direction="up", lfc=1)
 interesting.up2 <- markers.pbmc.up2[[chosen]]
-interesting.up2[1:20,1:3]
+interesting.up2[1:10,1:3]
 ```
 
 These two settings yield a more focused set of candidate marker genes that are upregulated in cluster `r chosen` (Figure \@ref(heat-focused-pbmc)).
@@ -145,7 +145,7 @@ A gene will only achieve a low combined $p$-value if it is strongly DE in all co
 markers.pbmc.up3 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
     pval.type="all", direction="up")
 interesting.up3 <- markers.pbmc.up3[[chosen]]
-interesting.up3[1:30,1:2]
+interesting.up3[1:10,1:2]
 ```
 
 This strategy will only report genes that are highly specific to the cluster of interest.
@@ -185,7 +185,7 @@ The interpretation of `Top` is the same as described for $t$ tests, and Simes' m
 
 ```{r}
 interesting.wmw <- markers.pbmc.wmw[[chosen]]
-interesting.wmw[1:30,1:3]
+interesting.wmw[1:10,1:3]
 ```
 
 The `DataFrame` contains the AUCs from comparing cluster `r chosen` to every other cluster (Figure \@ref(fig:heat-wmw-pbmc)).
@@ -193,7 +193,7 @@ A value greater than 0.5 indicates that the gene is upregulated in the current c
 while values less than 0.5 correspond to downregulation.
 We would typically expect AUCs of 0.7-0.8 for a strongly upregulated candidate marker.
 
-```{r heat-wmw-pbmc, fig.asp=2, fig.cap="Heatmap of AUCs for cluster `r chosen` over all other clusters."}
+```{r heat-wmw-pbmc, fig.cap="Heatmap of AUCs for cluster `r chosen` over all other clusters."}
 best.set <- interesting.wmw[interesting.wmw$Top <= 5,]
 AUCs <- as.matrix(best.set[,-(1:3)])
 colnames(AUCs) <- sub("AUC.", "", colnames(AUCs))
@@ -206,6 +206,53 @@ pheatmap(AUCs, breaks=seq(0, 1, length.out=21),
 The main disadvantage of the WMW test is that the AUCs are much slower to compute compared to $t$-statistics.
 This may be inconvenient for interactive analyses involving multiple iterations of marker detection.
 We can mitigate this to some extent by parallelizing these calculations using the `BPPARAM=` argument in `overlapExprs()`.
+
+### Using a binomial test
+
+The binomial test identifies genes that differ in the proportion of expressing cells between clusters.
+(For the purposes of this section, a cell is considered to express a gene simply if it has non-zero expression for that gene.)
+This represents a much more stringent definition of marker genes compared to the other methods, as differences in expression between clusters are effectively ignored if both distributions of expression values are not near zero.
+The premise is that genes are more likely to contribute to important biological decisions if they were active in one cluster and silent in another, compared to more subtle "tuning" effects from changing the expression of an active gene.
+From a practical perspective, a binary measure of presence/absence is easier to validate.
+
+We perform pairwise binomial tests between clusters using the `pairwiseBinom()` function.
+This returns a list of `DataFrame`s containing marker statistics for each cluster, such as the `Top` rank and its $p$-value.
+Here, the effect size is reported as the log-fold change in this proportion between each pair of clusters.
+Large positive log-fold changes indicate that the gene is more frequently expressed in one cluster compared to the other.
+Here, we focus on genes that are upregulated in each cluster compared to the others by setting `direction="up"`.
+
+```{r}
+# TODO: push this into another findMarkers() option. 
+b.pairs <- pairwiseBinom(sce.pbmc, sce.pbmc$cluster, direction="up")
+markers.pbmc.binom <- combineMarkers(b.pairs$statistics, b.pairs$pairs)
+names(markers.pbmc.binom)
+interesting.binom <- markers.pbmc.binom[[chosen]]
+colnames(interesting.binom)
+```
+
+Figure \ref(fig:viol-de-binom) confirms that the top genes exhibit strong differences in the proportion of expressing cells in cluster `r chosen` compared to the others. 
+
+```{r viol-de-binom, fig.cap=sprintf("Distribution of log-normalized expression values for the top 10 DE genes involving cluster %s with the binomial test, stratified by cluster assignment and coloured by the plate of origin for each cell.", chosen)}
+library(scater)
+top.genes <- head(rownames(interesting.binom))
+plotExpression(sce.pbmc, x="cluster", features=top.genes)
+```
+
+The disadvantage of the binomial test is that its increased stringency can lead to the loss of good candidate markers.
+For example, _GCG_ is a known marker for pancreatic alpha cells but is expressed in almost every other cell of the @lawlor2017singlecell pancreas data (Figure \@ref(fig:viol-gcg-lawlor)) and would not be highly ranked by the binomial test.
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/lawlor-pancreas", "normalization", "sce.lawlor")
+```
+
+```{r viol-gcg-lawlor, fig.cap="Distribution of log-normalized expression values for _GCG_ across different pancreatic cell types in GSE86469."}
+plotExpression(sce.lawlor, x="cell type", features="ENSG00000115263")
+```
+
+Another property of the binomial test is that it will not respond to scaling normalization.
+Systematic differences in library size between clusters will not be considered when computing $p$-values or effect sizes.
+This is not necessarily problematic for marker gene detection -
+users can treat this as retaining information about the total RNA content, analogous to spike-in normalization.
 
 ## Handling blocking factors
 
