@@ -342,8 +342,8 @@ extractCached("workflows/lun-416b", "normalization", "sce.416b")
 ```
 
 ```{r}
-m.out <- findMarkers(sce.416b, sce.416b$cluster, 
-    block=sce.416b$batch, direction="up") 
+m.out <- findMarkers(sce.416b, sce.416b$phenotype, 
+                     block=sce.416b$block, direction="up") 
 ```
 
 For each gene, each pairwise comparion between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
@@ -370,10 +370,10 @@ There is also a slight increase in power when information is shared across clust
 ```{r}
 # Setting up the design matrix (we remove intercept for full rank
 # in the final design matrix with the cluster-specific terms).
-design <- model.matrix(~sce.416b$Plate)
+design <- model.matrix(~sce.416b$block)
 design <- design[,-1,drop=FALSE]
 
-m.alt <- findMarkers(sce.416b, sce.416b$cluster, 
+m.alt <- findMarkers(sce.416b, sce.416b$phenotype, 
     design=design, direction="up")
 demo <- m.alt[["1"]]
 demo[demo$Top <= 5,1:3]
