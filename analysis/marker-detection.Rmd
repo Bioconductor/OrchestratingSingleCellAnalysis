@@ -331,6 +331,60 @@ Nonetheless, some custom methods (e.g., `r Biocpkg("MAST")`) may provide a usefu
 
 ## Handling blocking factors
 
+## Using the `block=` argument
+
+Large studies may contain factors of variation that are known and not interesting (e.g., batch effects, sex differences).
+If these are not modelled, they can interfere with marker gene detection - most obviously by inflating the variance within each cluster, but also by distorting the log-fold changes if the cluster composition varies across levels of the blocking factor.
+To avoid these issues, we set the `block=` argument in the `findMarkers()` call, as demonstrated below for the 416B data set.
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/lun-416b", "normalization", "sce.416b")
+```
+
+```{r}
+m.out <- findMarkers(sce.416b, sce.416b$cluster, 
+    block=sce.416b$batch, direction="up") 
+```
+
+For each gene, each pairwise comparion between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
+The function will then combine $p$-values from different plates using Stouffer's Z method to obtain a single $p$-value per pairwise comparison.
+(These $p$-values are further combined across comparisons to obtain a single $p$-value per gene, using either Simes' method or an intersection-union test depending on the value of `pval.type=`.)
+This approach favours genes that exhibit consistent DE in the same direction in each plate.
+
+```{r}
+demo <- m.out[["1"]] 
+demo[demo$Top <= 5,1:3]
+```
+
+The `block=` argument works with all tests shown above and is robust to difference in the log-fold changes or variance between batches.
+However, it assumes that each pair of clusters is present in at least one batch.
+In scenarios where cells from two clusters never co-occur in the same batch, the comparison will be impossible and `NA`s will be reported in the output.
+
+## Using the `design=` argument
+
+Another approach is to define a design matrix containing the batch of origin as the sole factor.
+`findMarkers()` will then fit a linear model to the log-expression values, similar to the use of `r Biocpkg("limma")` for bulk RNA sequencing data [@ritchie2015limma].
+This handles situations where multiple batches contain unique clusters, as comparisons can be implicitly performed via shared cell types in each batch.
+There is also a slight increase in power when information is shared across clusters for variance estimation.
+
+```{r}
+# Setting up the design matrix (we remove intercept for full rank
+# in the final design matrix with the cluster-specific terms).
+design <- model.matrix(~sce.416b$Plate)
+design <- design[,-1,drop=FALSE]
+
+m.alt <- findMarkers(sce.416b, sce.416b$cluster, 
+    design=design, direction="up")
+demo <- m.alt[["1"]]
+demo[demo$Top <= 5,1:3]
+```
+
+The use of a linear model makes some strong assumptions, necessitating some caution when interpreting the results.
+If the batch effect is not consistent across clusters, the variance will be inflated and the log-fold change estimates will be distorted.
+Variances are also assumed to be equal across groups, which is not true in general.
+In particular, the presence of clusters in which a gene is silent will shrink the residual variance towards zero, preventing the model from penalizing genes with high variance in other clusters.
+Thus, we generally recommend the use of `block=` where possible.
+
 ## Invalidity of $p$-values
 
 ### From data snooping

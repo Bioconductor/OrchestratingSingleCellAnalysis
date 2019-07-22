@@ -53,9 +53,28 @@ dec.416b <- decomposeVar(sce.416b, fit.416b)
 chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
 ```
 
+```{r batch-correction}
+# Composition of the plates is expected to be the same,
+# hence the use of a simple 'removeBatchEffect'.
+library(limma)
+assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b), 
+    design=model.matrix(~sce.416b$Oncogene), batch=sce.416b$Plate)
+```
+
 ```{r dimensionality-reduction}
-sce.416b <- denoisePCA(sce.416b, technical=dec.416b, subset.row=chosen.hvgs)
+sce.416b <- denoisePCA(sce.416b, technical=dec.416b, 
+    subset.row=chosen.hvgs, assay.type="corrected")
 
 set.seed(1010)
 sce.416b <- runTSNE(sce.416b, use_dimred="PCA", perplexity=10)
+```
+
+```{r clustering}
+my.dist <- dist(reducedDim(sce.416b, "PCA"))
+my.tree <- hclust(my.dist, method="ward.D2")
+
+library(dynamicTreeCut)
+my.clusters <- unname(cutreeDynamic(my.tree, distM=as.matrix(my.dist),
+    minClusterSize=10, verbose=0))
+sce.416b$cluster <- factor(my.clusters)
 ```
