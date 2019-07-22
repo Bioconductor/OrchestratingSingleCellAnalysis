@@ -177,7 +177,7 @@ We combine these factors together and supply this to the `batch=` argument.
 This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
 
 ```{r}
-batch <- paste0(sce.416b$Oncogene, "-", sce.416b$Plate)
+batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
 
 qc.lib3 <- isOutlier(log(sce.416b$total_counts), nmads=3, type="lower",
     batch=batch)

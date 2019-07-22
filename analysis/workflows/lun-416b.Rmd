@@ -58,7 +58,7 @@ chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
 # hence the use of a simple 'removeBatchEffect'.
 library(limma)
 assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b), 
-    design=model.matrix(~sce.416b$Oncogene), batch=sce.416b$Plate)
+    design=model.matrix(~sce.416b$phenotype), batch=sce.416b$Plate)
 ```
 
 ```{r dimensionality-reduction}
