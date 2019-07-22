@@ -74,7 +74,7 @@ extractCached <- function(prefix, chunk, objects)
 
     m <- match(chunk, names(chunks))
     if (is.na(m)) {
-        stop("could not find chunk '%s'", chunk)
+        stop(sprintf("could not find chunk '%s'", chunk))
     }
     chunks <- chunks[seq_len(m)]
 
