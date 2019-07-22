@@ -39,7 +39,7 @@ We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, whic
 Importantly, the data is provided with no prior QC, allowing us to apply our own procedures as desired.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/lun-416b", "download", "sce.416b")
+extractCached("workflows/lun-416b", "loading", "sce.416b")
 ```
 
 ```{r}

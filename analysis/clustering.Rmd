@@ -31,7 +31,7 @@ extractCached("workflows/tenx-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 sce.pbmc
 ```
 
-## Comments on truth
+## Comments on Truth
 
 At this point^[Pretty deep title here. I'm not a Doctor of Philosophy for nothing, y'know.], it is worth stressing the distinction between clusters and cell types.
 The former is an empirical construct while the latter is a biological truth (albeit a vaguely defined one).
