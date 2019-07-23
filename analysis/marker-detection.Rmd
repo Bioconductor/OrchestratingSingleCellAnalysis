@@ -9,7 +9,7 @@ bibliography: ../ref.bib
 ```{r setup, echo=FALSE, results="asis"}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache = TRUE,
-                      dev = 'CairoPNG')
+                      dev = 'Cairo')
 options(digits = 4)
 library(BiocStyle)
 source("workflows/extractor.R")
@@ -340,11 +340,11 @@ If these are not modelled, they can interfere with marker gene detection - most 
 To avoid these issues, we set the `block=` argument in the `findMarkers()` call, as demonstrated below for the 416B data set.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/lun-416b", "normalization", "sce.416b")
+extractCached("workflows/lun-416b", "clustering", "sce.416b")
 ```
 
 ```{r}
-m.out <- findMarkers(sce.416b, sce.416b$phenotype, 
+m.out <- findMarkers(sce.416b, sce.416b$cluster, 
                      block=sce.416b$block, direction="up") 
 ```
 
@@ -375,7 +375,7 @@ There is also a slight increase in power when information is shared across clust
 design <- model.matrix(~sce.416b$block)
 design <- design[,-1,drop=FALSE]
 
-m.alt <- findMarkers(sce.416b, sce.416b$phenotype, 
+m.alt <- findMarkers(sce.416b, sce.416b$cluster, 
     design=design, direction="up")
 demo <- m.alt[["1"]]
 demo[demo$Top <= 5,1:3]
