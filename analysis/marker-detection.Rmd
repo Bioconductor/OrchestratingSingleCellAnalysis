@@ -429,6 +429,6 @@ This reinforces the inappropriateness of using the marker gene $p$-values to mak
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```

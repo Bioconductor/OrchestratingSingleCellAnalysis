@@ -332,7 +332,7 @@ wrap_plots(p1, p2, nrow = 1)
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```
 

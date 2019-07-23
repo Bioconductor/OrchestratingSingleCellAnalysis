@@ -26,6 +26,6 @@ setupHTML()
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```

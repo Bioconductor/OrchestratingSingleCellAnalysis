@@ -428,6 +428,6 @@ This can be helpful to automatically obtain a "reasonable" clustering, though in
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```

@@ -373,6 +373,6 @@ Given a discrepancy between the visible clusters on a $t$-SNE plot and those ide
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```

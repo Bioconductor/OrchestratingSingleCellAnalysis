@@ -497,6 +497,6 @@ Based on the example analyses, we task the interested reader to assess the previ
 
 ## Session Info
 
-```{r, results='asis', echo=FALSE}
+```{r, echo=FALSE}
 prettySessionInfo()
 ```
