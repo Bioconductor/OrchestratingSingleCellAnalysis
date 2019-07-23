@@ -7,6 +7,7 @@ bibliography: ../ref.bib
 # Feature selection 
 
 ```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache = TRUE,
                       dev = 'Cairo')
