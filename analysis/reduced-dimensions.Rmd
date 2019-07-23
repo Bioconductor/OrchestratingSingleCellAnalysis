@@ -6,10 +6,14 @@ bibliography: ../ref.bib
 
 # Dimensionality reduction
 
-```{r setup, echo=FALSE, results='asis'}
-source("workflows/extractor.R")
-knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
 setupHTML()
 ```
 
@@ -365,3 +369,10 @@ As a general rule, we would not perform clustering on the $t$-SNE coordinates.
 Rather, we would cluster on the first 10-50 PCs (see Chapter ???) and then visualize the cluster identities on the $t$-SNE plot.
 This ensures that clustering makes use of the information that was lost during compression into two dimensions.
 Given a discrepancy between the visible clusters on a $t$-SNE plot and those identified by our clustering, we would be inclined to favour the latter.
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

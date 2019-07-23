@@ -6,11 +6,15 @@ bibliography: ../ref.bib
 
 # Quality Control
 
-```{r setup, echo=FALSE, results='asis'}
+```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
+library(BiocStyle)
 source("workflows/extractor.R")
 setupHTML()
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
-options(digits = 4)
 ```
 
 ## Motivation
@@ -39,7 +43,7 @@ We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, whic
 Importantly, the data is provided with no prior QC, allowing us to apply our own procedures as desired.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/lun-416b", "download", "sce.416b")
+extractCached("workflows/lun-416b", "loading", "sce.416b")
 ```
 
 ```{r}
@@ -177,7 +181,7 @@ We combine these factors together and supply this to the `batch=` argument.
 This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
 
 ```{r}
-batch <- paste0(sce.416b$Oncogene, "-", sce.416b$Plate)
+batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
 
 qc.lib3 <- isOutlier(log(sce.416b$total_counts), nmads=3, type="lower",
     batch=batch)
@@ -397,3 +401,10 @@ As an aside, it is worth mentioning that the true technical quality of a cell ma
 This can arise if some cell types are not amenable to dissociation or microfluidics handling during the scRNA-seq protocol.
 In such cases, it is possible to "correctly" discard an entire cell type during QC if all of its cells are damaged.
 Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

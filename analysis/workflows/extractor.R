@@ -72,6 +72,12 @@ extractCached <- function(prefix, chunk, objects)
         chunks[[curname]] <- current.chunk
     }
 
+    m <- match(chunk, names(chunks))
+    if (is.na(m)) {
+        stop(sprintf("could not find chunk '%s'", chunk))
+    }
+    chunks <- chunks[seq_len(m)]
+
     # Collecting all variable names and loading them into the global namespace.
     if (is.null(old <- knitr::opts_knit$get("output.dir"))) {
         knitr::opts_knit$set(output.dir=".")
@@ -82,6 +88,8 @@ extractCached <- function(prefix, chunk, objects)
     for (obj in objects) {
         assign.pattern <- paste0(obj, ".*<-")
         found <- FALSE
+
+        # Setting 'rev' to get the last chunk in which 'obj' was on the left-hand side of assignment.
         for (x in rev(names(chunks))) {
             if (found <- any(grepl(assign.pattern, chunks[[x]]))) {
                 assign(obj, envir=.GlobalEnv, 
@@ -118,4 +126,31 @@ extractCached <- function(prefix, chunk, objects)
 }
 
 
+## Pretty (collapsible) printing of R Session info
+## must follow after setupHTML() is run that defines collapsible div class
+prettySessionInfo <- function() {
+    ## grab session info printed output
+    tmp <- tempfile()
+    sink(tmp)
+    print(sessionInfo())
+    sink()
+    lines <- readLines(tmp)
+
+    ## print session info out into collapsible div
+    cat('<button class="aaron-collapse">View session info</button>
+<div class="aaron-content">\n')
+    first <- TRUE
+    for (l in lines) {
+        if (!first) {
+            cat("\n")
+        } else {
+            first <- FALSE
+        }
+        cat(sprintf("%s", l))
+    }
+    cat("\n")
+    cat("</div>\n")
+
+    invisible(NULL)
+}
 

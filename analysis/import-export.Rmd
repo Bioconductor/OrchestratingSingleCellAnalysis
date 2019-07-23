@@ -1,1 +1,27 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
 # Data Import and Export
+
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
+library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
+```
+
+*WIP*
+
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

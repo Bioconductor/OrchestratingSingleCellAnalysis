@@ -1,12 +1,20 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
 
 # A Basic Analysis
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE, warning = FALSE, error = FALSE,
+```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache = TRUE,
                       dev = 'CairoPNG')
 options(digits = 4)
+library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
 ```
 
 In this chapter, we will walk through a minimal analysis of a simple scRNA-seq dataset in order to acquaint you with the overall framework of scRNA-seq in code terms. 
@@ -485,3 +493,10 @@ iSEE(sce)
 ```
 
 Based on the example analyses, we task the interested reader to assess the previous section's automatic annotation relative to the clustering results using `iSEE`.
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

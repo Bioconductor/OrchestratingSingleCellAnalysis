@@ -7,7 +7,10 @@ bibliography: ../ref.bib
 # Clustering
 
 ```{r setup, echo=FALSE, results="asis"}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
 options(digits = 4)
 library(BiocStyle)
 source("workflows/extractor.R")
@@ -31,7 +34,7 @@ extractCached("workflows/tenx-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 sce.pbmc
 ```
 
-## Comments on truth
+## Comments on Truth
 
 At this point^[Pretty deep title here. I'm not a Doctor of Philosophy for nothing, y'know.], it is worth stressing the distinction between clusters and cell types.
 The former is an empirical construct while the latter is a biological truth (albeit a vaguely defined one).
@@ -421,3 +424,10 @@ table(Cluster=sil[neg.widths,1], Neighbor=sil[neg.widths,2])
 The average silhouette width across all cells can also be used to choose clustering parameters.
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

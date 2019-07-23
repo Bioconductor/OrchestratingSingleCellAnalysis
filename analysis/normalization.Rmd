@@ -6,10 +6,14 @@ bibliography: ../ref.bib
 
 # Normalization 
 
-```{r setup, include=FALSE, results='asis'}
-source("workflows/extractor.R")
-knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
 setupHTML()
 ```
 
@@ -256,3 +260,10 @@ In contrast, if we had simply divided each cell's counts by its library size bef
 Of course, log-transformation is not the only possible transformation. 
 More sophisticated approaches can be used such as dedicated variance stabilizing transformations (e.g., from the `r Biocpkg("DESeq2")` or `r CRANpkg("sctransform")` packages), which out-perform the log-transformation for removal of the mean-variance trend.
 In practice, though, the log-transformation is a good default choice due its simplicity (a.k.a., reliability^[If a log-transformation is giving you errors, there's probably something seriously wrong with your system's math libraries.], predictability and computational efficiency) and interpretability.
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
+```

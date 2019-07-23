@@ -55,15 +55,3 @@ We would first and foremost like to thank the Bioconductor core team and the eme
 We'd also like to thank Garret Grolemund and Hadley Wickham for their book, [R for Data Science](https://r4ds.had.co.nz/index.html), from which we drew stylistic and teaching inspiration. We also thank Levi Waldron and Aaron Lun for advice on the code-related aspects of managing the online version of this book.
 
 
-<!-- ## Contributors -->
-
-<!-- * Robert A. Amezquita -->
-<!-- * Stephanie C. Hicks (advisor, _Workflow: Integrating Datasets_) -->
-<!-- * Raphael Gottardo (advisor) -->
-<!-- * Etienne Becht (_Workflow: Differential Expression_) -->
-<!-- * Davide Risso (_Workflow: Large-Scale Data_) -->
-<!-- * Aaron Lun (code/design advice, related workflows) -->
-<!-- * Levi Waldron (code/design advice) -->
-
-
-

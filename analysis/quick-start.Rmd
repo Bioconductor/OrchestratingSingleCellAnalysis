@@ -1,13 +1,20 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
 
 # Quick Start
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE, warning = FALSE, error = FALSE,
+```{r setup, echo=FALSE, results="asis"}
+library(Cairo)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache = TRUE,
-                      dev = 'CairoPNG')                      
+                      dev = 'CairoPNG')
 options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
 ```
 
 To make it as easy as possible to get started fast, here we simply provide a script that walks through a typical, basic scRNA-seq analysis in code, with prose as comments (`#`), and all visualization held until the end of the script. The next chapter - "A Basic Analysis" - will provide more commentary on the various steps throughout, as well as relevant intermediate plotting results. 
@@ -326,4 +333,11 @@ plotGseaTable(pathways[topPathways], stats,
 ## Traditional GSEA plot
 plotEnrichment(pathways[["GSE29618_MONOCYTE_VS_PDC_UP"]],
                stats)
+```
+
+
+## Session Info
+
+```{r, echo=FALSE}
+prettySessionInfo()
 ```
