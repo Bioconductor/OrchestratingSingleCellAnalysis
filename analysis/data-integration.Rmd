@@ -1,12 +1,19 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
 # Integrating Datasets
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      message = FALSE, warning = FALSE, error = FALSE,
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache = TRUE,
-                      dev = 'CairoPNG')                      
+                      dev = 'CairoPNG')
 options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
 ```
 
 As scRNA-seq approaches continue to gain in popularity, projects that combine independently generated datasets will become increasingly common. While generalized linear modeling frameworks can be used to integrate disparate datasets, the performance of these frameworks in the scRNA-seq context may be sub-optimal, often due to an underlying assumption that the composition of cell populations is either known or identical across batches of cells. This has inspired a new class of methods that leverage the unique properties of scRNA-seq to improve the amelioration of batch effects, which we demonstrate here.
@@ -322,35 +329,9 @@ wrap_plots(p1, p2, nrow = 1)
 ```
 
 
+## Session Info
 
+```{r, results='asis', echo=FALSE}
+prettySessionInfo()
+```
 
-
-
-<!-- ```{r} -->
-<!-- ## chunk for combining 1k cells from pbmc3k and pbmc4k -->
-<!-- ## ... -->
-
-<!-- ## separate chunk -->
-<!-- ## Create two SCEs, reset reducedDims -->
-<!-- sce_mnn_25 <- sce -->
-<!-- sce_mnn_7 <- sce -->
-<!-- reducedDims(sce_mnn_25) <- reducedDims(sce_mnn_7) <- NULL -->
-
-<!-- ## Run MNN with differing component numbers -->
-<!-- retain <- 25 -->
-<!-- top_pcs <- map(as.list(pcs), ~ .[, 1:retain]) -->
-<!-- mnn <- fastMNN(top_pcs$pbmc3k, top_pcs$pbmc4k, pc.input = TRUE) -->
-<!-- reducedDim(sce_mnn_25, 'MNN') <- mnn$corrected -->
-<!-- sce_mnn_25 <- runUMAP(sce_mnn_25, use_dimred = 'MNN') -->
-
-<!-- retain <- 7 -->
-<!-- top_pcs <- map(as.list(pcs), ~ .[, 1:retain]) -->
-<!-- mnn <- fastMNN(top_pcs$pbmc3k, top_pcs$pbmc4k, pc.input = TRUE) -->
-<!-- reducedDim(sce_mnn_7, 'MNN') <- mnn$corrected -->
-<!-- sce_mnn_7 <- runUMAP(sce_mnn_7, use_dimred = 'MNN') -->
-
-<!-- ## Plot on plot -->
-<!-- plotReducedDim(sce_mnn_25, use_dimred = 'UMAP', colour_by = 'Sample') -->
-<!-- dev.new() -->
-<!-- plotReducedDim(sce_mnn_7, use_dimred = 'UMAP', colour_by = 'Sample') -->
-<!-- ``` -->

@@ -6,10 +6,13 @@ bibliography: ../ref.bib
 
 # Feature selection 
 
-```{r setup, echo=FALSE, results='asis'}
-source("workflows/extractor.R")
-knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
 setupHTML()
 ```
 
@@ -334,3 +337,10 @@ dim(sce.pbmc)
 
 Alternatively, some methods may allow users to pass in the full `SingleCellExperiment` object and specify the genes to use via an extra argument like `subset.row=`.
 This may be more convenient in the context of the overall analysis, where genes outside of this subset may still be of interest during DE analyses or for visualization.
+
+
+## Session Info
+
+```{r, results='asis', echo=FALSE}
+prettySessionInfo()
+```

@@ -1,6 +1,30 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
 # Sharing and Interactive Interfaces
+
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
+library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
+```
+
 
 ![Overview of the *iSEE* interactive data visualization package's relationship to a *SingleCellExperiment* object](images/iSEE-dataflow.png)
 
 
 *WIP*
+
+
+## Session Info
+
+```{r, results='asis', echo=FALSE}
+prettySessionInfo()
+```

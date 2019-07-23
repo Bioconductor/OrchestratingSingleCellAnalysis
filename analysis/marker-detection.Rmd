@@ -6,12 +6,14 @@ bibliography: ../ref.bib
 
 # Marker gene detection
 
-```{r setup, echo=FALSE, results='asis'}
-source("workflows/extractor.R")
-setupHTML()
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
 options(digits = 4)
 library(BiocStyle)
+source("workflows/extractor.R")
+setupHTML()
 ```
 
 ## Motivation
@@ -422,3 +424,10 @@ DE analyses that treat cells as replicates fail to properly model the sample-to-
 The latter is arguably the more important level of replication as different samples will necessarily be generated if the experiment is to be replicated.
 Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
 This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
+
+
+## Session Info
+
+```{r, results='asis', echo=FALSE}
+prettySessionInfo()
+```

@@ -6,11 +6,14 @@ bibliography: ../ref.bib
 
 # Quality Control
 
-```{r setup, echo=FALSE, results='asis'}
+```{r setup, echo=FALSE, results="asis"}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
+                      cache = TRUE,
+                      dev = 'CairoPNG')
+options(digits = 4)
+library(BiocStyle)
 source("workflows/extractor.R")
 setupHTML()
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error = FALSE)
-options(digits = 4)
 ```
 
 ## Motivation
@@ -397,3 +400,10 @@ As an aside, it is worth mentioning that the true technical quality of a cell ma
 This can arise if some cell types are not amenable to dissociation or microfluidics handling during the scRNA-seq protocol.
 In such cases, it is possible to "correctly" discard an entire cell type during QC if all of its cells are damaged.
 Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.
+
+
+## Session Info
+
+```{r, results='asis', echo=FALSE}
+prettySessionInfo()
+```
