@@ -19,19 +19,16 @@ setupHTML()
 
 ## Motivation
 
-Low-quality cells in scRNA-seq data can arise from a variety of sources such as cell damage during dissociation
-or failure in library preparation (e.g., during reverse transcription or PCR amplification).
+Low-quality libraries in scRNA-seq data can arise from a variety of sources such as cell damage during dissociation or failure in library preparation (e.g., inefficient reverse transcription or PCR amplification).
 These usually manifest as "cells" with low total counts, few expressed genes and high mitochondrial or spike-in proportions.
-These low-quality cells are problematic as they can yield misleading results in downstream analyses.
+These low-quality libraries are problematic as they can contribute to misleading results in downstream analyses:
 
-- They can forming their own distinct cluster(s), complicating interpretation of the results.
+- They form their own distinct cluster(s), complicating interpretation of the results.
 This can be most obviously driven by increased mitochondrial proportions or enrichment for nuclear RNAs after cell damage.
-However, very small libraries can also form their own clusters due to shifts in the mean expression upon log-transformation.
-- They contain genes that appear to be strongly "upregulated", again complicating interpretation.
-This is most problematic if some transcripts are present at constant levels in the ambient solution for all libraries.
-These counts will then be greatly inflated upon normalization for the small library sizes.
-- They containing genes that appear to be strongly "downregulated" due to the loss of RNA upon cell damage.
-This seems most pronounced with ribosomal protein genes, though other cytoplasmic transcripts are likely to be affected.
+However, very small libraries can also form their own clusters due to shifts in the mean upon transformation [@lun2018overcoming].
+- They contain genes that appear to be strongly "upregulated" due to aggressive scaling to normalize for small library sizes.
+This is most problematic for contaminating transcripts (e.g., from the ambient solution) that are present in all libraries at low but constant levels.
+Increased scaling in low-quality libraries transforms small counts for these transcripts in large normalized expression values, resulting in apparent upregulation compared to other cells.
 - They distort the characterization of population heterogeneity during variance estimation or principal components analysis.
 The first few principal components will capture differences in quality rather than biology, reducing the effectiveness of dimensionality reduction.
 Similarly, genes with the largest variances will be driven by differences between low- and high-quality cells.
@@ -39,8 +36,7 @@ Similarly, genes with the largest variances will be driven by differences betwee
 To avoid - or at least mitigate - these problems, we need to remove these cells at the start of the analysis.
 This step is commonly referred to as quality control (QC) on the cells.
 (We will use "library" and "cell" rather interchangeably here, though the distinction will become important when dealing with droplet-based data.)
-We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, which contains SMART-seq2 data with spike-ins from two 96-well plates of 416B cells with and without induction of the _CBFB-MYH11_ oncogene.
-Importantly, the data is provided with no prior QC, allowing us to apply our own procedures as desired.
+We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, which is provided with no prior QC so that we can apply our own procedures.
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/lun-416b", "loading", "sce.416b")
@@ -115,23 +111,28 @@ Indeed, even with the same protocol and system, the appropriate threshold can va
 ### With adaptive thresholds
 
 To obtain an adaptive threshold, we assume that most of the dataset consists of high-quality cells.
-We then identify cells that are outliers for the various QC metrics.
-Outliers are defined based on the median absolute deviation (MADs) from the median value of each metric across all cells.
-This is loosely motivated by the fact that such a filter will retain 99% of non-outlier values that follow a Normal distribution.
+We then identify cells that are outliers for the various QC metrics, based on the median absolute deviation (MAD) from the median value of each metric across all cells.
+Specifically, a value is considered an outlier if it is more than 3 MADs from the median in the "problematic" direction.
+This is loosely motivated by the fact that such a filter will retain 99% of non-outlier values that follow a normal distribution.
 
-For the 416B data, we remove cells with log-library sizes that are more than 3 MADs below the median. 
-We also remove cells where the log-transformed number of expressed genes is 3 MADs below the median.
+For the 416B data, we identify cells with log-transformed library sizes that are more than 3 MADs below the median. 
 A log-transformation is used to improve resolution at small values when `type="lower"`.
-It ensures that the threshold is not a negative value, which would be meaningless for quality control on these metrics.
+In particular, it guarantees that the threshold is not a negative value, which would be meaningless for quality control on these metrics.
+Moreover, these metrics can occasionally exhibit a heavy right tail, and the log-transformation makes the distribution seem more normal to justify the 99% rationale mentioned above.
 
 ```{r}
-qc.lib2 <- isOutlier(log(sce.416b$total_counts), nmads=3, type="lower")
-qc.nexprs2 <- isOutlier(log(sce.416b$total_features_by_counts), nmads=3,
-    type="lower")
+qc.lib2 <- isOutlier(sce.416b$total_counts, log=TRUE, nmads=3, type="lower")
+```
+
+We do the same for the log-transformed number of expressed genes. 
+
+```{r}
+qc.nexprs2 <- isOutlier(sce.416b$total_features_by_counts, nmads=3,
+    log=TRUE, type="lower")
 ```
 
 `isOutlier()` will also return the exact filter thresholds for each metric.
-These may be useful for checking whether the automatically selected thresholds are appropriate.
+These is useful for checking whether the automatically selected thresholds are appropriate.
 
 ```{r}
 attr(qc.lib2, "thresholds")
@@ -146,7 +147,8 @@ qc.spike2 <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher")
 qc.mito2 <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher")
 ```
 
-We use all of these filters to identify and remove low-quality cells.
+A cell that is an outlier for any of these metrics is considered to be of low-quality and discarded.
+This is achieved simply by subsetting the `SingleCellExperiment` as previously shown.
 
 ```{r}
 discard2 <- qc.lib2 | qc.nexprs2 | qc.spike2 | qc.mito2
