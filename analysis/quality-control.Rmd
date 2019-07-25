@@ -56,8 +56,8 @@ Cells with small library sizes are of low quality as the RNA has not been effici
 - The number of expressed features in each cell is defined as the number of features with non-zero counts for that cell.
 Any cell with very few expressed genes is likely to be of poor quality as the diverse transcript population has not been successfully captured.
 - The proportion of reads mapped to spike-in transcripts is calculated relative to the library size for each cell.
-High proportions are indicative of poor-quality cells, where endogenous RNA has been lost during processing (e.g., due to partial cell lysis or RNA degradation during dissociation).
-The same amount of spike-in RNA to each cell, so an enrichment in spike-in counts is symptomatic of loss of endogenous RNA.
+As the same amount of spike-in RNA should have been added to each cell, any enrichment in spike-in counts is symptomatic of loss of endogenous RNA.
+Thus, high proportions are indicative of poor-quality cells where endogenous RNA has been lost due to, e.g., partial cell lysis or RNA degradation during dissociation.
 - In the absence of spike-in transcripts, the proportion of reads mapped to genes in the mitochondrial genome can be used.
 High proportions are indicative of poor-quality cells [@islam2014quantitative;@ilicic2016classification], possibly because of loss of cytoplasmic RNA from perforated cells.
 The reasoning is that mitochondria are larger than individual transcript molecules 
@@ -69,12 +69,14 @@ These are stored in the column-wise metadata of the `SingleCellExperiment` for f
 
 ```{r}
 # Identifying the mitochondrial transcripts:
+# TODO: replace with AnnotationHub
 library(TxDb.Mmusculus.UCSC.mm10.ensGene)
 location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, 
-                   keys=rownames(sce.416b), column="CDSCHROM", keytype="GENEID")
+    keys=rownames(sce.416b), column="CDSCHROM", keytype="GENEID")
 is.mito <- which(location=="chrM")
 
 # Computing the QC metrics.
+# TODO: replace with perCellQCMetrics, without implicit storage in colData.
 library(scater)
 sce.416b <- calculateQCMetrics(sce.416b, feature_controls=list(Mito=is.mito))
 head(colnames(rowData(sce.416b)))
@@ -108,7 +110,7 @@ While simple, this strategy generally requires considerable experience to determ
 For example, thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa.
 Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth.
 
-### With adaptive thresholds
+### With adaptive thresholds {#quality-control-outlier}
 
 To obtain an adaptive threshold, we assume that most of the dataset consists of high-quality cells.
 We then identify cells that are outliers for the various QC metrics, based on the median absolute deviation (MAD) from the median value of each metric across all cells.
@@ -169,7 +171,7 @@ However, it does require some implicit assumptions that are discussed below in m
 
 More complex studies may involve batches of cells generated at different times or in different systems.
 In such cases, the adaptive strategy should be applied to each batch separately. 
-It makes little sense to compute medians and MADs from a mixture distribution involving observations from multiple batches.
+It makes little sense to compute medians and MADs from a mixture distribution containing samples from multiple batches.
 For example, if the sequencing coverage is lower in one batch compared to the others, it will drag down the median and inflate the MAD.
 This will reduce the suitability of the adaptive threshold for the other batches.
 
@@ -283,7 +285,11 @@ sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
 
 Users wanting to use the cell calling algorithm from the _CellRanger_ pipeline (version 2) can call `defaultDrops()` instead.
 This tends to be quite conservative as it often discards genuine cells with low RNA content (and thus low total counts).
-It also requires an estimate of the expected number of cells in the experiment.
+It also requires an _a priori_ estimate of the expected number of cells in the experiment, which may or may not be accurate.
+
+(As an aside, _CellRanger_ version 3 will automatically use its own implementation of `emptyDrops()` to generate the filtered count matrix.
+Thus, for routine applications, it is not necessary to run `emptyDrops()` manually as shown here.
+Nonetheless, it may be desirable on occasions where more detailed inspection or control of the cell-calling statistics is desired.)
 
 ### Examining cell-calling diagnostics
 
@@ -323,7 +329,7 @@ This can be done using the outlier-based strategy to set data-adaptive threshold
 
 ### Overview
 
-The use of `isOutlier()` is a general and effective strategy for identifying and removing low-quality cells.
+The use of `isOutlier()` (Section \@ref(quality-control-outlier)) is a general and effective strategy for identifying and removing low-quality cells.
 However, it involves a number of assumptions about the experiment and biological system, and while these assumptions are mostly reasonable, users should still keep them in mind when interpreting the results^["Be alert, not alarmed" - for those who remember the Australian Government's indoctrination - uh, I mean, counter-terror campaign.].
 
 An outlier-based definition for low-quality cells assumes that most cells are of acceptable quality.
@@ -383,7 +389,7 @@ logFC <- logged[,1] - logged[,2]
 abundance <- rowMeans(logged)
 ```
 
-The presence of a distinct population in the discarded pool manifests in Figure \@ref(fig:discardplotpbmc) as a a number of genes that are 
+The presence of a distinct population in the discarded pool manifests in Figure \@ref(fig:discardplotpbmc) as a set of genes that are strongly upregulated in `lost`.
 This includes _PF4_, _PPBP_ and _CAVIN2_, which (spoiler alert!) indicates that there is a platelet population that has been discarded by `alt.discard`.
 
 ```{r discardplotpbmc, fig.cap="Average counts across all discarded and retained cells in the PBMC dataset, after using a more stringent filter on the total UMI count. Each point represents a gene, with platelet-related genes highlighted in orange."}
@@ -404,9 +410,8 @@ This can arise if some cell types are not amenable to dissociation or microfluid
 In such cases, it is possible to "correctly" discard an entire cell type during QC if all of its cells are damaged.
 Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.
 
-
 ## Session Info
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, results="asis"}
 prettySessionInfo()
 ```
