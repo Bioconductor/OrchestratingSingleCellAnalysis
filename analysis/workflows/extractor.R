@@ -130,25 +130,12 @@ extractCached <- function(prefix, chunk, objects)
 ## must follow after setupHTML() is run that defines collapsible div class
 prettySessionInfo <- function() {
     ## grab session info printed output
-    tmp <- tempfile()
-    sink(tmp)
-    print(sessionInfo())
-    sink()
-    lines <- readLines(tmp)
+    X <- capture.output(sessionInfo())
 
     ## print session info out into collapsible div
     cat('<button class="aaron-collapse">View session info</button>
 <div class="aaron-content">\n')
-    first <- TRUE
-    for (l in lines) {
-        if (!first) {
-            cat("\n")
-        } else {
-            first <- FALSE
-        }
-        cat(sprintf("%s", l))
-    }
-    cat("\n")
+    cat(c("```", X, "```"), sep="\n")
     cat("</div>\n")
 
     invisible(NULL)
