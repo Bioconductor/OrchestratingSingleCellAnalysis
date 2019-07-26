@@ -98,6 +98,7 @@ The CV^2^ is a widely used metric for describing variation in non-negative data 
 We compute the CV^2^ for each gene in the PBMC dataset using the `improvedCV2()` function, which provides a more robust implementation of the approach described by @brennecke2013accounting.
 
 ```{r}
+# TODO: upgrade scran to use the latest version of this.
 # No spike-ins, so setting 'spike.type=NA'.
 cv2.pbmc <- improvedCV2(sce.pbmc, spike.type=NA) 
 ```
@@ -174,14 +175,14 @@ curve(fit.pbmc2$trend(x), col="dodgerblue", add=TRUE)
 #### Fitting block-specific trends
 
 Data containing multiple batches will often exhibit batch effects (see Chapter ??? for more details).
-We are usually not interested in HVGs that are driven by batch effects.
+We are (usually) not interested in HVGs that are driven by batch effects.
 Rather, we want to focus on genes that are highly variable within each batch.
 This is naturally achieved by performing trend fitting and variance decomposition separately for each batch.
-We demonstrate this approach by treating each plate in the 416B dataset as a different batch, using the `multiBlockVar()` function.
+We demonstrate this approach by treating each plate (`block`) in the 416B dataset as a different batch, using the `multiBlockVar()` function.
 
 ```{r}
-sce.416b.2 <- multiBlockNorm(sce.416b, block=sce.416b$Plate)
-dec.416b <- multiBlockVar(sce.416b.2, block=sce.416b$Plate)
+sce.416b.2 <- multiBlockNorm(sce.416b, block=sce.416b$block)
+dec.416b <- multiBlockVar(sce.416b.2, block=sce.416b$block)
 head(dec.416b[order(dec.416b$bio, decreasing=TRUE),1:6])
 ```
 
@@ -219,7 +220,7 @@ In such cases, we can use the `design=` argument to specify a design matrix with
 We illustrate again with the 416B data set, blocking on the plate of origin and oncogene induction.
 
 ```{r}
-design <- model.matrix(~Plate + Oncogene, colData(sce.416b))
+design <- model.matrix(~factor(block) + phenotype, colData(sce.416b))
 fit.416b.2 <- trendVar(sce.416b, design=design)
 dec.416b.2 <- decomposeVar(sce.416b, fit.416b.2)
 dec.416b.2[order(dec.416b.2$bio, decreasing=TRUE),]
