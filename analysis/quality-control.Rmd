@@ -287,8 +287,8 @@ Users wanting to use the cell calling algorithm from the _CellRanger_ pipeline (
 This tends to be quite conservative as it often discards genuine cells with low RNA content (and thus low total counts).
 It also requires an _a priori_ estimate of the expected number of cells in the experiment, which may or may not be accurate.
 
-(As an aside, _CellRanger_ version 3 will automatically use its own implementation of `emptyDrops()` to generate the filtered count matrix.
-Thus, for routine applications, it is not necessary to run `emptyDrops()` manually as shown here.
+(As an aside, _CellRanger_ version 3 automatically performs cell calling using an algorithm similar to `emptyDrops()`.
+If we had started our analysis with the **filtered** count matrix, we would not need to run `emptyDrops()` manually as shown here.
 Nonetheless, it may be desirable on occasions where more detailed inspection or control of the cell-calling statistics is desired.)
 
 ### Examining cell-calling diagnostics
