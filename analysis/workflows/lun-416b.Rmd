@@ -8,21 +8,17 @@ sce.416b <- LunSpikeInData(which="416b")
 ```
 
 ```{r gene-annotation}
-library(org.Mm.eg.db)
-symb <- mapIds(org.Mm.eg.db, keys=rownames(sce.416b), 
-    keytype="ENSEMBL", column="SYMBOL")
+library(AnnotationHub)
+ens.mm.v97 <- AnnotationHub()[["AH73905"]]
 rowData(sce.416b)$ENSEMBL <- rownames(sce.416b)
-rowData(sce.416b)$SYMBOL <- symb
+rowData(sce.416b)$SYMBOL <- mapIds(ens.mm.v97, keys=rownames(sce.416b),
+    keytype="GENEID", column="SYMBOL")
+rowData(sce.416b)$SEQNAME <- mapIds(ens.mm.v97, keys=rownames(sce.416b),
+    keytype="GENEID", column="SEQNAME")
 
 library(scater)
 rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL, 
     rowData(sce.416b)$SYMBOL)
-
-library(TxDb.Mmusculus.UCSC.mm10.ensGene)
-location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, 
-    keys=rowData(sce.416b)$ENSEMBL, 
-    column="CDSCHROM", keytype="GENEID")
-rowData(sce.416b)$CHR <- location
 ```
 
 ```{r quality-control}
