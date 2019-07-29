@@ -1,5 +1,9 @@
 # (PART) Workflows {-}
 
+```{r setup, echo=FALSE, results="asis"}
+source("workflows/knitr_options.R")
+```
+
 # Analytical Workflow Overview
 
 ![Figure 1. Overview of a typical scRNA-seq workflow.](images/Workflow.png)

@@ -7,12 +7,7 @@ bibliography: ../ref.bib
 # Clustering
 
 ```{r setup, echo=FALSE, results="asis"}
-#library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 ## Motivation

@@ -7,14 +7,7 @@ bibliography: ../ref.bib
 # Dimensionality reduction
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 ## Overview
@@ -75,7 +68,7 @@ The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and stor
 
 ```{r}
 library(scater)
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE)
+sce.zeisel <- runPCA(sce.zeisel, subset.row=chosen.hvgs, scale=FALSE)
 reducedDimNames(sce.zeisel)
 ```
 

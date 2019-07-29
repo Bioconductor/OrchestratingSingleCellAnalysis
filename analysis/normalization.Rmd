@@ -7,14 +7,7 @@ bibliography: ../ref.bib
 # Normalization 
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 ## Motivation

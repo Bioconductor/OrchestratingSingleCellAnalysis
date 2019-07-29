@@ -7,14 +7,7 @@ bibliography: ../ref.bib
 # A Basic Analysis
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 In this chapter, we will walk through a minimal analysis of a simple scRNA-seq dataset in order to acquaint you with the overall framework of scRNA-seq in code terms. 

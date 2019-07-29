@@ -7,14 +7,7 @@ bibliography: ../ref.bib
 # Integrating Datasets
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 ## Motivation
@@ -74,12 +67,12 @@ The `multiBatchNorm()` function recomputes log-normalized expression values afte
 (Size factors only remove biases between cells _within_ a single batch.)
 This improves the quality of the correction by removing one aspect of the technical differences between batches.
 
-  ```{r}
-  library(batchelor)
-  rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
-  pbmc3k <- rescaled[[1]]
-  pbmc4k <- rescaled[[2]]
-  ```
+```{r}
+library(batchelor)
+rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
+pbmc3k <- rescaled[[1]]
+pbmc4k <- rescaled[[2]]
+```
 
 3. We obtain a single set of features for batch correction by compute the average biological component across all batches.
 Here, we take all genes with positive biological components to ensure that all interesting biology is retained.
