@@ -29,9 +29,9 @@ Lastly, note that some arguments are added for the sake of reducing computationa
 ## BiocManager::install(version = 'devel') # devel=3.10
 ## BiocManager::install(c(
 ##   'HCAData',                       # dataset
-##   'scater', 'scran', 'batchelor',  # processing
+##   'scater', 'scran', 'batchelor',  # processing + DE + batch correction
 ##   'igraph',                        # clustering
-##   'MAST', 'slingshot',             # DE + Trajectory
+##   'slingshot',                     # Trajectory
 ##   'iSEE'                           # interactive viz
 ## ))
 ```
