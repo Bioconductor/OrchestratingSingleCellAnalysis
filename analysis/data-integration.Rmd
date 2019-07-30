@@ -37,7 +37,8 @@ For example, outlier-based QC on the cells is more effective when performed with
 The same can also be said for trend fitting when modelling the mean-variance relationship (Section ???).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/3k", "variance-modelling", c("pbmc3k", "dec3k"))
+extractCached("workflows/tenx-batch-pbmc/3k", "feature-selection",
+              c("pbmc3k", "dec3k", "chosen.hvgs"))
 ```
 
 ```{r}
@@ -45,7 +46,8 @@ pbmc3k
 ```
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/4k", "variance-modelling", c("pbmc4k", "dec4k"))
+extractCached("workflows/tenx-batch-pbmc/4k", "variance-modelling",
+              c("pbmc4k", "dec4k"))
 ```
 
 ```{r}
@@ -191,6 +193,17 @@ In this case, the proportion of lost variance is small, indicating that non-orth
 Harmony provides a unified framework for data visualization, analysis, and interpretation of scRNA-seq data. Included is a method for integrating different batches of scRNA-seq. This produces a new dimension reduction representation, saved as `HARMONY` within the *SingleCellExperiment* object, as shown below. Furthermore, this Harmony embedding can be used to produce a UMAP representation as well:
 
 ```{r}
+## Combine pbmc3k and pbmc4k datasets into single sce
+## Removing mcols needed to let cbind work
+p3 <- pbmc3k
+p4 <- pbmc4k
+mcols(p3) <- mcols(p3)[, -1:-ncol(mcols(p3))]
+mcols(p4) <- mcols(p4)[, -1:-ncol(mcols(p4))]
+int <- intersect(rownames(p3), rownames(p4))
+sce <- cbind(p3[int, ], p4[int, ])
+```
+
+```{r}
 library(harmony) # devtools::install_github('immunogenomics/harmony')
 library(BiocSingular)
 
@@ -199,7 +212,7 @@ sce_harmony <- sce
 
 ## Add PCA to sce, then run Harmony as its dependent on PCA
 sce_harmony <- runPCA(sce_harmony,
-                      feature_set = hvg,
+                      feature_set = chosen.hvgs,
                       BSPARAM = BiocSingular::IrlbaParam(),
                       BPPARAM = BiocParallel::MulticoreParam())
 sce_harmony <- RunHarmony(sce_harmony, group.by.vars = "Sample")
@@ -275,7 +288,7 @@ set.seed(1234) # for Random/IrlbaParam backends
 ## run batchelor version of multiBatchPCA (use :: notation to override namespace)
 pcs <- batchelor::multiBatchPCA(sce_mnn_advanced,
                                 batch = sce_mnn_advanced$Sample,
-                                subset.row = hvg,
+                                subset.row = chosen.hvgs,
                                 get.variance = TRUE,
                                 BSPARAM = BiocSingular::IrlbaParam(),
                                 BPPARAM = BiocParallel::MulticoreParam())
@@ -283,7 +296,7 @@ pcs <- batchelor::multiBatchPCA(sce_mnn_advanced,
 ## Retain only the top PCs based on variance explained > technical noise
 retain <- denoisePCANumber(
     metadata(pcs)$var.explained, # variance explained per PC.
-    sum(dec[hvg, ]$tech),       # technical noise in subset of genes.
+    sum(dec[chosen.hvgs, ]$tech),       # technical noise in subset of genes.
     metadata(pcs)$var.total      # total variance in the data
 )
 
@@ -333,7 +346,7 @@ sce_naive <- sce
 ```{r}
 ## run PCA on only the normalized gene expression data
 sce_naive <- runPCA(sce_naive,
-                    feature_set = hvg,
+                    feature_set = chosen.hvgs,
                     BSPARAM = BiocSingular::IrlbaParam(),
                     BPPARAM = BiocParallel::MulticoreParam())
 
@@ -367,7 +380,7 @@ assay(sce_limma, "logcounts_limma") <- limma_corrected ## add new assay
 
 ## calc a PCA on limma values; save separate to prevent overwriting
 sce_limma <- runPCA(sce_limma,
-                    feature_set = hvg,
+                    feature_set = chosen.hvgs,
                     exprs_values = "logcounts_limma",
                     BSPARAM = BiocSingular::IrlbaParam(),
                     BPPARAM = BiocParallel::MulticoreParam())
