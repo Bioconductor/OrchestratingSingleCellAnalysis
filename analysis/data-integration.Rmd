@@ -201,6 +201,7 @@ mcols(p3) <- mcols(p3)[, -1:-ncol(mcols(p3))]
 mcols(p4) <- mcols(p4)[, -1:-ncol(mcols(p4))]
 int <- intersect(rownames(p3), rownames(p4))
 sce <- cbind(p3[int, ], p4[int, ])
+chosen.hvgs <- chosen.hvgs[chosen.hvgs %in% int]
 ```
 
 ```{r}
