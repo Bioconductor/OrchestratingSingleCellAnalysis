@@ -1,0 +1,50 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r loading}
+library(scRNAseq)
+sce.muraro <- MuraroPancreasData()
+```
+
+```{r gene-annotation}
+# Converting back to Ensembl identifiers.
+library(org.Hs.eg.db)
+gene.symb <- sub("__chr.*$", "", rownames(sce.muraro))
+gene.ids <- mapIds(org.Hs.eg.db, keys=gene.symb, 
+    keytype="SYMBOL", column="ENSEMBL")
+is.spike <- isSpike(sce.muraro)
+gene.ids[is.spike] <- gene.symb[is.spike]
+
+# Removing duplicated genes or genes without Ensembl IDs.
+keep <- !is.na(gene.ids) & !duplicated(gene.ids)
+sce.muraro <- sce.muraro[keep,]
+rownames(sce.muraro) <- gene.ids[keep]
+```
+
+```{r quality-control}
+library(scater)
+sce.muraro <- calculateQCMetrics(sce.muraro, compact=TRUE)
+QC <- sce.muraro$scater_qc
+low.lib <- isOutlier(QC$all$log10_total_counts, type="lower", nmad=3)
+low.genes <- isOutlier(QC$all$log10_total_features_by_counts, type="lower", nmad=3)
+high.spike <- isOutlier(QC$feature_control_ERCC$pct_counts, type="higher", nmad=3)
+discard <- low.lib | low.genes | high.spike
+sce.muraro <- sce.muraro[,!discard]
+```
+
+```{r normalization}
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.muraro)
+sce.muraro <- computeSumFactors(sce.muraro, min.mean=0.1, clusters=clusters)
+sce.muraro <- computeSpikeFactors(sce.muraro, general.use=FALSE)
+sce.muraro <- normalize(sce.muraro)
+```
+
+```{r variance-modelling}
+# Blocking on a combined plate and donor factor.
+block <- paste0(sce.muraro$plate, "_", sce.muraro$donor)
+fit.muraro <- trendVar(sce.muraro, block=block, parametric=TRUE) 
+dec.muraro <- decomposeVar(sce.muraro, fit.muraro)
+```
