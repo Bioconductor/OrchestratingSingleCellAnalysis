@@ -191,7 +191,7 @@ In this case, the proportion of lost variance is small, indicating that non-orth
 
 ## Session Info
 
-```{r, echo=FALSE}
+```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
 

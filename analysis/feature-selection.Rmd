@@ -336,6 +336,6 @@ This may be more convenient in the context of the overall analysis, where genes 
 
 ## Session Info
 
-```{r, echo=FALSE}
+```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```

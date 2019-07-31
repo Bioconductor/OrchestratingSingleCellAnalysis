@@ -256,6 +256,6 @@ In practice, though, the log-transformation is a good default choice due its sim
 
 ## Session Info
 
-```{r, echo=FALSE, results="asis"}
+```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
