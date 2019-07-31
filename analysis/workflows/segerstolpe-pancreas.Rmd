@@ -39,7 +39,8 @@ sce.seger$CellType <- paste0(
 # Removing low quality cells that were marked by the authors.
 low.qual <- sce.seger$Quality == "low quality cell"
 
-# Performing additional quality control, just in case.
+# Performing additional quality control, as some of the remaining 
+# still have very low counts and numbers of detected features.
 library(scater)
 sce.seger <- calculateQCMetrics(sce.seger, compact=TRUE)
 qc.mat <- cbind(
@@ -57,7 +58,7 @@ sce.seger <- sce.seger[,!discard]
 
 ```{r normalization}
 library(scran)
-clusters <- quickCluster(sce.seger, BSPARAM=BiocSingular::IrlbaParam())
+clusters <- quickCluster(sce.seger)
 sce.seger <- computeSumFactors(sce.seger, clusters=clusters)
 sce.seger <- computeSpikeFactors(sce.seger, general.use=FALSE)
 ```
