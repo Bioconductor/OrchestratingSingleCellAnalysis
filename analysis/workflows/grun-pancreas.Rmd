@@ -1,0 +1,51 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r loading}
+library(scRNAseq)
+sce.grun <- GrunPancreasData()
+```
+
+```{r gene-annotation}
+# Converting back to Ensembl identifiers.
+library(org.Hs.eg.db)
+gene.symb <- sub("__chr.*$", "", rownames(sce.grun))
+gene.ids <- mapIds(org.Hs.eg.db, keys=gene.symb, 
+    keytype="SYMBOL", column="ENSEMBL")
+is.spike <- isSpike(sce.grun)
+gene.ids[is.spike] <- gene.symb[is.spike]
+
+# Removing duplicated genes or genes without Ensembl IDs.
+keep <- !is.na(gene.ids) & !duplicated(gene.ids)
+sce.grun <- sce.grun[keep,]
+rownames(sce.grun) <- gene.ids[keep]
+```
+
+```{r quality-control}
+# TODO: streamline.
+library(scater)
+sce.grun <- calculateQCMetrics(sce.grun, compact=TRUE)
+QC <- sce.grun$scater_qc
+low.lib <- isOutlier(QC$all$log10_total_counts, type="lower", nmad=3)
+low.genes <- isOutlier(QC$all$log10_total_features_by_counts, type="lower", nmad=3)
+high.spike <- isOutlier(QC$feature_control_ERCC$pct_counts, type="higher", nmad=3)
+discard <- low.lib | low.genes | high.spike
+sce.grun <- sce.grun[,!discard]
+```
+
+```{r normalization}
+library(scran)
+set.seed(1000) # for irlba. 
+clusters <- quickCluster(sce.grun)
+sce.grun <- computeSumFactors(sce.grun, min.mean=0.1, clusters=clusters)
+sce.grun <- computeSpikeFactors(sce.grun, general.use=FALSE)
+sce.grun <- normalize(sce.grun)
+```
+
+```{r variance-modelling}
+# Blocking on a combined plate and donor factor.
+block <- paste0(sce.grun$sample, "_", sce.grun$donor)
+fit.grun <- trendVar(sce.grun, block=block, parametric=TRUE) 
+dec.grun <- decomposeVar(sce.grun, fit.grun)
+```
