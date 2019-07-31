@@ -68,7 +68,7 @@ The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and stor
 
 ```{r}
 library(scater)
-sce.zeisel <- runPCA(sce.zeisel, subset.row=chosen.hvgs, scale=FALSE)
+sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE)
 reducedDimNames(sce.zeisel)
 ```
 
