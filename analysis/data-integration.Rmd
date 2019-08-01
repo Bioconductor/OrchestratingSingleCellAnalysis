@@ -26,7 +26,7 @@ Here, we will demonstrate the application of these methods on two case studies i
 We will focus on the method proposed by  @haghverdi2018batch, which is based on the detection of mutual nearest neighbours (MNNs).
 The MNN approach does not rely on pre-defined or equal population compositions across batches, only requiring that a subset of the population be shared between batches.
 
-## Simple two batch example
+## Simple two batch example {#correction-two-group}
 
 ### Setting up the data
 
@@ -38,7 +38,7 @@ The same can also be said for trend fitting when modelling the mean-variance rel
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/tenx-batch-pbmc/3k", "feature-selection",
-              c("pbmc3k", "dec3k", "chosen.hvgs"))
+    c("pbmc3k", "dec3k"))
 ```
 
 ```{r}
@@ -47,7 +47,7 @@ pbmc3k
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/tenx-batch-pbmc/4k", "variance-modelling",
-              c("pbmc4k", "dec4k"))
+    c("pbmc4k", "dec4k"))
 ```
 
 ```{r}
@@ -59,32 +59,32 @@ To prepare for the batch correction:
 1. We subset all batches to the common "universe" of features.
 In this case, it is straightforward as both batches use Ensembl gene annotation^[As we shall see later, this step can be much, much, much more painful. As is often said, biologists would rather share a toothbrush than nomenclature.].
 
-  ```{r}
-  universe <- intersect(rownames(pbmc3k), rownames(pbmc4k))
-  length(universe)
-  ```
+    ```{r}
+    universe <- intersect(rownames(pbmc3k), rownames(pbmc4k))
+    length(universe)
+    ```
 
 2. We rescale each batch to adjust for differences in sequencing depth between batches.
 The `multiBatchNorm()` function recomputes log-normalized expression values after adjusting the size factors for systematic differences in coverage between `SingleCellExperiment` objects.
 (Size factors only remove biases between cells _within_ a single batch.)
 This improves the quality of the correction by removing one aspect of the technical differences between batches.
 
-```{r}
-library(batchelor)
-rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
-pbmc3k <- rescaled[[1]]
-pbmc4k <- rescaled[[2]]
-```
+    ```{r}
+    library(batchelor)
+    rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
+    pbmc3k <- rescaled[[1]]
+    pbmc4k <- rescaled[[2]]
+    ```
 
 3. We obtain a single set of features for batch correction by compute the average biological component across all batches.
 Here, we take all genes with positive biological components to ensure that all interesting biology is retained.
 However, other feature selection strategies described in Chapter ??? are also reasonable.
 
-  ```{r}
-  mean.bio <- (dec3k[universe,"bio"] + dec4k[universe,"bio"])/2
-  chosen <- universe[mean.bio > 0]
-  length(chosen)
-  ```
+    ```{r}
+    mean.bio <- (dec3k[universe,"bio"] + dec4k[universe,"bio"])/2
+    chosen <- universe[mean.bio > 0]
+    length(chosen)
+    ```
 
 ### Performing MNN correction
 
@@ -95,6 +95,7 @@ The reasoning is that MNN pairs represent cells from the same biological state p
 Thus, the difference between cells in MNN pairs can be used as an estimate of the batch effect, the subtraction of which can yield batch-corrected values.
 
 The `r Biocpkg("batchelor")` package provides an implementation of the MNN approach via the `fastMNN()` function.
+(Unlike the MNN method described by @haghverdi2018batch, the `fastMNN()` function performs PCA to reduce the dimensions beforehand and speed up the downstream neighbor detection steps.)
 We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen`.
 To reduce computational work and technical noise, all cells in all batches are projected into the low-dimensional space defined by the top `d` principal components.
 Identification of MNNs and calculation of correction vectors are then performed in this low-dimensional space.
@@ -187,6 +188,126 @@ metadata(mnn.out)$merge.info$lost.var
 Large proportions of lost variance suggest that correction is removing genuine biological heterogeneity.
 This would occur due to violations of the assumption of orthogonality between the batch effect and the biological subspace [@haghverdi2018batch].
 In this case, the proportion of lost variance is small, indicating that non-orthogonality is not a major concern.
+
+## Example with multiple batches
+
+### Setting up the data
+
+Here, we will use human pancreas datasets generated using Smart-based technologies [@segerstolpe2016singlecell;@lawlor2017singlecell] and merge them with data generated using CEL-seq-based methods [@grun2016denovo;@muraro2016singlecell].
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/grun-pancreas", "variance-modelling",
+    c("sce.grun", "dec.grun"))
+```
+
+```{r}
+sce.grun
+```
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/muraro-pancreas", "variance-modelling",
+    c("sce.muraro", "dec.muraro"))
+```
+
+```{r}
+sce.muraro
+```
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/lawlor-pancreas", "variance-modelling",
+    c("sce.lawlor", "dec.lawlor"))
+```
+
+```{r}
+sce.lawlor
+```
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/segerstolpe-pancreas", "variance-modelling",
+    c("sce.seger", "dec.seger"))
+```
+
+```{r}
+sce.seger
+```
+
+There are two approaches that we use to merge multiple datasets.
+The first is simply an extension to the two-sample method described in Section \@ref(correction-two-group), which just involves passing all the `SingleCellExperiment` objects to `fastMNN()`.
+This will merge the first batch with the second, creating a new reference batch; merge the third batch with the reference, again creating a new reference; and so on until all batches have been processed.
+Such a sequential merge is easy to execute but ignores any similarities between batches.
+
+The other strategy is to perform a hierarchical merge that considers the relationships between batches.
+The aim is to first merge batches that are expected to be the most similar and thus easiest to merge.
+This increases the number of cells available for the later, more difficult merge steps involving batches that are more different, which improves the likelihood of obtaining appropriate MNN pairs and a more accurate batch correction.
+We will be demonstrating this strategy with the pancreas dataset by first removing batch effects between donors in one of the datasets;
+then removing batch effects between datasets involving the same scRNA-seq technology;
+and finally, removing batch effects between technologies.
+
+To perform the correction here:
+
+1. We define the universe of genes that are common across all batches.
+This is made straightforward by the presence of common Ensembl identifiers.
+
+    ```{r}
+    universe <- Reduce(intersect, list(rownames(dec.grun), rownames(dec.muraro), 
+        rownames(dec.seger), rownames(dec.lawlor)))
+    universe <- universe[!grepl("^ERCC-", universe)] # removing spike-ins.
+    length(universe)
+    ```
+
+2. We adjust the size factors with `multiBatchNorm()` to make them more comparable across batches.
+This mitigates differences in scale and variance in the log-expression values between batches, especially between technologies.
+
+    ```{r}
+    # TODO: switch to altExp, get rid of these damn spike-ins!
+    isSpike(sce.lawlor, "ERCC") <- integer(0)
+  
+    nout <- multiBatchNorm(sce.grun[universe,], sce.muraro[universe,],
+        sce.seger[universe,], sce.lawlor[universe,])
+    sce.grun<- nout[[1]]
+    sce.muraro <- nout[[2]]
+    sce.seger <- nout[[3]]
+    sce.lawlor <- nout[[4]]
+    ```
+
+3. We keep all genes with positive average biological components. 
+This is a relaxed approach to feature selection that retains interesting features in one or more batches. 
+
+    ```{r}
+    mean.bio <- rowMeans(cbind(
+        dec.grun[universe,"bio"],
+        dec.muraro[universe,"bio"],
+        dec.seger[universe,"bio"],
+        dec.lawlor[universe,"bio"]
+    ))
+    chosen <- universe[mean.bio > 0]
+    length(chosen)
+    ```
+
+4. We use the `multiBatchPCA()` function to perform a PCA across _all_ batches to be merged.
+This ensures that all cells are placed onto the same coordinate space, which would obviously not be possible if a PCA was performed for each batch separately.
+Specifically, `multiBatchPCA()` performs a modified PCA to ensure that each supplied matrix contributes equally to the definition of the PC space.
+This avoids problems with imbalances in the number of cells across batches, meaning that smaller batches (possibly with unique cell types) are not ignored.
+
+    ```{r}
+    set.seed(1000) # For irlba.
+    pcs <- multiBatchPCA(
+        Grun=sce.grun[chosen,],
+        Muraro=sce.muraro[chosen,],
+        Seger=sce.seger[chosen,],
+        Lawlor=sce.lawlor[chosen,],
+        BSPARAM=BiocSingular::IrlbaParam(deferred=TRUE)
+    )
+    names(pcs)
+    ```
+
+    Direct application of `fastMNN()` will automatically use the `multiBatchPCA()` function on gene expression inputs.
+    However, this is not appropriate here as we will be performing a hierarchical merge.
+    Each call to `fastMNN()` will only involve a subset of batches,
+    and it would be difficult to try to merge results from two separate PCAs involving different subsets of data.
+    We need to run `multiBatchPCA()` manually on all batches to ensure that they are on the same coordinate system during merging.
+
+### Merging within batches
 
 
 ## Session Info
