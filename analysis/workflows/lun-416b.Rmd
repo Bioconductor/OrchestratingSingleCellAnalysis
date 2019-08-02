@@ -8,32 +8,31 @@ sce.416b <- LunSpikeInData(which="416b")
 ```
 
 ```{r gene-annotation}
-library(org.Mm.eg.db)
-symb <- mapIds(org.Mm.eg.db, keys=rownames(sce.416b), 
-    keytype="ENSEMBL", column="SYMBOL")
+library(AnnotationHub)
+ens.mm.v97 <- AnnotationHub()[["AH73905"]]
 rowData(sce.416b)$ENSEMBL <- rownames(sce.416b)
-rowData(sce.416b)$SYMBOL <- symb
+rowData(sce.416b)$SYMBOL <- mapIds(ens.mm.v97, keys=rownames(sce.416b),
+    keytype="GENEID", column="SYMBOL")
+rowData(sce.416b)$SEQNAME <- mapIds(ens.mm.v97, keys=rownames(sce.416b),
+    keytype="GENEID", column="SEQNAME")
 
 library(scater)
 rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL, 
     rowData(sce.416b)$SYMBOL)
-
-library(TxDb.Mmusculus.UCSC.mm10.ensGene)
-location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, 
-    keys=rowData(sce.416b)$ENSEMBL, 
-    column="CDSCHROM", keytype="GENEID")
-rowData(sce.416b)$CHR <- location
 ```
 
 ```{r quality-control}
-mito <- which(rowData(sce.416b)$CHR=="chrM")
+mito <- which(rowData(sce.416b)$SEQNAME=="MT")
 sce.416b <- calculateQCMetrics(sce.416b, feature_controls=list(Mt=mito))
+
+combined <- paste0(sce.416b$block, ":", sce.416b$phenotype)
 libsize.drop <- isOutlier(sce.416b$total_counts, nmads=3, type="lower", 
-    log=TRUE, batch=sce.416b$PlateOnco)
+    log=TRUE, batch=combined)
 feature.drop <- isOutlier(sce.416b$total_features_by_counts, nmads=3, 
-    type="lower", log=TRUE, batch=sce.416b$PlateOnco)
+    type="lower", log=TRUE, batch=combined)
 spike.drop <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher",
-    batch=sce.416b$PlateOnco)
+    batch=combined)
+
 keep <- !(libsize.drop | feature.drop | spike.drop)
 sce.416b <- sce.416b[,keep]
 ```
@@ -46,7 +45,7 @@ sce.416b <- normalize(sce.416b)
 ```
 
 ```{r variance-modelling}
-fit.416b <- trendVar(sce.416b, block=sce.416b$Plate)
+fit.416b <- trendVar(sce.416b, block=sce.416b$block)
 dec.416b <- decomposeVar(sce.416b, fit.416b)
 
 # Taking all of the genes with positive biological components.
@@ -58,7 +57,7 @@ chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
 # hence the use of a simple 'removeBatchEffect'.
 library(limma)
 assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b), 
-    design=model.matrix(~sce.416b$phenotype), batch=sce.416b$Plate)
+    design=model.matrix(~sce.416b$phenotype), batch=sce.416b$block)
 ```
 
 ```{r dimensionality-reduction}

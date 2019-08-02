@@ -7,14 +7,7 @@ bibliography: ../ref.bib
 # Dimensionality reduction
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
 ## Overview
@@ -373,6 +366,6 @@ Given a discrepancy between the visible clusters on a $t$-SNE plot and those ide
 
 ## Session Info
 
-```{r, echo=FALSE}
+```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```

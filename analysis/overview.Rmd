@@ -1,5 +1,9 @@
 # (PART) Workflows {-}
 
+```{r setup, echo=FALSE, results="asis"}
+source("workflows/knitr_options.R")
+```
+
 # Analytical Workflow Overview
 
 ![Figure 1. Overview of a typical scRNA-seq workflow.](images/Workflow.png)
@@ -76,25 +80,12 @@ In cases where its necessary to bring together multiple distinct scRNA-seq exper
 Integration approaches provide a new (potentially dimensionality reduced) representation of the data that allows for the identification of biologically similar cells between batches. This improves the performance of clustering, annotation, and the consequently the interpretability of 2- or 3-dimensional visualizations. 
 
 
-## Downstream Statistical Analyses
-
-
-### Clustering
-
-
-### Differential Expression
-
-
-### Trajectory Analysis
-
-
-### Annotation
-
-
-
-
-## Accessible & Reproducible Analysis
-
-### Interactive Data Visualization
-
-### Report Generation
+<!-- Proposed additional chapters following from manuscript -->
+<!-- ## Downstream Statistical Analyses -->
+<!-- ### Clustering -->
+<!-- ### Differential Expression -->
+<!-- ### Trajectory Analysis -->
+<!-- ### Annotation -->
+<!-- ## Accessible & Reproducible Analysis -->
+<!-- ### Interactive Data Visualization -->
+<!-- ### Report Generation -->

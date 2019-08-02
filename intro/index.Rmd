@@ -41,3 +41,4 @@ knitr::write_bib(c(
 ```
 
 _Version 0.0.1.9999_
+_Built on `r Sys.Date()`_

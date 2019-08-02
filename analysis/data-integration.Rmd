@@ -7,332 +7,340 @@ bibliography: ../ref.bib
 # Integrating Datasets
 
 ```{r setup, echo=FALSE, results="asis"}
-library(Cairo)
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
-                      dev = 'CairoPNG')
-options(digits = 4)
-library(BiocStyle)
-source("workflows/extractor.R")
-setupHTML()
+source("workflows/knitr_options.R")
 ```
 
-As scRNA-seq approaches continue to gain in popularity, projects that combine independently generated datasets will become increasingly common. While generalized linear modeling frameworks can be used to integrate disparate datasets, the performance of these frameworks in the scRNA-seq context may be sub-optimal, often due to an underlying assumption that the composition of cell populations is either known or identical across batches of cells. This has inspired a new class of methods that leverage the unique properties of scRNA-seq to improve the amelioration of batch effects, which we demonstrate here.
+## Motivation
 
-Here we will work with two PBMC datasets from the *TENxPBMCData* package - the `pbmc3k` and `pbmc4k` datasets - that come from different donors, and integrate them to produce an integrated representation of the data.
+Large single-cell RNA sequencing (scRNA-seq) projects usually need to generate data across multiple batches due to logistical constraints.
+However, the processing of different batches is often subject to uncontrollable differences, e.g., changes in operator, differences in reagent quality.
+This results in systematic differences in the observed expression in cells from different batches, which we refer to as "batch effects".
+Batch effects are problematic as they can be major drivers of heterogeneity in the data, masking the relevant biological differences and complicating interpretation of the results.
 
+Computational correction of these effects is critical for eliminating batch-to-batch variation, allowing data across multiple batches to be combined for common downstream analysis.
+However, existing methods based on linear models [@ritchie2015limma;@leek2012sva] assume that the composition of cell populations are either known or the same across batches.
+To overcome these limitations, bespoke methods have been developed for batch correction of single-cell data [@haghverdi2018batch;@butler2018integrating;@lin2019scmerge] that do not require _a priori_ knowledge about the composition of the population.
+This allows them to be used in workflows for exploratory analyses of scRNA-seq data where such knowledge is usually unavailable.
 
-## Preprocessing
+## Setting up the data
 
-Before proceeding to the integration section, we will first load the data, and subsequently run it through a preprocessing pipeline that ensures we have a common set of genes across both experiments, filters out poor quality cells, and normalizes the expression matrix. The code for this is shown below for completeness. 
-Note that here we make use of the *purrr* package both for code succinctness and to apply the same function to each PBMC dataset contained within the `pbmc_l` list. (see base `lapply()` and `purrrr::map()` for more details).
+To demonstrate, we will use two separate 10X Genomics PBMC datasets generated in two different batches.
+Each dataset was obtained from the `r Biocpkg("TENxPBMCData")` package and separately subjected to basic processing steps.
+Separate processing prior to the batch correction step is more convenient, scalable and (on occasion) more reliable.
+For example, outlier-based QC on the cells is more effective when performed within a batch (Chapter ???).
+The same can also be said for trend fitting when modelling the mean-variance relationship (Section ???).
 
-Furthermore, to speed up computation, we will subsample each of these datasets down to 1000 cells each.
-
-```{r}
-## Load the data
-library(TENxPBMCData)
-pbmc3k <- TENxPBMCData('pbmc3k')
-pbmc4k <- TENxPBMCData('pbmc4k')
-pbmc_l <- list(pbmc3k = pbmc3k, pbmc4k = pbmc4k)
-
-## Subsample data to 1000 cells each
-library(purrr)
-set.seed(1234)
-pbmc_l <- map(pbmc_l, function(x) { x[, sample(ncol(x), 1000)] })
-
-## Retain common genes (rows); reorder rows by common genes
-common_genes <- reduce(map(pbmc_l, rownames), intersect)
-pbmc_l <- map(pbmc_l, function(x) { x[common_genes, ] })
-
-## Save rowData from first object
-## remove from each individual object else `cbind` will throw an error
-rd <- rowData(pbmc_l[[1]])
-pbmc_l <- map(pbmc_l, function(x) {
-    rowData(x) <- NULL
-    return(x)
-})
-
-## Combine the objects via `cbind`
-sce <- reduce(pbmc_l, cbind)
-
-## Replace rowData within combined object
-## Uniquify row ids to use mostly human readable rownames
-rowData(sce) <- rd
-rownames(sce) <- scater::uniquifyFeatureNames(rd$ENSEMBL_ID, rd$Symbol_TENx)
-```
-
-<!-- ## HOTFIX NEEDED - RECAST ASSAY INTO MATRIX  -->
-```{r, include=FALSE, eval=TRUE}
-## HOTFIX
-counts(sce) <- as.matrix(counts(sce))
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/tenx-batch-pbmc/3k", "feature-selection",
+    c("pbmc3k", "dec3k"))
 ```
 
 ```{r}
-## Calculate and apply QC metrics; filter out cells with low lib or low genes detected
+pbmc3k
+```
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/tenx-batch-pbmc/4k", "variance-modelling",
+    c("pbmc4k", "dec4k"))
+```
+
+```{r}
+pbmc4k
+```
+
+To prepare for the batch correction:
+
+1. We subset all batches to the common "universe" of features.
+In this case, it is straightforward as both batches use Ensembl gene annotation^[As we shall see later, this step can be much, much, much more painful. As is often said, biologists would rather share a toothbrush than nomenclature.].
+
+    ```{r}
+    universe <- intersect(rownames(pbmc3k), rownames(pbmc4k))
+    length(universe)
+    ```
+
+2. We rescale each batch to adjust for differences in sequencing depth between batches.
+The `multiBatchNorm()` function recomputes log-normalized expression values after adjusting the size factors for systematic differences in coverage between `SingleCellExperiment` objects.
+(Size factors only remove biases between cells _within_ a single batch.)
+This improves the quality of the correction by removing one aspect of the technical differences between batches.
+
+    ```{r}
+    library(batchelor)
+    rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
+    pbmc3k <- rescaled[[1]]
+    pbmc4k <- rescaled[[2]]
+    ```
+
+3. We obtain a single set of features for batch correction by compute the average biological component across all batches.
+Here, we take all genes with positive biological components to ensure that all interesting biology is retained.
+However, other feature selection strategies described in Chapter ??? are also reasonable.
+
+    ```{r}
+    mean.bio <- (dec3k[universe,"bio"] + dec4k[universe,"bio"])/2
+    chosen <- universe[mean.bio > 0]
+    length(chosen)
+    ```
+
+## Diagnosing batch effects
+
+Before we actually perform any correction, it is worth examining whether there is any batch effect in this dataset.
+We combine the two `SingleCellExperiment`s and perform a PCA on the log-expression values for the selected genes.
+
+```{r}
+# Synchronizing the metadata for cbind()ing.
+rowData(pbmc3k) <- rowData(pbmc4k)
+pbmc3k$batch <- "3k"
+pbmc4k$batch <- "4k"
+combined <- cbind(pbmc3k, pbmc4k)
+
 library(scater)
-sce <- calculateQCMetrics(sce)
-low_lib <- isOutlier(sce$log10_total_counts, type = "lower", nmad = 3)
-low_genes <- isOutlier(sce$log10_total_features_by_counts, type = "lower", nmad = 3)
-sce <- sce[, !(low_lib | low_genes)]
+set.seed(0010101010)
+combined <- runPCA(combined, subset_row=chosen, 
+    BSPARAM=BiocSingular::RandomParam())
+```
 
-## normalize data
-sce <- normalize(sce)
+We use graph-based clustering on the components to obtain a summary of the population structure.
+In the presence of a strong batch effect, we would expect to see clusters that are comprised of cells from a single batch.
+This indicates that cells of the same type are artificially separated due to technical differences between batches.
 
-## feature selection
+```{r}
 library(scran)
-fit <- trendVar(sce, use.spikes = FALSE)
-dec <- decomposeVar(sce, fit)
-hvg <- rownames(dec)[dec$bio > 0] # save gene names
+snn.gr <- buildSNNGraph(combined, use.dimred="PCA")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=combined$batch)
+tab
 ```
 
-For faster calculations, here we will subset the `hvg` object to the top 2000 genes:
-
-```{r}
-hvg <- hvg[1:2000]
+```{r, echo=FALSE}
+stopifnot(any(tab==0)) # Check the text above was correct.
 ```
 
-From the combined dataset encapsulated within `sce`, we note that the origin of each cell is annotated within `colData` under the column `Sample`. This will be used as the batch variable throughout.
+We can also visualize the corrected coordinates using a $t$-SNE plot (Figure \@ref(fig:tsne-pbmc-uncorrected)).
+The strong separation between cells from different batches is consistent with the clustering results.
 
-```{r}
-table(sce$Sample) # alternately: colData(sce)$Sample
+```{r tsne-pbmc-uncorrected, fig.cap="$t$-SNE plot of the PBMC datasets without any batch correction. Each point is a cell that is colored according to its batch of origin."}
+combined <- runTSNE(combined, dimred="PCA")
+plotTSNE(combined, colour_by="batch")
 ```
 
+Of course, the other explanation for batch-specific clusters is that there are cell types that are unique to each batch.
+These two possibilities are not always easy to distinguish (Section \@ref(batch-truth)).
+However, in this particular example, we would have hoped to see some shared cell types between two PBMC populations.
+This suggests that the separation observed above is driven more by batch effects rather than unique populations.
 
-## Fast MNN
+## Linear regression
 
-The *batchelor* package provides the `fastMNN()` function, which calculates a dimension reduced representation based on the original principal components derived directly from the normalized expression data. These MNN coordinates can then be used for further dimensionality reduction via UMAP as shown below.
+### Overview
+
+Batch effects in bulk RNA sequencing studies are commonly removed with linear modelling.
+This involves fitting a linear model to each gene's expression profile, setting the undesirable batch term to zero and recomputing the observations _sans_ the batch effect, yielding a set of corrected expression values for downstream analyses.
+Linear modelling is the basis of the `removeBatchEffect()` function from the `r Biocpkg("limma")` package [@ritchie2015limma] as well the `comBat()` function from the `r Biocpkg("sva")` package [@leek2012sva].
+
+The typical assumption of this approach is that the composition of cell populations is the same across batches.
+This is a relatively strong assumption in scRNA-seq contexts as batches derived from different individuals will naturally exhibit variation in cell type abundances.
+However, it may be applicable for batches that are technical replicates generated from the same population of cells.
+Linear modelling can also accommodate situations where the composition is known _a priori_ by including the cell type as a factor in the linear model, but this situation is even less common^[If I already knew the type and state of each cell, why would I waste money sequencing the bloody things?].
+
+We use the `rescaleBatches()` function from the `r Biocpkg("batchelor")` package to remove the batch effect.
+For each gene, the mean expression in each batch is scaled down until it is equal to the lowest mean across all batches.
+We deliberately choose to scale all expression values down as this mitigates differences in variance when batches lie at different positions on the mean-variance trend.
+(Specifically, the shrinkage effect of the pseudo-count is greater for smaller counts, suppressing any differences in variance across batches.)
+An additional feature of `rescaleBatches()` is that it will preserve sparsity in the input matrix for greater efficiency, whereas other methods like `removeBatchEffect()` will always return a dense matrix.
 
 ```{r}
+# TODO: modify rescaleBatches() to support known groups.
+# 'block' specifies the plate of origin.
 library(batchelor)
-
-## create new object from sce for mnn simple workflow
-sce_mnn_simple <- sce
-
-## run MNN with no advanced preprocessing
-## BSPARAM/BNPARAM/BPPARAM explained in "adaptations to large scale data"
-mnn_simple_out <- batchelor::fastMNN(sce_mnn_simple,
-                                     subset.row = hvg,
-                                     batch = sce_mnn_simple$Sample)
-                                     ## BSPARAM = BiocSingular::IrlbaParam(),
-                                     ## BNPARAM = BiocNeighbors::AnnoyParam())
-
-## add MNN_simple coordinates to the new sce object
-reducedDim(sce_mnn_simple, 'MNN') <- reducedDim(mnn_simple_out, 'corrected')
-
-## run UMAP on the "simple MNN" version
-sce_mnn_simple <- runUMAP(sce_mnn_simple, use_dimred = 'MNN')
+rescaled <- rescaleBatches(pbmc3k, pbmc4k)
+rescaled
 ```
 
-```{r, fig.cap = 'Simple MNN method. First two MNN coordinates (left) and UMAP derived from the full MNN coordinate set (right).'}
-library(patchwork)
-p1 <- plotReducedDim(sce_mnn_simple, 'MNN', colour_by = 'Sample')
-p2 <- plotReducedDim(sce_mnn_simple, 'UMAP', colour_by = 'Sample')
-wrap_plots(p1, p2, nrow = 1)
-```
-
-## Harmony
-
-Harmony provides a unified framework for data visualization, analysis, and interpretation of scRNA-seq data. Included is a method for integrating different batches of scRNA-seq. This produces a new dimension reduction representation, saved as `HARMONY` within the *SingleCellExperiment* object, as shown below. Furthermore, this Harmony embedding can be used to produce a UMAP representation as well:
+After clustering, we observe similar contributions from each batch to each cluster.
+We expect that both PBMC populations should contain the same set of cell types, so the presence of clusters containing cells from both batches indicates that the batch effect has been removed.
+This conclusion is supported by the apparent mixing of cells from different batches in Figure \@ref(fig:tsne-pbmc-rescaled).
 
 ```{r}
-library(harmony) # devtools::install_github('immunogenomics/harmony')
-library(BiocSingular)
+set.seed(1010101010)
+rescaled <- runPCA(rescaled, subset_row=chosen,
+    BSPARAM=BiocSingular::IrlbaParam(), exprs_values="corrected")
 
-## create a new sce for harmony
-sce_harmony <- sce
-
-## Add PCA to sce, then run Harmony as its dependent on PCA
-sce_harmony <- runPCA(sce_harmony,
-                      feature_set = hvg,
-                      BSPARAM = BiocSingular::IrlbaParam(),
-                      BPPARAM = BiocParallel::MulticoreParam())
-sce_harmony <- RunHarmony(sce_harmony, group.by.vars = "Sample")
-
-## Calculate UMAP on Harmony embeddings
-sce_harmony <- runUMAP(sce_harmony, use_dimred = 'HARMONY')
+snn.gr <- buildSNNGraph(rescaled, use.dimred="PCA")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=rescaled$batch)
+tab
 ```
 
-
-```{r, fig.cap = 'Plot of the first two components of the Harmony embedding (left). UMAP calculated on the Harmony embeddings. (right)'}
-p1 <- plotReducedDim(sce_harmony, 'HARMONY', colour_by = 'Sample')
-p2 <- plotReducedDim(sce_harmony, 'UMAP', colour_by = 'Sample')
-wrap_plots(p1, p2, nrow = 1)
+```{r tsne-pbmc-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+rescaled <- runTSNE(rescaled, dimred="PCA")
+plotTSNE(rescaled, colour_by="batch")
 ```
 
+In this example, it is likely that both batches were generated from the same underlying population of cells.
+When batches have similar cell type composition, `rescaleBatches()` and related methods provide an accurate and simple correction.
+However, this is not often the case, as shown in the pancreas dataset below (Figure \@ref(fig:tsne-pancreas-rescaled)). 
 
-## Advanced MNN Workflow
-
-Here we work through a more advanced workflow using MNN as above, but this time walking through the various steps that are otherwise implicit within the `fastMNN()` function. While not always necessary, it may be informative for those interested in the finer details of a batch correction workflow. Note that this follows the 
-
-For more details, we refer to the [`compareSingleCell` vignette](https://github.com/MarioniLab/compareSingleCell/) vignette by Aaron Lun.
-
-<!-- ### Feature Selection -->
-
-<!-- We briefly highlight feature selection within the preprocessing, as the choice of genes used in the integration can have an outsize effect on end result.  -->
-
-<!-- For brevity, here we use the `scran` package to identify the genes with biological coefficients of variation greater than zero, but leave the choice of method up to the reader. Note that, compared to the basic analysis workflow, we use the `multiBlockVar()` function and block on the origin (`pbmc3k` vs `pbmc4k`). This function models the variance of expression in each block separately. -->
-
-<!-- Additionally, we turn off weighting such that each sample contributes equally to the results, regardless of the number of cells per sample. This prevents one condition from biasing the combined statistics.  -->
-
-<!-- For more details, we refer to the [`compareSingleCell` merge](https://github.com/MarioniLab/compareSingleCell/blob/master/vignettes/embryo_merge.Rmd) vignette. -->
-
-
-```{r}
-## create a new sce for advanced mnn
-sce_mnn_advanced <- sce
-```
-
-<!-- ```{r} -->
-<!-- library(scran) -->
-<!-- dec <- multiBlockVar(sce_mnn_advanced, block = sce_mnn_advanced$Sample, -->
-<!--                      make.tech.trend = TRUE, -->
-<!--                      weighted = FALSE) -->
-
-<!-- hvg <- rownames(dec)[dec$bio > 0] -->
-<!-- ``` -->
-
-<!-- In this example, we get back `r sum(dec$bio > 0)` genes. -->
-
-
-<!-- ```{r} -->
-<!-- hvg_subset <- hvg[1:1000] -->
-<!-- ``` -->
-
-### Dimensionality Reduction
-
-Principal components analyses can be used to both reduce computational work and remove high-dimensional noise, as discussed in the `r Biocpkg("simpleSingleCell", "reads.html#denoising-expression-values-using-pca", "simpleSingleCell vignette")`. 
-
-To accomplish this, the `multiBatchPCA()` function from *scran* ensures that each sample contributes equally to the new coordinate space. For further discussion on this point, see the `r Biocpkg("simpleSingleCell", "batch.html#hierarchical-merging", "simpleSingleCell vignette")` section on hierarchical merging.
-
-We then calculate the number of PCs to retain by comparing the variance explained per principal component versus the technical noise and total variance in the data. This will leave us with a subset of PCA components.
-
-Note that we will use the features selected from the preproprocessing step earlier in this chapter.
-
-
-```{r}
-library(batchelor)
-library(BiocSingular) # provide approximate pca via IrlbaParam()
-
-## Calculate PCA by batch
-set.seed(1234) # for Random/IrlbaParam backends
-
-## run batchelor version of multiBatchPCA (use :: notation to override namespace)
-pcs <- batchelor::multiBatchPCA(sce_mnn_advanced,
-                                batch = sce_mnn_advanced$Sample,
-                                subset.row = hvg,
-                                get.variance = TRUE,
-                                BSPARAM = BiocSingular::IrlbaParam(),
-                                BPPARAM = BiocParallel::MulticoreParam())
-
-## Retain only the top PCs based on variance explained > technical noise
-retain <- denoisePCANumber(
-    metadata(pcs)$var.explained, # variance explained per PC.
-    sum(dec[hvg, ]$tech),       # technical noise in subset of genes.
-    metadata(pcs)$var.total      # total variance in the data
-)
-
-retain
-```
-
-From the number of PCs to retain, we can filter the PCs as follows:
-
-```{r}
-## Subset PCA number of components up to the number in retain
-top_pcs <- map(as.list(pcs), ~ .[, 1:retain])
-```
-
-Then, using the retained components as input, we can input them directly into the `fastMNN()` method as follows, and furthermore produce a UMAP representation based on these MNN coordinates:
-
-```{r}
-## Calculate MNN coordinates, add into reducedDims
-mnn_advanced_out <- batchelor::fastMNN(top_pcs$pbmc3k,
-                                       top_pcs$pbmc4k,
-                                       pc.input = TRUE)
-reducedDim(sce_mnn_advanced, 'MNN') <- mnn_advanced_out$corrected
-
-## Run UMAP on MNN coordinates
-sce_mnn_advanced <- runUMAP(sce_mnn_advanced, use_dimred = 'MNN')
-```
-
-The MNN coordinates and the UMAP coordinates derived from them are visualized below:
-
-```{r, fig.cap = "Plot of first two MNN coordinates (left). UMAP calculated on the MNN coordinates (right). Colour denotes origin of sample."} 
-p1 <- plotReducedDim(sce_mnn_advanced, 'MNN', colour_by = 'Sample')
-p2 <- plotReducedDim(sce_mnn_advanced, 'UMAP', colour_by = 'Sample')
-wrap_plots(p1, p2, nrow = 1)
-```
-
-Comparing to the simpler MNN workflow shown above (which only used the `fastMNN()` function on the barely processed *SingleCellExperiment* class object `sce`), we see that the two results are fairly comparable, differing only by the number of principal components and the selected number of features (here we chose 1000 for computational efficacy; we leave it to the interested reader to explore the results with a larger feature space).
-
-
-## Naive Method Without Correction
-
-For completeness, we show here the results of performing the correction solely on the gene expression matrix.
-
-```{r}
-## create a new sce for naive method
-sce_naive <- sce
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/grun-pancreas", "variance-modelling",
+    c("sce.grun", "dec.grun"))
 ```
 
 ```{r}
-## run PCA on only the normalized gene expression data
-sce_naive <- runPCA(sce_naive,
-                    feature_set = hvg,
-                    BSPARAM = BiocSingular::IrlbaParam(),
-                    BPPARAM = BiocParallel::MulticoreParam())
-
-## Run UMAP on the norm gene exp. derived PCA coordinates - use only top PCs
-sce_naive <- runUMAP(sce_naive, use_dimred = 'PCA')
-
+sce.grun
 ```
 
-```{r, fig.cap = "First two components of PCA calculated directly from the gene expression matrix (left). UMAP calculated on the PCA derived from the normalized gene expression matrix (right)."}
-p1 <- plotPCA(sce_naive, colour_by = 'Sample')
-p2 <- plotReducedDim(sce_naive, 'UMAP', colour_by = 'Sample')
-wrap_plots(p1, p2, nrow = 1)
-```
-
-While the PCA looks well integrated, the UMAP representation - which encapsulates a fuller PCA space - distinctly shows the residual batch effect present.
-
-
-## Limma Batch Correction
-
-The `limma` package, a popular framework for the statistical analysis of RNA-seq, has a function `removeBatchEffect()` which will be used here to correct the normalized expression matrix `logcounts` across the two batches. The result will be assigned into the `assays` slot of the `sce` object as `limma_corrected`, and then used for PCA, saving the result in the `reducedDim` slot as `"PCA_limma"`.
-
-```{r}
-## create a new sce for limma method
-sce_limma <- sce
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/muraro-pancreas", "variance-modelling",
+    c("sce.muraro", "dec.muraro"))
 ```
 
 ```{r}
-library(limma)
-limma_corrected <- removeBatchEffect(logcounts(sce_limma), batch = sce_limma$Sample)
-assay(sce_limma, "logcounts_limma") <- limma_corrected ## add new assay
-
-## calc a PCA on limma values; save separate to prevent overwriting
-sce_limma <- runPCA(sce_limma,
-                    feature_set = hvg,
-                    exprs_values = "logcounts_limma",
-                    BSPARAM = BiocSingular::IrlbaParam(),
-                    BPPARAM = BiocParallel::MulticoreParam())
-
-## run UMAP; save separate to prevent overwriting
-sce_limma <- runUMAP(sce_limma, use_dimred = 'PCA')
+sce.muraro
 ```
 
-The resulting PCA and UMAP from the limma batch correction method are shown below:
+```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+universe <- intersect(rownames(sce.grun), rownames(sce.muraro))
+universe <- universe[!grepl("^ERCC", universe)]
+mean.bio <- (dec.grun[universe,"bio"] + dec.muraro[universe,"bio"])/2
+chosen.genes <- universe[mean.bio > 0]
 
-```{r, fig.cap = 'PCA calculated on the limma batch-corrected gene expression matrix (left). UMAP calculated via the PCA derived from limma batch-corrected gene expression matrix (right).'}
-p1 <- plotReducedDim(sce_limma, 'PCA', colour_by = 'Sample')
-p2 <- plotReducedDim(sce_limma, 'UMAP', colour_by = 'Sample')
-wrap_plots(p1, p2, nrow = 1)
+rescaled.pancreas <- rescaleBatches(sce.grun[universe,], sce.muraro[universe,])
+rescaled.pancreas <- runPCA(rescaled.pancreas, subset_row=chosen.genes,
+    BSPARAM=BiocSingular::IrlbaParam(), exprs_values="corrected")
+
+rescaled.pancreas <- runTSNE(rescaled.pancreas, dimred="PCA")
+plotTSNE(rescaled.pancreas, colour_by="batch")
 ```
+
+## Performing MNN correction
+
+Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
+Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
+Mutual nearest neighbours are pairs of cells from different batches that belong in each other's set of nearest neighbours.
+The reasoning is that MNN pairs represent cells from the same biological state prior to the application of a batch effect - see @haghverdi2018batch for full theoretical details.
+Thus, the difference between cells in MNN pairs can be used as an estimate of the batch effect, the subtraction of which can yield batch-corrected values.
+
+The `r Biocpkg("batchelor")` package provides an implementation of the MNN approach via the `fastMNN()` function.
+(Unlike the MNN method described by @haghverdi2018batch, the `fastMNN()` function performs PCA to reduce the dimensions beforehand and speed up the downstream neighbor detection steps.)
+We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen`.
+To reduce computational work and technical noise, all cells in all batches are projected into the low-dimensional space defined by the top `d` principal components.
+Identification of MNNs and calculation of correction vectors are then performed in this low-dimensional space.
+
+```{r}
+# Using randomized SVD here, as this is faster than 
+# irlba for file-backed matrices.
+set.seed(1000101001)
+mnn.out <- fastMNN(pbmc3k, pbmc4k, d=50, k=20,
+    BSPARAM=BiocSingular::RandomParam(deferred=TRUE))
+```
+
+The function returns a `SingleCellExperiment` object containing corrected values for downstream analyses like clustering or visualization.
+Each column of `mnn.out` corresponds to a cell in one of the batches, while each row corresponds to an input gene in `chosen`.
+
+```{r}
+mnn.out
+```
+
+The `batch` field in the column metadata contains a vector specifying the batch of origin of each cell. 
+
+```{r}
+head(mnn.out$batch) 
+```
+
+The `corrected` matrix in the `reducedDims` slot contains the low-dimensional corrected coordinates for all cells, which we will use in place of the PCs in our downstream analyses.
+
+```{r}
+dim(reducedDim(mnn.out, "corrected"))
+```
+
+The `k` parameter is the most important and specifies the number of nearest neighbours to consider when defining MNN pairs.
+This should be interpreted as the minimum frequency of any shared cell type or state in each batch.
+
+- Larger values will improve the precision of the correction by increasing the number of MNN pairs.
+- Larger `k` provides some robustness to violations of the assumption that the batch vector is orthogonal to the biological subspace [@haghverdi2018batch], by allowing the neighbour search to ignore biological variation in each batch to identify the correct MNN pairs.
+- However, larger `k` can also reduce accuracy by allowing incorrect MNN pairs to form between cells of different types.
+
+We suggest starting with the default `k` and increasing it if one is confident that the same cell types are not adequately merged across batches.
+This is better than starting with a large `k` as incorrect merging is much harder to diagnose than insufficient merging.
+
+### Correction diagnostics 
+
+### Clustering and visualization
+
+We use graph-based clustering on the low-dimensional corrected coordinates to obtain a partitioning of the cells that serves as a proxy for the population structure.
+If the batch effect is successfully corrected, clusters corresponding to shared cell types or states should contain cells from both batches.
+
+```{r}
+library(scran)
+snn.gr <- buildSNNGraph(mnn.out, use.dimred="corrected")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=mnn.out$batch)
+tab
+```
+
+```{r, echo=FALSE}
+stopifnot(all(tab>0)) # Check the text above was correct.
+```
+
+We can also visualize the corrected coordinates using a $t$-SNE plot (Figure \@ref(fig:tsne-pbmc-corrected)).
+The presence of visual clusters containing cells from both batches provides a comforting illusion that the correction was successful.
+
+```{r tsne-pbmc-corrected, fig.cap="$t$-SNE plot of the PBMC datasets after MNN correction. Each point is a cell that is colored according to its batch of origin."}
+library(scater)
+set.seed(0010101010)
+mnn.out <- runTSNE(mnn.out, use_dimred="corrected")
+
+mnn.out$batch <- factor(mnn.out$batch)
+plotTSNE(mnn.out, colour_by="batch")
+```
+
+Needless to say, the mixing of cells from different batches is not an effective diagnostic when the batches involved actually contain unique cell subpopulations.
+If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific population.
+For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
+Or should they be merged together?
+We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
+
+#### Percentage of variance lost
+
+For `fastMNN()`, one useful diagnostic is the proportion of variance within each batch that is lost during MNN correction.
+Specifically, this refers to the within-batch variance that is removed during orthogonalization with respect to the average correction vector at each merge step. 
+This is returned via the `lost.var` field in the metadata of `mnn.out`, which contains a matrix of the variance lost in each batch (column) at each merge step (row).
+
+```{r}
+metadata(mnn.out)$merge.info$lost.var
+```
+
+Large proportions of lost variance suggest that correction is removing genuine biological heterogeneity.
+This would occur due to violations of the assumption of orthogonality between the batch effect and the biological subspace [@haghverdi2018batch].
+In this case, the proportion of lost variance is small, indicating that non-orthogonality is not a major concern.
+
+### Something about pancreas
+
+```{r}
+mnn.pancreas <- fastMNN(sce.grun[universe,], sce.muraro[universe,],
+    subset.row=chosen.genes)
+
+snn.gr <- buildSNNGraph(mnn.pancreas, use.dimred="corrected")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=mnn.pancreas$batch)
+tab
+
+mnn.pancreas <- runTSNE(mnn.pancreas, dimred="corrected")
+plotTSNE(mnn.pancreas, colour_by="batch")
+```
+
+### Merging within batches
+
+## Yet more comments on truth {#batch-truth}
+
+Needless to say, the mixing of cells from different batches is not an effective diagnostic when the batches involved actually contain unique cell subpopulations.
+If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific population.
+For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
+Or should they be merged together?
+We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
 
 
 ## Session Info
 
-```{r, echo=FALSE}
+```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
 
