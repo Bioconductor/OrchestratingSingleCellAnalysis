@@ -22,15 +22,9 @@ However, existing methods based on linear models [@ritchie2015limma;@leek2012sva
 To overcome these limitations, bespoke methods have been developed for batch correction of single-cell data [@haghverdi2018batch;@butler2018integrating;@lin2019scmerge] that do not require _a priori_ knowledge about the composition of the population.
 This allows them to be used in workflows for exploratory analyses of scRNA-seq data where such knowledge is usually unavailable.
 
-Here, we will demonstrate the application of these methods on two case studies involving PBMCs and pancreatic cells.
-We will focus on the method proposed by  @haghverdi2018batch, which is based on the detection of mutual nearest neighbours (MNNs).
-The MNN approach does not rely on pre-defined or equal population compositions across batches, only requiring that a subset of the population be shared between batches.
+## Setting up the data
 
-## Simple two batch example {#correction-two-group}
-
-### Setting up the data
-
-We will use two separate 10X Genomics datasets involving PBMCs obtained from different donors.
+To demonstrate, we will use two separate 10X Genomics PBMC datasets generated in two different batches.
 Each dataset was obtained from the `r Biocpkg("TENxPBMCData")` package and separately subjected to basic processing steps.
 Separate processing prior to the batch correction step is more convenient, scalable and (on occasion) more reliable.
 For example, outlier-based QC on the cells is more effective when performed within a batch (Chapter ???).
@@ -86,7 +80,137 @@ However, other feature selection strategies described in Chapter ??? are also re
     length(chosen)
     ```
 
-### Performing MNN correction
+## Diagnosing batch effects
+
+Before we actually perform any correction, it is worth examining whether there is any batch effect in this dataset.
+We combine the two `SingleCellExperiment`s and perform a PCA on the log-expression values for the selected genes.
+
+```{r}
+# Synchronizing the metadata for cbind()ing.
+rowData(pbmc3k) <- rowData(pbmc4k)
+pbmc3k$batch <- "3k"
+pbmc4k$batch <- "4k"
+combined <- cbind(pbmc3k, pbmc4k)
+
+library(scater)
+set.seed(0010101010)
+combined <- runPCA(combined, subset_row=chosen, 
+    BSPARAM=BiocSingular::RandomParam())
+```
+
+We use graph-based clustering on the components to obtain a summary of the population structure.
+In the presence of a strong batch effect, we would expect to see clusters that are comprised of cells from a single batch.
+This indicates that cells of the same type are artificially separated due to technical differences between batches.
+
+```{r}
+library(scran)
+snn.gr <- buildSNNGraph(combined, use.dimred="PCA")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=combined$batch)
+tab
+```
+
+```{r, echo=FALSE}
+stopifnot(any(tab==0)) # Check the text above was correct.
+```
+
+We can also visualize the corrected coordinates using a $t$-SNE plot (Figure \@ref(fig:tsne-pbmc-uncorrected)).
+The strong separation between cells from different batches is consistent with the clustering results.
+
+```{r tsne-pbmc-uncorrected, fig.cap="$t$-SNE plot of the PBMC datasets without any batch correction. Each point is a cell that is colored according to its batch of origin."}
+combined <- runTSNE(combined, dimred="PCA")
+plotTSNE(combined, colour_by="batch")
+```
+
+Of course, the other explanation for batch-specific clusters is that there are cell types that are unique to each batch.
+These two possibilities are not always easy to distinguish (Section \@ref(batch-truth)).
+However, in this particular example, we would have hoped to see some shared cell types between two PBMC populations.
+This suggests that the separation observed above is driven more by batch effects rather than unique populations.
+
+## Linear regression
+
+### Overview
+
+Batch effects in bulk RNA sequencing studies are commonly removed with linear modelling.
+This involves fitting a linear model to each gene's expression profile, setting the undesirable batch term to zero and recomputing the observations _sans_ the batch effect, yielding a set of corrected expression values for downstream analyses.
+Linear modelling is the basis of the `removeBatchEffect()` function from the `r Biocpkg("limma")` package [@ritchie2015limma] as well the `comBat()` function from the `r Biocpkg("sva")` package [@leek2012sva].
+
+The typical assumption of this approach is that the composition of cell populations is the same across batches.
+This is a relatively strong assumption in scRNA-seq contexts as batches derived from different individuals will naturally exhibit variation in cell type abundances.
+However, it may be applicable for batches that are technical replicates generated from the same population of cells.
+Linear modelling can also accommodate situations where the composition is known _a priori_ by including the cell type as a factor in the linear model, but this situation is even less common^[If I already knew the type and state of each cell, why would I waste money sequencing the bloody things?].
+
+We use the `rescaleBatches()` function from the `r Biocpkg("batchelor")` package to remove the batch effect.
+For each gene, the mean expression in each batch is scaled down until it is equal to the lowest mean across all batches.
+We deliberately choose to scale all expression values down as this mitigates differences in variance when batches lie at different positions on the mean-variance trend.
+(Specifically, the shrinkage effect of the pseudo-count is greater for smaller counts, suppressing any differences in variance across batches.)
+An additional feature of `rescaleBatches()` is that it will preserve sparsity in the input matrix for greater efficiency, whereas other methods like `removeBatchEffect()` will always return a dense matrix.
+
+```{r}
+# TODO: modify rescaleBatches() to support known groups.
+# 'block' specifies the plate of origin.
+library(batchelor)
+rescaled <- rescaleBatches(pbmc3k, pbmc4k)
+rescaled
+```
+
+After clustering, we observe similar contributions from each batch to each cluster.
+We expect that both PBMC populations should contain the same set of cell types, so the presence of clusters containing cells from both batches indicates that the batch effect has been removed.
+This conclusion is supported by the apparent mixing of cells from different batches in Figure \@ref(fig:tsne-pbmc-rescaled).
+
+```{r}
+set.seed(1010101010)
+rescaled <- runPCA(rescaled, subset_row=chosen,
+    BSPARAM=BiocSingular::IrlbaParam(), exprs_values="corrected")
+
+snn.gr <- buildSNNGraph(rescaled, use.dimred="PCA")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=rescaled$batch)
+tab
+```
+
+```{r tsne-pbmc-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+rescaled <- runTSNE(rescaled, dimred="PCA")
+plotTSNE(rescaled, colour_by="batch")
+```
+
+In this example, it is likely that both batches were generated from the same underlying population of cells.
+When batches have similar cell type composition, `rescaleBatches()` and related methods provide an accurate and simple correction.
+However, this is not often the case, as shown in the pancreas dataset below (Figure \@ref(fig:tsne-pancreas-rescaled)). 
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/grun-pancreas", "variance-modelling",
+    c("sce.grun", "dec.grun"))
+```
+
+```{r}
+sce.grun
+```
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/muraro-pancreas", "variance-modelling",
+    c("sce.muraro", "dec.muraro"))
+```
+
+```{r}
+sce.muraro
+```
+
+```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+universe <- intersect(rownames(sce.grun), rownames(sce.muraro))
+universe <- universe[!grepl("^ERCC", universe)]
+mean.bio <- (dec.grun[universe,"bio"] + dec.muraro[universe,"bio"])/2
+chosen.genes <- universe[mean.bio > 0]
+
+rescaled.pancreas <- rescaleBatches(sce.grun[universe,], sce.muraro[universe,])
+rescaled.pancreas <- runPCA(rescaled.pancreas, subset_row=chosen.genes,
+    BSPARAM=BiocSingular::IrlbaParam(), exprs_values="corrected")
+
+rescaled.pancreas <- runTSNE(rescaled.pancreas, dimred="PCA")
+plotTSNE(rescaled.pancreas, colour_by="batch")
+```
+
+## Performing MNN correction
 
 Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
 Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
@@ -139,11 +263,10 @@ This is better than starting with a large `k` as incorrect merging is much harde
 
 ### Correction diagnostics 
 
-#### Clustering and visualization
+### Clustering and visualization
 
 We use graph-based clustering on the low-dimensional corrected coordinates to obtain a partitioning of the cells that serves as a proxy for the population structure.
 If the batch effect is successfully corrected, clusters corresponding to shared cell types or states should contain cells from both batches.
-In this particular scenario, we expect that both PBMC populations will contain the same set of cell types, so all clusters should contain contributions from both batches.
 
 ```{r}
 library(scran)
@@ -189,125 +312,30 @@ Large proportions of lost variance suggest that correction is removing genuine b
 This would occur due to violations of the assumption of orthogonality between the batch effect and the biological subspace [@haghverdi2018batch].
 In this case, the proportion of lost variance is small, indicating that non-orthogonality is not a major concern.
 
-## Example with multiple batches
-
-### Setting up the data
-
-Here, we will use human pancreas datasets generated using Smart-based technologies [@segerstolpe2016singlecell;@lawlor2017singlecell] and merge them with data generated using CEL-seq-based methods [@grun2016denovo;@muraro2016singlecell].
-
-```{r, results='asis', echo=FALSE}
-extractCached("workflows/grun-pancreas", "variance-modelling",
-    c("sce.grun", "dec.grun"))
-```
+### Something about pancreas
 
 ```{r}
-sce.grun
+mnn.pancreas <- fastMNN(sce.grun[universe,], sce.muraro[universe,],
+    subset.row=chosen.genes)
+
+snn.gr <- buildSNNGraph(mnn.pancreas, use.dimred="corrected")
+clusters <- igraph::cluster_walktrap(snn.gr)$membership
+tab <- table(Cluster=clusters, Batch=mnn.pancreas$batch)
+tab
+
+mnn.pancreas <- runTSNE(mnn.pancreas, dimred="corrected")
+plotTSNE(mnn.pancreas, colour_by="batch")
 ```
-
-```{r, results='asis', echo=FALSE}
-extractCached("workflows/muraro-pancreas", "variance-modelling",
-    c("sce.muraro", "dec.muraro"))
-```
-
-```{r}
-sce.muraro
-```
-
-```{r, results='asis', echo=FALSE}
-extractCached("workflows/lawlor-pancreas", "variance-modelling",
-    c("sce.lawlor", "dec.lawlor"))
-```
-
-```{r}
-sce.lawlor
-```
-
-```{r, results='asis', echo=FALSE}
-extractCached("workflows/segerstolpe-pancreas", "variance-modelling",
-    c("sce.seger", "dec.seger"))
-```
-
-```{r}
-sce.seger
-```
-
-There are two approaches that we use to merge multiple datasets.
-The first is simply an extension to the two-sample method described in Section \@ref(correction-two-group), which just involves passing all the `SingleCellExperiment` objects to `fastMNN()`.
-This will merge the first batch with the second, creating a new reference batch; merge the third batch with the reference, again creating a new reference; and so on until all batches have been processed.
-Such a sequential merge is easy to execute but ignores any similarities between batches.
-
-The other strategy is to perform a hierarchical merge that considers the relationships between batches.
-The aim is to first merge batches that are expected to be the most similar and thus easiest to merge.
-This increases the number of cells available for the later, more difficult merge steps involving batches that are more different, which improves the likelihood of obtaining appropriate MNN pairs and a more accurate batch correction.
-We will be demonstrating this strategy with the pancreas dataset by first removing batch effects between donors in one of the datasets;
-then removing batch effects between datasets involving the same scRNA-seq technology;
-and finally, removing batch effects between technologies.
-
-To perform the correction here:
-
-1. We define the universe of genes that are common across all batches.
-This is made straightforward by the presence of common Ensembl identifiers.
-
-    ```{r}
-    universe <- Reduce(intersect, list(rownames(dec.grun), rownames(dec.muraro), 
-        rownames(dec.seger), rownames(dec.lawlor)))
-    universe <- universe[!grepl("^ERCC-", universe)] # removing spike-ins.
-    length(universe)
-    ```
-
-2. We adjust the size factors with `multiBatchNorm()` to make them more comparable across batches.
-This mitigates differences in scale and variance in the log-expression values between batches, especially between technologies.
-
-    ```{r}
-    # TODO: switch to altExp, get rid of these damn spike-ins!
-    isSpike(sce.lawlor, "ERCC") <- integer(0)
-  
-    nout <- multiBatchNorm(sce.grun[universe,], sce.muraro[universe,],
-        sce.seger[universe,], sce.lawlor[universe,])
-    sce.grun<- nout[[1]]
-    sce.muraro <- nout[[2]]
-    sce.seger <- nout[[3]]
-    sce.lawlor <- nout[[4]]
-    ```
-
-3. We keep all genes with positive average biological components. 
-This is a relaxed approach to feature selection that retains interesting features in one or more batches. 
-
-    ```{r}
-    mean.bio <- rowMeans(cbind(
-        dec.grun[universe,"bio"],
-        dec.muraro[universe,"bio"],
-        dec.seger[universe,"bio"],
-        dec.lawlor[universe,"bio"]
-    ))
-    chosen <- universe[mean.bio > 0]
-    length(chosen)
-    ```
-
-4. We use the `multiBatchPCA()` function to perform a PCA across _all_ batches to be merged.
-This ensures that all cells are placed onto the same coordinate space, which would obviously not be possible if a PCA was performed for each batch separately.
-Specifically, `multiBatchPCA()` performs a modified PCA to ensure that each supplied matrix contributes equally to the definition of the PC space.
-This avoids problems with imbalances in the number of cells across batches, meaning that smaller batches (possibly with unique cell types) are not ignored.
-
-    ```{r}
-    set.seed(1000) # For irlba.
-    pcs <- multiBatchPCA(
-        Grun=sce.grun[chosen,],
-        Muraro=sce.muraro[chosen,],
-        Seger=sce.seger[chosen,],
-        Lawlor=sce.lawlor[chosen,],
-        BSPARAM=BiocSingular::IrlbaParam(deferred=TRUE)
-    )
-    names(pcs)
-    ```
-
-    Direct application of `fastMNN()` will automatically use the `multiBatchPCA()` function on gene expression inputs.
-    However, this is not appropriate here as we will be performing a hierarchical merge.
-    Each call to `fastMNN()` will only involve a subset of batches,
-    and it would be difficult to try to merge results from two separate PCAs involving different subsets of data.
-    We need to run `multiBatchPCA()` manually on all batches to ensure that they are on the same coordinate system during merging.
 
 ### Merging within batches
+
+## Yet more comments on truth {#batch-truth}
+
+Needless to say, the mixing of cells from different batches is not an effective diagnostic when the batches involved actually contain unique cell subpopulations.
+If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific population.
+For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
+Or should they be merged together?
+We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
 
 
 ## Session Info
