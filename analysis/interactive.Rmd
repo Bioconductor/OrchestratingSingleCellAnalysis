@@ -12,9 +12,11 @@ source("workflows/knitr_options.R")
 
 ## Motivation
 
-A major part of science is to share data and observations with collaborators and the wider scientific community.
+A major part of scientific research project is to visualize data at all stages of analytical workflows, and ultimately to share data and observations with collaborators and the wider scientific community.
 However, single-cell analysis workflows generate such abundant and diverse data that they cannot be comprehensively captured and reported in static reports (e.g., scientific articles).
 As such, interactive graphical user interfaces (GUI) for exploratory data analysis have gained popularity in recent years to enable other scientists to explore a dataset independently from the findings reported in the primary analysis.
+In particular, interactive data exploration drives the formation of novel data-driven hypotheses prior to a more rigorous statistical analysis, and enables diagnosis of potential problems such as batch effects and low-quality samples.
+
 Notably, an [awesome repository](https://github.com/federicomarini/awesome-expression-browser) has been set up to collaboratively track interactive expression browsers as they become available.
 In this chapter, we describe solutions for sharing single-cell genomics data using interactive browsers directly integrating with Bioconductor workflows and data structures.
 
