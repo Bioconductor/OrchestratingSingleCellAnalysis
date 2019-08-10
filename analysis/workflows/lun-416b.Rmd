@@ -1,11 +1,24 @@
+# 416B Smart-seq2 dataset
+
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
+
+## Introduction
+
+This performs an analysis of the @lun2018assessing Smart-seq2 dataset, 
+which contains two 96-well plates of 416B cells with and without induction of a _CBFB-MYH11_ oncogene.
+
+## Analysis code
+
+### Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.416b <- LunSpikeInData(which="416b") 
 ```
+
+### Gene annotation
 
 ```{r gene-annotation}
 library(AnnotationHub)
@@ -21,21 +34,24 @@ rownames(sce.416b) <- uniquifyFeatureNames(rowData(sce.416b)$ENSEMBL,
     rowData(sce.416b)$SYMBOL)
 ```
 
+### Quality control
+
+We save an unfiltered copy of the `SingleCellExperiment` for later use.
+
+```{r}
+unfiltered <- sce.416b
+```
+
 ```{r quality-control}
 mito <- which(rowData(sce.416b)$SEQNAME=="MT")
-sce.416b <- calculateQCMetrics(sce.416b, feature_controls=list(Mt=mito))
-
-combined <- paste0(sce.416b$block, ":", sce.416b$phenotype)
-libsize.drop <- isOutlier(sce.416b$total_counts, nmads=3, type="lower", 
-    log=TRUE, batch=combined)
-feature.drop <- isOutlier(sce.416b$total_features_by_counts, nmads=3, 
-    type="lower", log=TRUE, batch=combined)
-spike.drop <- isOutlier(sce.416b$pct_counts_ERCC, nmads=3, type="higher",
-    batch=combined)
-
-keep <- !(libsize.drop | feature.drop | spike.drop)
-sce.416b <- sce.416b[,keep]
+stats <- perCellQCMetrics(sce.416b, subsets=list(Mt=mito))
+qc <- quickCellQC(stats, percent_subsets="subsets_Mt_percent")
+sce.416b <- sce.416b[,!qc$discard]
 ```
+
+### Normalization
+
+No pre-clustering is performed here, as the dataset is small and the cells are all similar.
 
 ```{r normalization}
 library(scran)
@@ -44,21 +60,28 @@ sce.416b <- computeSpikeFactors(sce.416b, general.use=FALSE)
 sce.416b <- normalize(sce.416b)
 ```
 
+### Variance modelling
+
+We take all of the genes with positive biological components.
+
 ```{r variance-modelling}
 fit.416b <- trendVar(sce.416b, block=sce.416b$block)
 dec.416b <- decomposeVar(sce.416b, fit.416b)
-
-# Taking all of the genes with positive biological components.
 chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
 ```
 
+### Batch correction
+
+The composition of cells is expected to be the same across the two plates, 
+hence the use of `removeBatchEffect()` rather than more complex methods.
+
 ```{r batch-correction}
-# Composition of the plates is expected to be the same,
-# hence the use of a simple 'removeBatchEffect'.
 library(limma)
 assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b), 
     design=model.matrix(~sce.416b$phenotype), batch=sce.416b$block)
 ```
+
+### Dimensionality reduction
 
 ```{r dimensionality-reduction}
 sce.416b <- denoisePCA(sce.416b, technical=dec.416b, 
@@ -67,6 +90,8 @@ sce.416b <- denoisePCA(sce.416b, technical=dec.416b,
 set.seed(1010)
 sce.416b <- runTSNE(sce.416b, use_dimred="PCA", perplexity=10)
 ```
+
+### Clustering
 
 ```{r clustering}
 my.dist <- dist(reducedDim(sce.416b, "PCA"))
@@ -77,3 +102,67 @@ my.clusters <- unname(cutreeDynamic(my.tree, distM=as.matrix(my.dist),
     minClusterSize=10, verbose=0))
 sce.416b$cluster <- factor(my.clusters)
 ```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.asp=0.5}
+par(mfrow=c(1,2))
+plot(stats$sum, stats$detected, xlab="Library size",
+    ylab="Number of detected genes", log="xy")     
+plot(stats$sum, stats$subsets_Mt_percent, xlab="Library size",
+    ylab="Number of detected genes", log="x")
+
+par(mfrow=c(1,2))
+boxplot(split(log10(stats$sum), unfiltered$block), ylab="Log10 library size")
+boxplot(split(log10(stats$detected), unfiltered$block), ylab="Log10 number of genes")
+
+par(mfrow=c(1,2))
+boxplot(split(log10(stats$sum), unfiltered$phenotype), ylab="Log10 library size")
+boxplot(split(log10(stats$detected), unfiltered$phenotype), ylab="Log10 number of genes")
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.416b))
+```
+
+```{r}
+plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")     
+```
+
+### Variance modelling
+
+```{r}
+plot(dec.416b$mean, dec.416b$total, col="black", pch=16,
+    xlab="Mean log-expression", ylab="Variance of log-expression")     
+points(fit.416b$mean, fit.416b$vars, col="red", pch=16)
+curve(fit.416b$trend(x), add=TRUE, col="dodgerblue")
+```
+
+### Clustering
+
+We compare the clusters to the plate of origin.
+
+```{r}
+table(Cluster=sce.416b$cluster, Plate=sce.416b$block)
+```
+
+We compare the clusters to the oncogene induction status.
+
+```{r}
+table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
+```
+
+```{r}
+plotTSNE(sce.416b, colour_by="cluster")
+```
+
+## References
