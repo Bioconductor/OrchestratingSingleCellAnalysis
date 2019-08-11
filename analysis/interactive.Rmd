@@ -263,3 +263,5 @@ At any time, copying the code displayed in the modal window and executing it in 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
+
+## References
