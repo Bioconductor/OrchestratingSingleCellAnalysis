@@ -136,7 +136,7 @@ Using the transfer of point selection between panels, users could select cells w
 Recent efforts such as the Human Cell Atlas (HCA) and the NIH Human BioMolecular Atlas Program (HuBMAP) have initiated the creation of reference maps of cell types and states in the human body, in health and disease.
 A direct challenge of such efforts lies in the curation and annotation of known and novel cell types in those data sets, and the subsequent transfer learning of those annotations to new data sets.
 This generally relies on unsupervised clustering of cells, followed by pairwise differential expression to identify gene markers for each cluster, and ultimately manual curation of gene signatures to assign a cell type identity - either known or novel - to each cluster.
-In this example, we show how iSEE can be used to interactively examine results from unsupervised clustering and pairwise differential expression to conveniently inspect and determine cell identities.
+In this example, we show how `iSEE` can be used to interactively examine results from unsupervised clustering and pairwise differential expression to conveniently inspect and determine cell identities.
 
 In this first code chunk, we identify clusters of cells and their respective positive markers; that is, genes expressed at higher levels in the cluster of interest relative to other cells.
 The clusters are identified as densely connected subgraphs within a k-nearest-neighbors graph of cells based on their expression profiles.
@@ -238,13 +238,13 @@ To complement this traditional mode of dissemination, it is becoming increasingl
 
 With `iSEE`, such interactive exploration can be guided by small guided tours - step-by-step walkthroughs of the different panels with pointers to facilitate their interpretation, from the authors' point of view.
 At any time, the viewer is still free to leave the provided tour and explore the data from their own perspective.
-All that is needed to add a tour to an `iSEE` instance is a data frame with two columns; the first column containing the UI element to be pointed to in each step of the tour, and the second one containing the text to display at that step.
+All that is needed to add a tour to an `iSEE` instance is a data frame with two columns named "element" and "intro"; the first column declares the UI element to highlight in each step of the tour, and the second one contains the text to display at that step.
 This data frame must then be provided to the `iSEE()` function via the `tour` argument. Examples of tours can be found in https://github.com/ltla/iSEE2018.
 
 ## Reproducibility
 
 Although this chapter focuses on interactive exploration of data, we note that it is important to retain reproducibility, and to have a record of how each figure was generated.
-With `iSEE, this information is readily available via the "Export R code" button under the "Diagnostics" tab in the top-right corner of the GUI.
+With `iSEE`, this information is readily available via the "Export R code" button under the "Diagnostics" tab in the top-right corner of the GUI.
 At any time, copying the code displayed in the modal window and executing it in the R session from which the iSEE app was launched exactly reproduces all plots currently displayed in the GUI.
 
 ## Additional resources
