@@ -89,7 +89,7 @@ Depending on the experimental context, such observations may result from technic
 For instance, it may indicate that normalization was not completely effective at removing cell biases.
 Alternatively, it could also indicate the presence of multiple cell types that differ in total RNA content.
 
-In the example below, we demonstrate that an iSEE app can be preconfigured to immediately display the views described above.
+In the example below, we demonstrate that an `iSEE` app can be preconfigured to immediately display the views described above.
 
 ```{r, eval=FALSE}
 # Rank cells by decreasing library size
@@ -133,7 +133,7 @@ Using the transfer of point selection between panels, users could select cells w
 
 ### Annotation and identification of cell populations
 
-Recent efforts such as the Human Cell Atlas (HCA) and the NIH Human BioMolecular Atlas Program (HuBMAP) have initiated the creation of reference maps of cell types and states in the human body, in health and disease.
+Recent efforts such as the [Human Cell Atlas](https://www.humancellatlas.org/) (HCA) and the NIH Human [BioMolecular Atlas Program](https://commonfund.nih.gov/hubmap) (HuBMAP) have initiated the creation of reference maps of cell types and states in the human body, in health and disease.
 A direct challenge of such efforts lies in the curation and annotation of known and novel cell types in those data sets, and the subsequent transfer learning of those annotations to new data sets.
 This generally relies on unsupervised clustering of cells, followed by pairwise differential expression to identify gene markers for each cluster, and ultimately manual curation of gene signatures to assign a cell type identity - either known or novel - to each cluster.
 In this example, we show how `iSEE` can be used to interactively examine results from unsupervised clustering and pairwise differential expression to conveniently inspect and determine cell identities.
@@ -218,7 +218,7 @@ Rather than sharing analysis results via multiple versions of static figures and
 
 With `iSEE`, this can be achieved at any time by clicking on the "Display panel settings" button under the "Diagnostics" tab in the top right corner, copying the displayed code into an R script, and sharing this chunk of code with collaborators.
 However, note that they will also need to have access to a copy of the original `sce` object used for the analysis.
-In that setup, executing the code in the script and launching iSEE with the following command will open an instance mimicking what was shown on the screen when the "Display panel settings" button was clicked.
+In that setup, executing the code in the script and launching `iSEE` with the following command will open an instance mimicking what was shown on the screen when the "Display panel settings" button was clicked.
 It is important to note that all `iSEE` applications remain interactive irrespective of their initial configuration; only the initial layout and state of the application is modified from the default setup. 
 
 ```{r, eval=FALSE}
@@ -239,13 +239,14 @@ To complement this traditional mode of dissemination, it is becoming increasingl
 With `iSEE`, such interactive exploration can be guided by small guided tours - step-by-step walkthroughs of the different panels with pointers to facilitate their interpretation, from the authors' point of view.
 At any time, the viewer is still free to leave the provided tour and explore the data from their own perspective.
 All that is needed to add a tour to an `iSEE` instance is a data frame with two columns named "element" and "intro"; the first column declares the UI element to highlight in each step of the tour, and the second one contains the text to display at that step.
-This data frame must then be provided to the `iSEE()` function via the `tour` argument. Examples of tours can be found in https://github.com/ltla/iSEE2018.
+This data frame must then be provided to the `iSEE()` function via the `tour` argument.
+Examples of tours can be found in https://github.com/LTLA/iSEE2018.
 
 ## Reproducibility
 
 Although this chapter focuses on interactive exploration of data, we note that it is important to retain reproducibility, and to have a record of how each figure was generated.
 With `iSEE`, this information is readily available via the "Export R code" button under the "Diagnostics" tab in the top-right corner of the GUI.
-At any time, copying the code displayed in the modal window and executing it in the R session from which the iSEE app was launched exactly reproduces all plots currently displayed in the GUI.
+At any time, copying the code displayed in the modal window and executing it in the R session from which the `iSEE` app was launched exactly reproduces all plots currently displayed in the GUI.
 
 ## Additional resources
 
