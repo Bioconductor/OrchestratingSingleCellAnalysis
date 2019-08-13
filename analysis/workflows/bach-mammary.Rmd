@@ -1,0 +1,92 @@
+# Mammary gland dataset
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```
+
+## Introduction
+
+This performs an analysis of the @bach2017differentiation 10X Genomics dataset,
+from which we will consider a single sample of epithelial cells from the mouse mammary gland during gestation.
+
+## Analysis code
+
+### Data loading
+
+```{r loading}
+library(BiocFileCache)
+bfc <- BiocFileCache()
+base.path <- "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2834nnn/GSM2834500/suppl"
+barcode.fname <- bfcrpath(bfc, file.path(base.path, 
+    "GSM2834500%5FG%5F1%5Fbarcodes%2Etsv%2Egz"))
+gene.fname <- bfcrpath(bfc, file.path(base.path,
+    "GSM2834500%5FG%5F1%5Fgenes%2Etsv%2Egz"))
+counts.fname <- bfcrpath(bfc, file.path(base.path,
+    "GSM2834500%5FG%5F1%5Fmatrix%2Emtx%2Egz"))
+
+library(Matrix)
+library(SingleCellExperiment)
+gene.info <- read.table(gene.fname, stringsAsFactors=FALSE)
+colnames(gene.info) <- c("Ensembl", "Symbol")
+sce.mam <- SingleCellExperiment(
+    list(counts=as(readMM(counts.fname), "dgCMatrix")), 
+    rowData=gene.info, 
+    colData=DataFrame(Barcode=readLines(barcode.fname))
+)
+```
+
+### Gene annotation
+
+```{r gene-annotation}
+library(scater)
+rownames(sce.mam) <- uniquifyFeatureNames(
+    rowData(sce.mam)$Ensembl, rowData(sce.mam)$Symbol)
+
+library(AnnotationHub)
+ens.mm.v97 <- AnnotationHub()[["AH73905"]]
+rowData(sce.mam)$SEQNAME <- mapIds(ens.mm.v97, keys=rowData(sce.mam)$Ensembl,
+    keytype="GENEID", column="SEQNAME")
+```
+
+### Quality control
+
+```{r quality-control}
+is.mito <- rowData(sce.mam)$SEQNAME == "MT"
+df <- perCellQCMetrics(sce.mam, subsets=list(Mito=which(is.mito)))
+discarded <- quickCellQC(df, percent_subsets="subsets_Mito_percent", nmads=3)
+sce.mam <- sce.mam[,!discarded$discard]
+```
+
+### Normalization 
+
+```{r normalization}
+library(scran)
+set.seed(101000110)
+clusters <- quickCluster(sce.mam)
+sce.mam <- computeSumFactors(sce.mam, clusters=clusters, min.mean=0.1) 
+sce.mam <- logNormCounts(sce.mam)
+```
+
+### Variance modelling
+
+```{r variance-modelling}
+set.seed(00010101)
+dec <- modelGeneVar(sce.mam)
+```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101010011)
+sce.mam <- denoisePCA(sce.mam, technical=dec, BSPARAM=IrlbaParam())
+
+sce.mam <- runTSNE(sce.mam, dimred="PCA")
+```
+
+### Clustering 
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
+sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
