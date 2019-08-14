@@ -69,9 +69,11 @@ sce.mam <- logNormCounts(sce.mam)
 
 ### Variance modelling
 
+We use a Poisson-based technical trend to capture more genuine biological variation in the biological component.
+
 ```{r variance-modelling}
 set.seed(00010101)
-dec <- modelGeneVar(sce.mam)
+dec.mam <- modelGeneVarByPoisson(sce.mam)
 ```
 
 ### Dimensionality reduction
@@ -79,12 +81,14 @@ dec <- modelGeneVar(sce.mam)
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101010011)
-sce.mam <- denoisePCA(sce.mam, technical=dec, BSPARAM=IrlbaParam())
+sce.mam <- denoisePCA(sce.mam, technical=dec.mam, BSPARAM=IrlbaParam())
 
 sce.mam <- runTSNE(sce.mam, dimred="PCA")
 ```
 
 ### Clustering 
+
+We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` later).
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
