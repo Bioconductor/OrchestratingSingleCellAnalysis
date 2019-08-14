@@ -241,8 +241,6 @@ At any time, copying the code displayed in the modal window and executing it in 
 
 ## Additional resources
 
-- Publication (F1000Research, 2018): https://f1000research.com/articles/7-741/v1
-- Source code: https://github.com/csoneson/iSEE
 - Deployed examples: 
     - Use cases accompanying the published article: https://marionilab.cruk.cam.ac.uk/ (source code: https://github.com/LTLA/iSEE2018)
     - Examples of `iSEE` in production: http://www.teichlab.org/singlecell-treg 
@@ -256,4 +254,4 @@ At any time, copying the code displayed in the modal window and executing it in 
 prettySessionInfo()
 ```
 
-## Session info {-}
+## References {-}
