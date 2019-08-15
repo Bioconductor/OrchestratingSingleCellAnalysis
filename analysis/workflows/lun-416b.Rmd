@@ -56,8 +56,7 @@ No pre-clustering is performed here, as the dataset is small and the cells are a
 ```{r normalization}
 library(scran)
 sce.416b <- computeSumFactors(sce.416b)
-sce.416b <- computeSpikeFactors(sce.416b, general.use=FALSE)
-sce.416b <- normalize(sce.416b)
+sce.416b <- logNormCounts(sce.416b)
 ```
 
 ### Variance modelling
@@ -65,8 +64,7 @@ sce.416b <- normalize(sce.416b)
 We take all of the genes with positive biological components.
 
 ```{r variance-modelling}
-fit.416b <- trendVar(sce.416b, block=sce.416b$block)
-dec.416b <- decomposeVar(sce.416b, fit.416b)
+dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC")
 chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
 ```
 
@@ -143,7 +141,8 @@ plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
 ```{r}
 plot(dec.416b$mean, dec.416b$total, col="black", pch=16,
     xlab="Mean log-expression", ylab="Variance of log-expression")     
-points(fit.416b$mean, fit.416b$vars, col="red", pch=16)
+fit.416b <- metadata(dec.416b)
+points(fit.416b$mean, fit.416b$var, col="red", pch=16)
 curve(fit.416b$trend(x), add=TRUE, col="dodgerblue")
 ```
 
