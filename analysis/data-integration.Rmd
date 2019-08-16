@@ -70,9 +70,10 @@ This improves the quality of the correction by removing one aspect of the techni
     pbmc4k <- rescaled[[2]]
     ```
 
-3. We obtain a single set of features for batch correction by compute the average biological component across all batches.
-Here, we take all genes with positive biological components to ensure that all interesting biology is retained.
-However, other feature selection strategies described in Chapter ??? are also reasonable.
+3. We obtain a single set of features for batch correction by computing the average biological component across all batches.
+We use the average as it is responsive to batch-specific HVGs but does not put too much weight on biological components that are small and positive in only a few batches.
+We then take all genes with positive average components to ensure that we retain as much interesting biology as possible.
+However, the other feature selection strategies described in Chapter ??? are also reasonable.
 
     ```{r}
     mean.bio <- (dec3k[universe,"bio"] + dec4k[universe,"bio"])/2
