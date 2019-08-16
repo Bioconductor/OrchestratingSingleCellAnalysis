@@ -313,9 +313,14 @@ Large proportions of lost variance suggest that correction is removing genuine b
 This would occur due to violations of the assumption of orthogonality between the batch effect and the biological subspace [@haghverdi2018batch].
 In this case, the proportion of lost variance is small, indicating that non-orthogonality is not a major concern.
 
-### Something about pancreas
+### Application on the pancreas data
 
-```{r}
+As the PBMC dataset can already be corrected by linear regression, it is helpful to examine another situation where the sophistication of the MNN approach becomes necessary.
+Here, we use `fastMNN()` to merge together the two human pancreas datasets described earlier.
+Clustering on the merged datasets yields fewer batch-specific clusters, which is recapitulated as greater intermingling between batches in Figure \@ref(fig:tsne-pancreas-mnn).
+This improvement over Figure \@ref(fig:tsne-pancreas-rescaled) represents the ability of `fastMNN()` to adapt to more complex situations involving differences in population composition between batches.
+
+```{r tsne-pancreas-mnn, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin."}
 mnn.pancreas <- fastMNN(sce.grun[universe,], sce.muraro[universe,],
     subset.row=chosen.genes)
 
