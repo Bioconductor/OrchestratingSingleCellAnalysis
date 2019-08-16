@@ -143,6 +143,7 @@ Linear modelling can also accommodate situations where the composition is known 
 
 We use the `rescaleBatches()` function from the `r Biocpkg("batchelor")` package to remove the batch effect.
 For each gene, the mean expression in each batch is scaled down until it is equal to the lowest mean across all batches.
+This is roughly equivalent to applying a linear regression to the log-expression values per gene.
 We deliberately choose to scale all expression values down as this mitigates differences in variance when batches lie at different positions on the mean-variance trend.
 (Specifically, the shrinkage effect of the pseudo-count is greater for smaller counts, suppressing any differences in variance across batches.)
 An additional feature of `rescaleBatches()` is that it will preserve sparsity in the input matrix for greater efficiency, whereas other methods like `removeBatchEffect()` will always return a dense matrix.
@@ -177,7 +178,7 @@ plotTSNE(rescaled, colour_by="batch")
 
 In this example, it is likely that both batches were generated from the same underlying population of cells.
 When batches have similar cell type composition, `rescaleBatches()` and related methods provide an accurate and simple correction.
-However, this is not often the case, as shown in the pancreas dataset below (Figure \@ref(fig:tsne-pancreas-rescaled)). 
+However, this is not often the case, as we will demonstrate with two human pancreas CEL-seq datasets [@muraro2016singlecell;@grun2016denovo].
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/grun-pancreas", "variance-modelling",
@@ -197,13 +198,27 @@ extractCached("workflows/muraro-pancreas", "variance-modelling",
 sce.muraro
 ```
 
-```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+We subset both batches to their common universe of genes;
+adjust their scaling to equalize sequencing coverage (not really necessary in this case, as the coverage is already similar, but we will do so anyway for consistency);
+and select those genes with positive average biological components for further use.
+
+```{r}
 universe <- intersect(rownames(sce.grun), rownames(sce.muraro))
 universe <- universe[!grepl("^ERCC", universe)]
+
+normed.pancreas <- multiBatchNorm(sce.grun[universe,], sce.muraro[universe,])
+sce.grun <- normed.pancreas[[1]]
+sce.muraro <- normed.pancreas[[2]]
+
 mean.bio <- (dec.grun[universe,"bio"] + dec.muraro[universe,"bio"])/2
 chosen.genes <- universe[mean.bio > 0]
+```
 
-rescaled.pancreas <- rescaleBatches(sce.grun[universe,], sce.muraro[universe,])
+We observe that `rescaleBatches()` is unable to align cells from different batches in Figure \@ref(fig:tsne-pancreas-rescaled).
+This is attributable to differences in population composition between batches, with additional complications from non-linearities in the batch effect, e.g., when the magnitude or direction of the batch effect differs between cell types.
+
+```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+rescaled.pancreas <- rescaleBatches(sce.grun, sce.muraro)
 rescaled.pancreas <- runPCA(rescaled.pancreas, subset_row=chosen.genes,
     BSPARAM=BiocSingular::IrlbaParam(), exprs_values="corrected")
 
@@ -212,6 +227,8 @@ plotTSNE(rescaled.pancreas, colour_by="batch")
 ```
 
 ## Performing MNN correction
+
+### Application to the PBMC data
 
 Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
 Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
@@ -313,7 +330,7 @@ Large proportions of lost variance suggest that correction is removing genuine b
 This would occur due to violations of the assumption of orthogonality between the batch effect and the biological subspace [@haghverdi2018batch].
 In this case, the proportion of lost variance is small, indicating that non-orthogonality is not a major concern.
 
-### Application on the pancreas data
+### Application to the pancreas data
 
 As the PBMC dataset can already be corrected by linear regression, it is helpful to examine another situation where the sophistication of the MNN approach becomes necessary.
 Here, we use `fastMNN()` to merge together the two human pancreas datasets described earlier.
@@ -321,8 +338,7 @@ Clustering on the merged datasets yields fewer batch-specific clusters, which is
 This improvement over Figure \@ref(fig:tsne-pancreas-rescaled) represents the ability of `fastMNN()` to adapt to more complex situations involving differences in population composition between batches.
 
 ```{r tsne-pancreas-mnn, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin."}
-mnn.pancreas <- fastMNN(sce.grun[universe,], sce.muraro[universe,],
-    subset.row=chosen.genes)
+mnn.pancreas <- fastMNN(sce.grun, sce.muraro, subset.row=chosen.genes)
 
 snn.gr <- buildSNNGraph(mnn.pancreas, use.dimred="corrected")
 clusters <- igraph::cluster_walktrap(snn.gr)$membership
