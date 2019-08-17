@@ -31,7 +31,7 @@ For example, outlier-based QC on the cells is more effective when performed with
 The same can also be said for trend fitting when modelling the mean-variance relationship (Section ???).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/3k", "feature-selection",
+extractCached("workflows/tenx-batch-pbmc/3k", "clustering",
     c("pbmc3k", "dec3k"))
 ```
 
@@ -40,7 +40,7 @@ pbmc3k
 ```
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/4k", "variance-modelling",
+extractCached("workflows/tenx-batch-pbmc/4k", "clustering",
     c("pbmc4k", "dec4k"))
 ```
 
@@ -100,7 +100,8 @@ combined <- runPCA(combined, subset_row=chosen,
 ```
 
 We use graph-based clustering on the components to obtain a summary of the population structure.
-In the presence of a strong batch effect, we would expect to see clusters that are comprised of cells from a single batch.
+As our two PBMC populations should be replicates, each cluster should ideally consist of cells from both batches.
+However, we instead see clusters that are comprised of cells from a single batch.
 This indicates that cells of the same type are artificially separated due to technical differences between batches.
 
 ```{r}
@@ -124,9 +125,11 @@ plotTSNE(combined, colour_by="batch")
 ```
 
 Of course, the other explanation for batch-specific clusters is that there are cell types that are unique to each batch.
-These two possibilities are not always easy to distinguish (Section \@ref(batch-truth)).
-However, in this particular example, we would have hoped to see some shared cell types between two PBMC populations.
-This suggests that the separation observed above is driven more by batch effects rather than unique populations.
+The degree of intermingling of cells from different batches is not an effective diagnostic when the batches involved might actually contain unique cell subpopulations (which is not a consideration in the PBMC dataset, but the same cannot be said in general).
+If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific subpopulation.
+For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
+Or should they be merged together?
+We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
 
 ## Linear regression
 
@@ -142,8 +145,8 @@ However, it may be applicable for batches that are technical replicates generate
 Linear modelling can also accommodate situations where the composition is known _a priori_ by including the cell type as a factor in the linear model, but this situation is even less common^[If I already knew the type and state of each cell, why would I waste money sequencing the bloody things?].
 
 We use the `rescaleBatches()` function from the `r Biocpkg("batchelor")` package to remove the batch effect.
+This is roughly equivalent to applying a linear regression to the log-expression values per gene, with some adjustments to improve performance and efficiency.
 For each gene, the mean expression in each batch is scaled down until it is equal to the lowest mean across all batches.
-This is roughly equivalent to applying a linear regression to the log-expression values per gene.
 We deliberately choose to scale all expression values down as this mitigates differences in variance when batches lie at different positions on the mean-variance trend.
 (Specifically, the shrinkage effect of the pseudo-count is greater for smaller counts, suppressing any differences in variance across batches.)
 An additional feature of `rescaleBatches()` is that it will preserve sparsity in the input matrix for greater efficiency, whereas other methods like `removeBatchEffect()` will always return a dense matrix.
@@ -156,9 +159,10 @@ rescaled <- rescaleBatches(pbmc3k, pbmc4k)
 rescaled
 ```
 
-After clustering, we observe similar contributions from each batch to each cluster.
-We expect that both PBMC populations should contain the same set of cell types, so the presence of clusters containing cells from both batches indicates that the batch effect has been removed.
-This conclusion is supported by the apparent mixing of cells from different batches in Figure \@ref(fig:tsne-pbmc-rescaled).
+### Checking diagnostics
+
+After clustering, we observe that each batch contributes cells to each cluster.
+This is consistent with the removal of the batch effect, given that both PBMC populations should contain the same cell types.
 
 ```{r}
 set.seed(1010101010)
@@ -171,10 +175,32 @@ tab <- table(Cluster=clusters, Batch=rescaled$batch)
 tab
 ```
 
+```{r, echo=FALSE}
+stopifnot(all(tab>0)) # Check the text above was correct.
+```
+
+This conclusion is supported by the apparent mixing of cells from different batches in Figure \@ref(fig:tsne-pbmc-rescaled).
+
 ```{r tsne-pbmc-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
 rescaled <- runTSNE(rescaled, dimred="PCA")
 plotTSNE(rescaled, colour_by="batch")
 ```
+
+Another useful diagnostic is to compare the clustering within each batch to the clustering of the merged data.
+Ideally, we should see a many-to-1 mapping where the across-batch clustering is nested inside the within-batch clusterings.
+(That is, the vast majority of entries of the `table()`s below should be zero.)
+This indicates that any within-batch structure was preserved during batch correction while acknowledging that greater resolution is possible with more cells.
+In practice, more discrepancies can be expected even when the correction is flawless, due to the presence of neighboring clusters that were arbitrarily separated in the first place.
+
+```{r}
+# For the first batch.
+table(New=clusters[rescaled$batch==1], Old=pbmc3k$cluster)
+
+# For the second batch.
+table(New=clusters[rescaled$batch==2], Old=pbmc4k$cluster)
+```
+
+### Application to a pancreas dataset
 
 In this example, it is likely that both batches were generated from the same underlying population of cells.
 When batches have similar cell type composition, `rescaleBatches()` and related methods provide an accurate and simple correction.
@@ -310,11 +336,7 @@ mnn.out$batch <- factor(mnn.out$batch)
 plotTSNE(mnn.out, colour_by="batch")
 ```
 
-Needless to say, the mixing of cells from different batches is not an effective diagnostic when the batches involved actually contain unique cell subpopulations.
-If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific population.
-For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
-Or should they be merged together?
-We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
+We could also compare to the clustering within each batch, but we will skip that here for the sake of brevity.
 
 #### Percentage of variance lost
 
