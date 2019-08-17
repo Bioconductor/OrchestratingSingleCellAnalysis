@@ -371,16 +371,21 @@ mnn.pancreas <- runTSNE(mnn.pancreas, dimred="corrected")
 plotTSNE(mnn.pancreas, colour_by="batch")
 ```
 
-### Merging within batches
+## Using the corrected values
 
-## Yet more comments on truth {#batch-truth}
+The greatest value of batch correction lies in facilitating cell-based analysis of population heterogeneity in a consistent manner across batches.
+Cluster 1 in batch A is the same as cluster 1 in batch B when the clustering is performed on the merged data.
+There is no need to identify mappings between separate clusterings, which might not even be possible when the clusters are not well-separated.
+The burden of interpretation is consolidated by generating a single set of clusters for all batches, rather than requiring separate examination of each batch's clusters.
+Another benefit is that the available number of cells is increased when all batches are combined, which allows for greater resolution of population structure in downstream analyses^[And a nice $t$-SNE plot for Figure 1. Hey, those atlas papers almost write themselves!].
+We previously demonstrated the application of clustering methods to the batch-corrected data, but the same principles apply for other analyses like trajectory reconstruction. 
 
-Needless to say, the mixing of cells from different batches is not an effective diagnostic when the batches involved actually contain unique cell subpopulations.
-If a cluster only contains cells from a single batch, one can always debate whether that is caused by a failure of the correction method or if there is truly a batch-specific population.
-For example, do batch-specific metabolic or differentiation states represent distinct subpopulations? 
-Or should they be merged together?
-We will not attempt to answer this here, only noting that each batch correction algorithm will make different (and possibly inappropriate) decisions on what constitutes "shared" and "unique" populations.
-
+At this point, it is also tempting to use the batch-corrected values for gene-based analyses like DE-based marker gene detection. 
+This is not generally recommended as an arbitrary correction algorithm is not obliged to preserve the magnitude (or even direction) of differences in per-gene expression when attempting to align multiple batches.
+For example, cosine normalization in `fastMNN()` shrinks the magnitude of the expression values so that any subsequent log-fold change calculations are meaningless.
+Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed i Chapter ???.
+This strategy is based on the expectation that any genuine DE between clusters should still be present in a within-batch comparison where batch effects are absent.
+It penalizes genes that exhibit inconsistent DE across batches, thus protecting against misleading conclusions when a population in one batch is aligned to a similar-but-not-identical population in another batch.
 
 ## Session Info
 
@@ -388,3 +393,4 @@ We will not attempt to answer this here, only noting that each batch correction 
 prettySessionInfo()
 ```
 
+## References {-}
