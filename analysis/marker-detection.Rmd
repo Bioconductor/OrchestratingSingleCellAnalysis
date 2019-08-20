@@ -87,6 +87,11 @@ library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 ```
 
+We intentionally use pairwise comparisons between clusters rather than comparing each cluster to the average of all other cells.
+The latter approach is sensitive to the population composition, potentially resulting in wildly different sets of markers when cell type abundances change in different contexts.
+In the worst case, the presence of a single dominant subpopulation will drive the selection of top markers for every other cluster, pushing out useful genes that can resolve the various minor subpopulations.
+Moreover, pairwise comparisons naturally provide more information to interpret of the utility of a marker, e.g., by providing log-fold changes to indicate which clusters are distinguished by this gene.
+
 ### Using the log-fold change 
 
 Our previous `findMarkers()` call considers both up- and downregulated genes to be potential markers.
