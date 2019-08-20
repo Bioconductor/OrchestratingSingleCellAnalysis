@@ -34,13 +34,13 @@ library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.zeisel)
 sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clusters, min.mean=0.1)
-sce.zeisel <- computeSpikeFactors(sce.zeisel, general.use=FALSE)
-sce.zeisel <- normalize(sce.zeisel)
+
+library(scater)
+sce.zeisel <- logNormCounts(sce.zeisel)
 ```
 
 ```{r variance-modelling}
-fit.zeisel <- trendVar(sce.zeisel)
-dec.zeisel <- decomposeVar(sce.zeisel, fit.zeisel)
+dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
 
 # Taking 10% of the genes with the top biological components.
 ordered.genes <- rownames(dec.zeisel)[order(dec.zeisel$bio, decreasing=TRUE)]
