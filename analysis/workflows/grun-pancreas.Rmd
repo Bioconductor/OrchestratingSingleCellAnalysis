@@ -13,8 +13,6 @@ library(org.Hs.eg.db)
 gene.symb <- sub("__chr.*$", "", rownames(sce.grun))
 gene.ids <- mapIds(org.Hs.eg.db, keys=gene.symb, 
     keytype="SYMBOL", column="ENSEMBL")
-is.spike <- isSpike(sce.grun)
-gene.ids[is.spike] <- gene.symb[is.spike]
 
 # Removing duplicated genes or genes without Ensembl IDs.
 keep <- !is.na(gene.ids) & !duplicated(gene.ids)
@@ -23,15 +21,10 @@ rownames(sce.grun) <- gene.ids[keep]
 ```
 
 ```{r quality-control}
-# TODO: streamline.
 library(scater)
-sce.grun <- calculateQCMetrics(sce.grun, compact=TRUE)
-QC <- sce.grun$scater_qc
-low.lib <- isOutlier(QC$all$log10_total_counts, type="lower", nmad=3)
-low.genes <- isOutlier(QC$all$log10_total_features_by_counts, type="lower", nmad=3)
-high.spike <- isOutlier(QC$feature_control_ERCC$pct_counts, type="higher", nmad=3)
-discard <- low.lib | low.genes | high.spike
-sce.grun <- sce.grun[,!discard]
+QC <- perCellQCMetrics(sce.grun)
+filter <- quickCellQC(QC, percent_subsets="altexps_ERCC_percent", nmads=3)
+sce.grun <- sce.grun[,!filter$discard]
 ```
 
 ```{r normalization}
@@ -39,13 +32,11 @@ library(scran)
 set.seed(1000) # for irlba. 
 clusters <- quickCluster(sce.grun)
 sce.grun <- computeSumFactors(sce.grun, min.mean=0.1, clusters=clusters)
-sce.grun <- computeSpikeFactors(sce.grun, general.use=FALSE)
-sce.grun <- normalize(sce.grun)
+sce.grun <- logNormCounts(sce.grun)
 ```
 
 ```{r variance-modelling}
 # Blocking on a combined plate and donor factor.
 block <- paste0(sce.grun$sample, "_", sce.grun$donor)
-fit.grun <- trendVar(sce.grun, block=block, parametric=TRUE) 
-dec.grun <- decomposeVar(sce.grun, fit.grun)
+dec.grun <- modelGeneVarWithSpikes(sce.grun, spikes="ERCC", block=block)
 ```

@@ -1,0 +1,221 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Doublet detection 
+
+```{r setup, echo=FALSE, results="asis"}
+source("workflows/knitr_options.R")
+```
+
+## Overview
+
+In single-cell RNA sequencing (scRNA-seq) experiments, doublets are artifactual libraries generated from two cells.
+They typically arise due to errors in cell sorting or capture, especially in droplet-based protocols [@zheng2017massively] involving thousands of cells.
+Doublets are obviously undesirable when the aim is to characterize populations at the single-cell level.
+In particular, doublets can be mistaken for intermediate populations or transitory states that do not actually exist.
+Thus, it is desirable to identify and remove doublet libraries so that they do not compromise interpretation of the results.
+
+Several experimental strategies are available for doublet removal.
+One approach exploits natural genetic variation when pooling cells from multiple donor individuals [@kang2018multiplexed].
+Doublets can be identified as libraries with allele combinations that do not exist in any single donor.
+Another approach is to mark a subset of cells (e.g., all cells from one sample) with an antibody conjugated to a different oligonucleotide [@stoeckius2017hashing].
+Upon pooling, libraries that are observed to have different oligonucleotides are considered to be doublets and removed.
+These approaches can be highly effective but rely on experimental information that may not be available.
+
+A more general approach is to infer doublets from the expression profiles alone [@dahlin2018single].
+In this workflow, we will describe two purely computational approaches for detecting doublets from scRNA-seq data.
+The main difference between these two methods is whether or not they need cluster information beforehand.
+We will demonstrate the use of these methods on 10X Genomics data from a droplet-based scRNA-seq study of the mouse mammary gland [@bach2017differentiation].
+
+```{r, results='asis', echo=FALSE}
+extractCached("workflows/bach-mammary", "clustering", c("sce.mam", "dec.mam"))
+```
+
+```{r}
+sce.mam
+```
+
+## Doublet detection with clusters
+
+### Overview
+
+The `doubletCluster()` function will identify clusters that have intermediate expression profiles of two other clusters [@bach2017differentiation].
+Specifically, it will examine every possible triplet of clusters consisting of a query cluster and its two "parents".
+It will then compute a number of statistics:
+
+- The number of genes (`N`) that are differentially expressed in the same direction in the query cluster compared to _both_ of the parent clusters.
+Such genes would be unique markers for the query cluster and provide evidence against the null hypothesis, i.e., that the query cluster consists of doublets from the two parents.
+Clusters with few unique genes are more likely to be composed of doublets.
+- The ratio of the median library size in each parent to the median library size in the query (`lib.size` fields).
+Doublet libraries are generated from a larger initial pool of RNA compared to libraries for single cells, and thus the former should have larger library sizes.
+Library size ratios much greater than unity are inconsistent with a doublet identity for the query.
+- The proportion of cells in the query cluster should also be reasonable - typically less than 5% of all cells, depending on how many cells were loaded onto the 10X Genomics device.
+
+For each query cluster, the best pair of parents is identified based solely on the lowest `N`.
+(This means that any `lib.size*` above unity is not definitive evidence against a doublet identity for a query cluster, as there may be a pair of parents with slightly higher `N` but both `lib.size*` values below unity.)
+If more detail is necessary, the `all.pairs` field contains statistics on all possible parent pairs for a given query cluster.
+
+```{r}
+library(scran)
+dbl.out <- doubletCluster(sce.mam, sce.mam$cluster)
+dbl.out
+```
+
+Clusters are then ranked by `N` in the output of `doubletClusters()`, allowing us to prioritize "high-risk" clusters that require careful investigation.
+If a more concrete threshold is necessary, we can identify clusters that have unusually low `N` using an outlier-based approach. 
+
+```{r}
+library(scater)
+chosen.doublet <- rownames(dbl.out)[isOutlier(dbl.out$N,
+    type="lower", nmads=3, log=TRUE)]
+chosen.doublet
+```
+
+### Application to the mammary data
+
+```{r, echo=FALSE, results="hide"}
+# Hidden variables for use in text or hidden chunks,
+# to avoid the need for manual changes.
+chosen.doublet <- 10
+```
+
+Examination of the output of `doubletCluster()` indicates that cluster `r chosen.doublet` has the fewest unique genes and library sizes that are comparable to or greater than its parents.
+We see that every gene detected in this cluster is also expressed in either of the two proposed parent clusters (Figure \@ref(fig:heatclust)).
+
+```{r heatclust, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %i in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
+markers <- findMarkers(sce.mam, sce.mam$cluster, direction="up")
+dbl.markers <- markers[["10"]]
+
+library(scater)
+chosen <- rownames(dbl.markers)[dbl.markers$Top <= 10]
+plotHeatmap(sce.mam, columns=order(sce.mam$cluster), 
+    colour_columns_by="cluster", features=chosen, cluster_cols=FALSE, 
+    center=TRUE, symmetric=TRUE, zlim=c(-5, 5), show_colnames=FALSE)
+```
+
+```{r, echo=FALSE, results="hide"}
+# Checking that we've picked the correct cluster.
+acta2 <- sapply(dbl.markers["Acta2", -(1:3)], sign)
+csn2 <- sapply(dbl.markers["Csn2", -(1:3)], sign)
+
+below <- acta2 < 0
+stopifnot(all(csn2[below] == 1))
+below <- csn2 < 0
+stopifnot(all(acta2[below] == 1))
+```
+
+Closer examination of some known markers suggests that the offending cluster consists of doublets of basal cells (_Acta2_) and alveolar cells (_Csn2_) (Figure \@ref(fig:markerexprs)).
+Indeed, no cell type is known to strongly express both of these genes at the same time, which supports the hypothesis that this cluster consists solely of doublets^[While it is possible that this cluster represents an entirely novel cell type, the presence of doublets provides a more sober explanation for its expression profile. So, there's probably no _Nature_ paper here, move along.].
+
+```{r markerexprs, fig.asp=0.5, fig.width=10, fig.cap="Distribution of log-normalized expression values for _Acta2_ and _Csn2_ in each cluster. Each point represents a cell."}
+plotExpression(sce.mam, features=c("Acta2", "Csn2"), 
+    x="cluster", colour_by="cluster")
+```
+
+The strength of `doubletCluster()` lies in its simplicity and ease of interpretation.
+Suspect clusters can be quickly flagged based on the metrics returned by the function.
+However, it is obviously dependent on the quality of the clustering.
+Clusters that are too coarse will fail to separate doublets from other cells, while clusters that are too fine will complicate interpretation.
+The method is also somewhat biased towards clusters with fewer cells, where the reduction in power is more likely to result in a low `N`.
+(Fortunately, this is a desirable effect as doublets should be rare in a properly performed scRNA-seq experiment.)
+
+## Doublet detection by simulation
+
+### Overview
+
+The other doublet detection strategy involves _in silico_ simulation of doublets from the single-cell expression profiles [@dahlin2018single].
+This is performed using the `doubletCells()` function from `r Biocpkg("scran")`, which will:
+
+1. Simulate thousands of doublets by adding together two randomly chosen single-cell profiles.
+2. For each original cell, compute the density of simulated doublets in the surrounding neighbourhood.
+3. For each original cell, compute the density of other observed cells in the neighbourhood.
+4. Return the ratio between the two densities as a "doublet score" for each cell.
+
+This approach assumes that the simulated doublets are good approximations for real doublets.
+The use of random selection accounts for the relative abundances of different subpopulations, which affect the likelihood of their involvement in doublets;
+and the calculation of a ratio avoids high scores for non-doublet cells in highly abundant subpopulations.
+
+### Application to the mammary data
+
+We see the function in action below.
+To speed up the density calculations, `doubletCells()` will perform a PCA on the log-expression matrix. 
+When `BSPARAM=IrlbaParam()`, methods from the `r CRANpkg("irlba")` package are used to perform a fast approximate PCA -
+hence the use of `set.seed()` to ensure that results are reproducible.
+
+```{r}
+library(BiocSingular)
+set.seed(100)
+
+# Setting up the parameters for consistency with denoisePCA();
+# this can be changed depending on your feature selection scheme.
+dbl.dens <- doubletCells(sce.mam, BSPARAM=IrlbaParam(),
+    subset.row=dec.mam$bio > 0,
+    d=ncol(reducedDim(sce.mam)))
+summary(dbl.dens)
+```
+
+The highest doublet scores are concentrated in a single cluster of cells in the centre of Figure \@ref(fig:denstsne).
+
+```{r denstsne, fig.cap="t-SNE plot of the mammary gland data set. Each point is a cell coloured according to its doublet density."}
+sce.mam$DoubletScore <- log10(dbl.dens+1)
+plotTSNE(sce.mam, colour_by="DoubletScore")
+```
+
+From the clustering information, we see that the affected cells belong to the same cluster that was identified using `doubletCluster()` (Figure \@ref(fig:densclust))^[Phew. Would have been awkward if they didn't match up, right?]. 
+
+```{r densclust, fig.cap="Distribution of doublet scores for each cluster in the mammary gland data set. Each point is a cell."}
+plotColData(sce.mam, x="cluster", y="DoubletScore", colour_by="cluster")
+```
+
+## Strengths and weaknesses 
+
+The advantage of `doubletCells()` is that it does not depend on clusters, reducing the sensitivity of the results to clustering quality.
+The downside is that it requires some strong assumptions about how doublets form, such as the combining proportions and the sampling from pure subpopulations.
+In particular, `doubletCells()` treats the library size of each cell as an accurate proxy for its total RNA content.
+If this is not true, the simulation will not combine expression profiles from different cells in the correct proportions.
+This means that the simulated doublets will be systematically shifted away from the real doublets, resulting in doublet scores that are too low.
+
+Simply removing cells with high doublet scores will not be sufficient to eliminate real doublets from the data set.
+In some cases, only a subset of the cells in the putative doublet cluster actually have high scores.
+Removing these would still leave enough cells in that cluster to mislead downstream analyses.
+In fact, even defining a threshold on the doublet score is difficult as the interpretation of the score is relative.
+There is no general definition for a fixed threshold above which libraries are to be considered doublets.
+
+We recommend interpreting the `doubletCells()` scores in the context of cluster annotation.
+All cells from a cluster with a large average doublet score should be considered suspect, and close neighbours of problematic clusters should also be treated with caution.
+In contrast, a cluster containing a small proportion of high-scoring cells is probably safe provided that any interesting results ae not being driven by those cells (e.g., checking that DE in an interesting gene is not driven solely by cells with high doublet scores).
+While clustering is still required, this approach is more robust than `doubletClusters()` to the quality of the clustering as the scores are computed on a per-cell basis.
+
+(As an aside, the issue of unknown combining proportions can be solved completely if spike-in information is available, e.g., in plate-based protocols.
+This will provide an accurate estimate of the total RNA content of each cell.
+To this end, spike-in-based size factors from Section ??? can be supplied to the `doubletCells()` function via the `size.factors.content=` argument.
+This will use the spike-in size factors to scale the contribution of each cell to a doublet library.)
+
+## Further comments 
+
+Doublet detection procedures should only be applied to libraries generated in the same experimental batch.
+It is obviously impossible for doublets to form between two cells that were captured separately.
+Thus, some understanding of the experimental design is required prior to the use of the above functions.
+This avoids unnecessary concerns about the validity of batch-specific clusters that cannot possibly consist of doublets.
+
+It is also difficult to interpret doublet predictions in data containing cellular trajectories.
+By definition, cells in the middle of a trajectory are always intermediate between other cells and are liable to be incorrectly detected as doublets.
+Some protection is provided by the non-linear nature of many real trajectories, which reduces the risk of simulated doublets coinciding with real cells in `doubletCells()`.
+One can also put more weight on the relative library sizes in `doubletCluster()` instead of relying solely on `N`, 
+under the assumption that sudden spikes in RNA content are unlikely in a continuous biological process.
+
+The best solution to the doublet problem is experimental - that is, to avoid generating them in the first place^[Doh!].
+This should be a consideration when designing scRNA-seq experiments, where the desire to obtain large numbers of cells at minimum cost should be weighed against the general deterioration in data quality and reliability when doublets become more frequent.
+If cell labelling information is available [@kang2018multiplexed;@stoekius2018hashing], we recommend using it to mark doublet cells for use in identification of problematic clusters or cellular states in downstream analyses.
+Direct removal fails to account for unlabelled intra-sample doublets that can still be present in sufficient numbers to drive misleading conclusions, while the marking approach uses "guilt by association" to identify neighboring unlabelled doublets.
+
+## Session Info
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
+
+## References
