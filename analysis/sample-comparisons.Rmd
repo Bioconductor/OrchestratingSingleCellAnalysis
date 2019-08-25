@@ -45,12 +45,17 @@ The differential analyses are predicated on many of the pre-processing steps cov
 For brevity, we will not explicitly repeat them here,
 only noting that we have already merged cells from all samples into the same coordinate system (see Section ???)
 and clustered the merged dataset to obtain a common partitioning across all samples.
-A brief inspection of the results indicates that many clusters are stage-specific with fewer differences associated with td-Tomato expression (Figure \@ref(fig:tsne-initial)).
+A brief inspection of the results indicates that clusters contain similar contributions from all batches with only modest differences associated with td-Tomato expression (Figure \@ref(fig:tsne-initial)).
 
-```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression. Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
+```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
 library(scater)
 table(merged$cluster, merged$tomato)
-plotTSNE(merged, colour_by="tomato", text_by="cluster")
+table(merged$cluster, merged$pool)
+gridExtra::grid.arrange(
+    plotTSNE(merged, colour_by="tomato", text_by="cluster"),
+    plotTSNE(merged, colour_by=data.frame(pool=factor(merged$pool))),
+    ncol=2
+)
 ```
 
 Ordinarily, we would be obliged to perform marker detection to assign biological meaning to these clusters.
@@ -76,6 +81,8 @@ This leverages the resolution offered by single-cell technologies to define the 
 and combines it with the statistical rigor of bulk RNA-seq DE analyses.
 
 ```{r}
+# Using 'label' and 'sample' as our two factors; each column of the output
+# corresponds to one unique combination of these two factors.
 summed <- aggregateAcrossCells(merged, 
     id=DataFrame(
         label=merged$celltype.mapped,
@@ -133,7 +140,7 @@ summary(discarded)
 
 Another typical step in bulk RNA-seq analyses is to remove genes that are lowly expressed.
 This reduces computational work, improves the accuracy of mean-variance trend modelling and decreases the severity of the multiple testing correction.
-Genes are discarded if they are not expressed above a log-CPM threshold in a minimum number of samples (determined from the size of the smallest group in the experimental design). 
+Genes are discarded if they are not expressed above a log-CPM threshold in a minimum number of samples (determined from the size of the smallest treatment group in the experimental design). 
 
 ```{r}
 keep <- filterByExpr(y, group=current$tomato)
@@ -201,11 +208,13 @@ topTags(res)
 stopifnot(mean(abs(decideTests(res))) < 0.005)
 ```
 
-### Testing across all labels
+### Putting it all together
 
-We repeat this process for all of the labels to identify DE in each cell type.
-This is mostly straightforward but requires some additional care to deal with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
+We repeat this process for each of the labels to identify injection-induced DE in each cell type.
+This is mostly straightforward as we can write a loop that simply performs the DE analysis for each subset of columns in `summed`.
+However, some additional care is required to automatically deal with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
 or are not represented in a sufficient number of replicate samples to enable modelling of biological variability.
+This is represented by the extra checks related to `design` in the code chunk below.
 
 ```{r}
 de.results <- list()
@@ -239,7 +248,7 @@ for (i in unique(summed$celltype.mapped)) {
 }
 ```
 
-We then examine summaries of the numbers of DEGs in the injected cells compared to the background in each label.
+We examine the numbers of DEGs at a FDR of 5% for each label.
 In general, there seems to be very little differential expression that is introduced by injection.
 
 ```{r}
@@ -253,6 +262,7 @@ This is consistent with the fact that the injected cells are male while the back
 The consistent downregulation of _Phlda2_ and _Cdkn1c_ in the injected cells is also interesting, given that both are imprinted genes. 
 
 ```{r}
+# TODO: easier consolidation.
 degs <- lapply(de.results, FUN=function(x) rownames(topTags(x, p.value=0.05)))
 common.degs <- sort(table(unlist(degs)), decreasing=TRUE)
 head(common.degs, 20)
