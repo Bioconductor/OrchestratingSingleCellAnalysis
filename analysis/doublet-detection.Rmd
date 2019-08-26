@@ -212,7 +212,7 @@ This should be a consideration when designing scRNA-seq experiments, where the d
 If cell labelling information is available [@kang2018multiplexed;@stoekius2018hashing], we recommend using it to mark doublet cells for use in identification of problematic clusters or cellular states in downstream analyses.
 Direct removal fails to account for unlabelled intra-sample doublets that can still be present in sufficient numbers to drive misleading conclusions, while the marking approach uses "guilt by association" to identify neighboring unlabelled doublets.
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

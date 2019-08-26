@@ -416,7 +416,7 @@ The aim is to maximize the average silhouette width in order to obtain well-sepa
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

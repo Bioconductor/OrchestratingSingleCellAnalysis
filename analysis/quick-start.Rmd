@@ -329,7 +329,7 @@ plotEnrichment(pathways[["GSE29618_MONOCYTE_VS_PDC_UP"]],
 ```
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

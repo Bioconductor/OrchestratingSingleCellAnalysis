@@ -254,7 +254,7 @@ More sophisticated approaches can be used such as dedicated variance stabilizing
 In practice, though, the log-transformation is a good default choice due its simplicity (a.k.a., reliability^[If a log-transformation is giving you errors, there's probably something seriously wrong with your system's math libraries.], predictability and computational efficiency) and interpretability.
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

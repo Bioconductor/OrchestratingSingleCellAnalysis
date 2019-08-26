@@ -488,7 +488,7 @@ iSEE(sce)
 Based on the example analyses, we task the interested reader to assess the previous section's automatic annotation relative to the clustering results using `iSEE`.
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

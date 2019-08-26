@@ -470,7 +470,7 @@ This means that the differences between conditions manifests directly as DE with
 
 Thus, it is often necessary to consider both differential expression and abundance to fully characterize the differences between conditions in scRNA-seq experiments.
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

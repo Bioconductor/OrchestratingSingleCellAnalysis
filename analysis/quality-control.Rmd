@@ -401,7 +401,7 @@ This can arise if some cell types are not amenable to dissociation or microfluid
 In such cases, it is possible to "correctly" discard an entire cell type during QC if all of its cells are damaged.
 Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

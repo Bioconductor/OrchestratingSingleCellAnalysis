@@ -14,7 +14,7 @@ source("workflows/knitr_options.R")
 
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

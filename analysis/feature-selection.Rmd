@@ -334,7 +334,7 @@ Alternatively, some methods may allow users to pass in the full `SingleCellExper
 This may be more convenient in the context of the overall analysis, where genes outside of this subset may still be of interest during DE analyses or for visualization.
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

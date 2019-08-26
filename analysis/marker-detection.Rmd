@@ -425,7 +425,7 @@ Indeed, the use of cells as replicates only masks the fact that the sample size 
 This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

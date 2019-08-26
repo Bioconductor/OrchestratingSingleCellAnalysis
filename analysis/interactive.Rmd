@@ -279,7 +279,7 @@ For demontration and inspiration, we refer readers to the following examples of 
     - Gallery of examples notebooks to reproduce analyses on public data: https://github.com/federicomarini/iSEE_instances
     - Gallery of example custom panels: https://github.com/kevinrue/iSEE_custom 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
