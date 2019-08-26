@@ -56,7 +56,7 @@ sce.chimera <- logNormCounts(sce.chimera)
 
 Retaining all genes with any positive biological component, to preserve as much signal as possible across many samples.
 
-```{r variance-modelling, cache=TRUE}
+```{r variance-modelling}
 library(scran)
 dec <- modelGeneVar(sce.chimera, block=sce.chimera$sample)
 chosen.hvgs <- dec$bio > 0
