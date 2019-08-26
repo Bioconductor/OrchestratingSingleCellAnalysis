@@ -401,72 +401,73 @@ Combining the information derived from our heatmap and viewing these genes on ou
 Now that we've manually sorted our dataset on the basis of prior knowledge, let's try a more automated approach using publicly available markers.
 
 
-#### An Automated Approach
+<!-- REWRITE TO USE SINGLR -->
+<!-- #### An Automated Approach -->
 
-Manually classifying cell types present in an scRNA-seq experiment can be prone to bias in terms of how a label is selected. Thus have emerged automated classification approaches which take a measured approach to the labeling of cell types. 
+<!-- Manually classifying cell types present in an scRNA-seq experiment can be prone to bias in terms of how a label is selected. Thus have emerged automated classification approaches which take a measured approach to the labeling of cell types.  -->
 
-One such approach - `cellassign` - applies labels in a single-cell manner based on a gene by cell type "marker matrix". Here, we utilize an existing gene by cell type annotation from a publication by [Becht et al. (2016)](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-016-1070-5) which categorizes genes into cell types based on the specificity of their expression.
+<!-- One such approach - `cellassign` - applies labels in a single-cell manner based on a gene by cell type "marker matrix". Here, we utilize an existing gene by cell type annotation from a publication by [Becht et al. (2016)](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-016-1070-5) which categorizes genes into cell types based on the specificity of their expression. -->
 
-Let's first construct a marker matrix loosely inspired by the [Seurat PBMC 3k tutorial](https://satijalab.org/seurat/v3.0/pbmc3k_tutorial.html):
+<!-- Let's first construct a marker matrix loosely inspired by the [Seurat PBMC 3k tutorial](https://satijalab.org/seurat/v3.0/pbmc3k_tutorial.html): -->
 
-```{r}
-anno <- data.frame(
-    SYMBOL = c(
-        'IL7R', 'CCR7', 'CD4', 'CD3D', 'CD3E',
-        'CD14', 'LYZ',
-        'MS4A1', 'CD79A', 'CD79B',
-        'CD8A', 'CD8B', 'CD3D', 'CD3E',
-        'GNLY', 'NKG7',
-        'FCER1A', 'CST3', 'ITGAX'
-    ),
-    cell_type = c(
-        rep('CD4 T cell', 5),
-        rep('Monocyte', 2),
-        rep('B cell', 3),
-        rep('CD8 T cell', 4),
-        rep('NK cell', 2),
-        rep('Dendritic cell', 3)
-    )
-)
-```
+<!-- ```{r} -->
+<!-- anno <- data.frame( -->
+<!--     SYMBOL = c( -->
+<!--         'IL7R', 'CCR7', 'CD4', 'CD3D', 'CD3E', -->
+<!--         'CD14', 'LYZ', -->
+<!--         'MS4A1', 'CD79A', 'CD79B', -->
+<!--         'CD8A', 'CD8B', 'CD3D', 'CD3E', -->
+<!--         'GNLY', 'NKG7', -->
+<!--         'FCER1A', 'CST3', 'ITGAX' -->
+<!--     ), -->
+<!--     cell_type = c( -->
+<!--         rep('CD4 T cell', 5), -->
+<!--         rep('Monocyte', 2), -->
+<!--         rep('B cell', 3), -->
+<!--         rep('CD8 T cell', 4), -->
+<!--         rep('NK cell', 2), -->
+<!--         rep('Dendritic cell', 3) -->
+<!--     ) -->
+<!-- ) -->
+<!-- ``` -->
 
-Lastly, we'll need to reformat this matrix to fit the expectations of `cellassign`, chiefly to convert the annotation into a binary matrix of genes (rows) by cell types (columns):
+<!-- Lastly, we'll need to reformat this matrix to fit the expectations of `cellassign`, chiefly to convert the annotation into a binary matrix of genes (rows) by cell types (columns): -->
 
-```{r}
-## construct rho (binary marker matrix)
-tmp <- tidyr::spread(anno, cell_type, cell_type)
-rho <- ifelse(is.na(tmp[, -1]), 0, 1)
-rownames(rho) <- tmp$SYMBOL
+<!-- ```{r} -->
+<!-- ## construct rho (binary marker matrix) -->
+<!-- tmp <- tidyr::spread(anno, cell_type, cell_type) -->
+<!-- rho <- ifelse(is.na(tmp[, -1]), 0, 1) -->
+<!-- rownames(rho) <- tmp$SYMBOL -->
 
-## remove entries that are not present in our dataset
-rho <- rho[rownames(rho) %in% rownames(sce), ]
+<!-- ## remove entries that are not present in our dataset -->
+<!-- rho <- rho[rownames(rho) %in% rownames(sce), ] -->
 
-rho[1:3, ]
-```
+<!-- rho[1:3, ] -->
+<!-- ``` -->
 
-We can then run the `cellassign` method to produce cell type labels on a per cell basis:
+<!-- We can then run the `cellassign` method to produce cell type labels on a per cell basis: -->
 
-```{r}
-## devtools::install_github('Irrationone/cellassign')
-library(cellassign)
-library(tensorflow)
+<!-- ```{r} -->
+<!-- ## devtools::install_github('Irrationone/cellassign') -->
+<!-- library(cellassign) -->
+<!-- library(tensorflow) -->
 
-set.seed(1234)
-reticulate::py_set_seed(1234)
-fit <- cellassign(sce[rownames(rho), ],
-                  marker_gene_info = rho,
-                  s = sizeFactors(sce))
+<!-- set.seed(1234) -->
+<!-- reticulate::py_set_seed(1234) -->
+<!-- fit <- cellassign(sce[rownames(rho), ], -->
+<!--                   marker_gene_info = rho, -->
+<!--                   s = sizeFactors(sce)) -->
 
-## add cell type info into colData
-colData(sce)$cellassign_type <- fit$cell_type
-```
+<!-- ## add cell type info into colData -->
+<!-- colData(sce)$cellassign_type <- fit$cell_type -->
+<!-- ``` -->
 
-```{r, fig.cap="UMAP showing the results of automated label assignment as performed by cellassign."}
-## plot the cellassign results on UMAP
-plotUMAP(sce, colour_by = 'cellassign_type')
-```
+<!-- ```{r, fig.cap="UMAP showing the results of automated label assignment as performed by cellassign."} -->
+<!-- ## plot the cellassign results on UMAP -->
+<!-- plotUMAP(sce, colour_by = 'cellassign_type') -->
+<!-- ``` -->
 
-In practice, some combination of the above manual and automated classification schema will likely be necessary to properly annotate an scRNA-seq dataset.
+<!-- In practice, some combination of the above manual and automated classification schema will likely be necessary to properly annotate an scRNA-seq dataset. -->
 
 
 ## Accessible & Reproducible Analysis
