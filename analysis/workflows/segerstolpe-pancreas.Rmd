@@ -1,16 +1,27 @@
+# Human pancreas Smart-seq2 dataset 
+
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
+
+## Introduction
+
+## Analysis code
+
+### Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.seger <- SegerstolpePancreasData()
 ```
 
+### Gene annotation
+
 ```{r gene-annotation}
-library(org.Hs.eg.db)
+library(AnnotationHub)
+edb <- AnnotationHub()[["AH73881"]]
 symbols <- rowData(sce.seger)$symbol
-ens.id <- mapIds(org.Hs.eg.db, keys=symbols, keytype="SYMBOL", column="ENSEMBL")
+ens.id <- mapIds(edb, keys=symbols, keytype="SYMBOL", column="GENEID")
 ens.id <- ifelse(is.na(ens.id), symbols, ens.id)
 
 # Removing duplicated rows.
@@ -18,6 +29,8 @@ keep <- !duplicated(ens.id)
 sce.seger <- sce.seger[keep,]
 rownames(sce.seger) <- ens.id[keep]
 ```
+
+### Sample annotation
 
 ```{r sample-annotation}
 # We simplify the names of some of the relevant 
@@ -35,6 +48,8 @@ sce.seger$CellType <- paste0(
     substring(sce.seger$CellType, 2))
 ```
 
+### Quality control
+
 ```{r quality-control}
 # Removing low quality cells that were marked by the authors.
 low.qual <- sce.seger$Quality == "low quality cell"
@@ -42,32 +57,26 @@ low.qual <- sce.seger$Quality == "low quality cell"
 # Performing additional quality control, as some of the remaining 
 # still have very low counts and numbers of detected features.
 library(scater)
-sce.seger <- calculateQCMetrics(sce.seger, compact=TRUE)
-qc.mat <- cbind(
-    NFeatures=isOutlier(sce.seger$scater_qc$all$total_features_by_counts, 
-        log=TRUE, type="lower", nmads=3),
-    LibSize=isOutlier(sce.seger$scater_qc$all$total_counts, 
-        log=TRUE, type="lower", nmads=3),
-    SpikePct=isOutlier(sce.seger$scater_qc$feature_control_ERCC$pct_counts, 
-        type="higher", nmads=3)
-)
-
-discard <- rowMeans(qc.mat) > 0 | low.qual
-sce.seger <- sce.seger[,!discard]
+qcstats <- perCellQCMetrics(sce.seger)
+filtered <- quickCellQC(qcstats, nmads=3,
+    percent_subsets="altexps_ERCC_percent")
+sce.seger <- sce.seger[,!(filtered$discard | low.qual)]
 ```
+
+### Normalization
 
 ```{r normalization}
 library(scran)
 clusters <- quickCluster(sce.seger)
 sce.seger <- computeSumFactors(sce.seger, clusters=clusters)
-sce.seger <- computeSpikeFactors(sce.seger, general.use=FALSE)
 ```
+
+### Variance modelling
 
 ```{r variance-modelling}
 # Not using cells with no spike-ins for variance modelling
 # (Donor AZ has very spike-ins and is subsequently ignored).
-for.hvg <- sce.seger[,sizeFactors(sce.seger, "ERCC") > 0
+for.hvg <- sce.seger[,librarySizeFactors(altExp(sce.seger)) > 0
     & sce.seger$Donor!="AZ"]
-for.hvg <- multiBlockNorm(for.hvg, for.hvg$Donor) 
-dec.seger <- multiBlockVar(for.hvg, for.hvg$Donor)
+dec.seger <- modelGeneVarWithSpikes(for.hvg, "ERCC", block=for.hvg$Donor)
 ```
