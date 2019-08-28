@@ -208,7 +208,7 @@ We set `general.use=FALSE` in `computeSpikeFactors()` to indicate that the spike
 set.seed(100)
 clust.zeisel <- quickCluster(sce.zeisel) 
 sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clust.zeisel, min.mean=0.1)
-sce.zeisel <- computeSpikeFactors(sce.zeisel, general.use=FALSE)
+sce.zeisel <- computeSpikeFactors(sce.zeisel, 'ERCC', general.use=FALSE)
 ```
 
 Inspection of the `SingleCellExperiment` indicates that, indeed, two different sets of spike-ins have been added.
