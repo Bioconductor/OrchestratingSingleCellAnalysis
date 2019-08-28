@@ -30,9 +30,8 @@ gene.info <- read.table(gene.fname, stringsAsFactors=FALSE)
 colnames(gene.info) <- c("Ensembl", "Symbol")
 sce.mam <- SingleCellExperiment(
     list(counts=as(readMM(counts.fname), "dgCMatrix")), 
- #   rowData=gene.info
-                                        #    colData=DataFrame(Barcode=readLines(barcode.fname))
- #   colData=data.frame(Barcode=readLines(barcode.fname))
+    rowData=DataFrame(gene.info),
+    colData=DataFrame(Barcode=readLines(barcode.fname))
 )
 ```
 
