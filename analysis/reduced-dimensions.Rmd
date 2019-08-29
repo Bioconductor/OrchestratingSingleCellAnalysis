@@ -68,7 +68,7 @@ The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and stor
 
 ```{r}
 library(scater)
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE)
+sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs) 
 reducedDimNames(sce.zeisel)
 ```
 
@@ -86,7 +86,7 @@ For example, we can use methods from the `r CRANpkg("irlba")` package:
 ```{r}
 library(BiocSingular)
 set.seed(1000)
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
+sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs, 
     BSPARAM=IrlbaParam(), name="IRLBA")
 reducedDimNames(sce.zeisel)
 ```
@@ -97,7 +97,7 @@ Another strategy is to perform the SVD using methods from the `r CRANpkg("rsvd")
 
 ```{r}
 set.seed(1001) # Slightly different seed to add some variety!
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
+sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs,
     BSPARAM=RandomParam(), name="RSVD")
 reducedDimNames(sce.zeisel)
 ```
@@ -121,30 +121,9 @@ A simple heuristic for choosing $d$ involves identifying the elbow point in the 
 This refers to the "elbow" in the curve of a scree plot as shown in Figure \@ref(fig:elbow).
 
 ```{r elbow, fig.cap="Percentage of variance explained by successive PCs in the Zeisel brain data. The identified elbow point is marked with a red line."}
-# Hoping to find this guy a better home.
-elbowFinder <- function(var.exp) {
-    var.exp <- sort(var.exp, decreasing=TRUE)
-
-    dy <- -diff(range(var.exp))
-    dx <- length(var.exp) - 1
-    l2 <- sqrt(dx^2 + dy^2)
-    dx <- dx/l2
-    dy <- dy/l2
-
-    dy0 <- var.exp - var.exp[1]
-    dx0 <- seq_along(var.exp) - 1
-
-    parallel.l2 <- sqrt((dx0 * dx)^2 + (dy0 * dy)^2)
-    normal.x <- dx0 - dx * parallel.l2
-    normal.y <- dy0 - dy * parallel.l2
-    normal.l2 <- sqrt(normal.x^2 + normal.y^2)
-
-    which.max(normal.l2)
-}
-
 # Percentage of variance explained is tucked away in the attributes.
 percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
-chosen.elbow <- elbowFinder(percent.var)
+chosen.elbow <- PCAtools::findElbowPoint(percent.var)
 chosen.elbow
 
 plot(percent.var, xlab="PC", ylab="Variance explained (%)")
@@ -165,18 +144,17 @@ Another strategy is to retain all PCs until the percentage of total variation ex
 For example, one might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
 Instead, we define $T$ as the proportion of variance in the data that is attributed to the biological component.
-This is done using the `denoisePCA()` function, which uses our estimates from `decomposeVar()` to determine $d$.
+This is done using the `denoisePCA()` function, which uses our estimates from `modelGeneVar()` (or related functions) to determine $d$.
 
 ```{r}
 library(scran)
 set.seed(001001001)
 
-# Setting value="n" to just report the number of PCs.
 # Setting max.rank=200 to circumvent the default max of 100.
 # Also setting BSPARAM to perform a fast SVD with IRLBA.
-denoised.n <- denoisePCA(sce.zeisel, technical=dec.zeisel, value='n',
+denoised <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
     subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
-as.integer(denoised.n)
+ncol(reducedDim(denoised))
 ```
 
 This choice of $d$ represents the lower bound on the number of PCs required to retain all biological variation.
@@ -255,7 +233,7 @@ Further dimensionality reduction strategies are required to pack the most salien
 The simplest visualization approach is to plot the top 2 PCs (Figure \@ref(fig:zeisel-pca)):
 
 ```{r zeisel-pca, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
-plotReducedDim(sce.zeisel, use_dimred="PCA", colour_by="level1class")
+plotReducedDim(sce.zeisel, dimred="PCA", colour_by="level1class")
 ```
 
 The problem is that PCA is a linear technique, i.e., only variation along a line in high-dimensional space is captured by each PC.
@@ -267,7 +245,7 @@ One workaround is to plot several of the top PCs against each other in pairwise 
 However, it is difficult to interpret multiple plots simultaneously, and even this approach is not sufficient to separate some of the annotated subpopulations.
 
 ```{r zeisel-pca-multi, fig.wide=TRUE, fig.asp=1, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
-plotReducedDim(sce.zeisel, use_dimred="PCA", ncomponents=4,
+plotReducedDim(sce.zeisel, dimred="PCA", ncomponents=4,
     colour_by="level1class")
 ```
 
@@ -285,12 +263,12 @@ This means that it has much more freedom in how it arranges cells in low-dimensi
 
 ```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(00101001101)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA")
-plotReducedDim(sce.zeisel, use_dimred="TSNE", colour_by="level1class")
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA")
+plotReducedDim(sce.zeisel, dimred="TSNE", colour_by="level1class")
 ```
 
 One of the main disadvantages of $t$-SNE is that it is much more computationally intensive than other visualization methods.
-We mitigate this effect by performing the calculations on the top PCs with `use_dimred="PCA"` in `runtTSNE()`.
+We mitigate this effect by performing the calculations on the top PCs with `dimred="PCA"` in `runtTSNE()`.
 This takes advantage of the PCA to compact the data and remove noise, followed by $t$-SNE to create the visualization.
 It is possible to run $t$-SNE on the original expression matrix but this is less efficient.
 
@@ -302,18 +280,18 @@ Thus, it is advisable to test different perplexity values to ensure that the cho
 
 ```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.5}
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=5)
-out5 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=5)
+out5 <- plotReducedDim(sce.zeisel, dimred="TSNE",
     colour_by="level1class") + ggtitle("perplexity = 5")
 
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=20)
-out20 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=20)
+out20 <- plotReducedDim(sce.zeisel, dimred="TSNE",
     colour_by="level1class") + ggtitle("perplexity = 20")
 
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=80)
-out80 <- plotReducedDim(sce.zeisel, use_dimred="TSNE", 
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=80)
+out80 <- plotReducedDim(sce.zeisel, dimred="TSNE", 
     colour_by="level1class") + ggtitle("perplexity = 80")
 
 multiplot(out5, out20, out80, cols=3)
@@ -331,8 +309,8 @@ This manifests as a different visualization as shown in Figure \@ref(fig:umap-br
 
 ```{r umap-brain, fig.cap="UMAP plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(1100101001)
-sce.zeisel <- runUMAP(sce.zeisel, use_dimred="PCA")
-plotReducedDim(sce.zeisel, use_dimred="UMAP", colour_by="level1class")
+sce.zeisel <- runUMAP(sce.zeisel, dimred="PCA")
+plotReducedDim(sce.zeisel, dimred="UMAP", colour_by="level1class")
 ```
 
 Compared to $t$-SNE, the UMAP visualization tends to have more compact visual clusters with more empty space between them.
