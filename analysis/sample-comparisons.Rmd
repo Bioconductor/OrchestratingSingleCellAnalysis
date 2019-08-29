@@ -454,6 +454,28 @@ This ensures that any non-DA subpopulation is not reported as being depleted aft
 Some caution is still required, though - even if the external numbers are accurate, we need to assume that cell capture efficiency is (on average) equal between conditions to justify their use as $\tau$.
 And obviously, the use of a non-zero $\tau$ will reduce power to detect real changes when the composition bias is not present.
 
+## DE or DA? Two sides of the same coin
+
+While useful, the distinction between DA and DE analyses is inherently artificial for scRNA-seq data.
+This is because the labels used in the former are defined based on the genes to be tested in the latter.
+To illustrate, consider a scRNA-seq experiment involving two biological conditions with several shared cell types.
+We focus on a cell type $X$ that is present in both conditions but contains some DEGs between conditions.
+This leads to two possible outcomes:
+
+1. The DE between conditions causes $X$ to form two separate clusters (say, $X_1$ and $X_2$) in expression space.
+This manifests as DA where $X_1$ is enriched in one condition and $X_2$ is enriched in the other condition.
+2. The DE between conditions is not sufficient to split $X$ into two separate clusters, 
+e.g., because the data integration procedure identifies them as corresponding cell types and merges them together.
+This means that the differences between conditions manifest as DE within the single cluster corresponding to $X$.
+
+We have described the example above in terms of clustering, but the same arguments apply for any labelling strategy based on the expression profiles, e.g., automated cell type assignment (Chapter ???).
+Moreover, the choice between outcomes 1 and 2 is made implicitly by the combined effect of the data merging, clustering and label assignment procedures.
+For example, differences between conditions are more likely to manifest as DE for coarser clusters but as DA for finer clusters, but this is difficult to predict reliably.
+
+The moral of the story is that DA and DE analyses are simply two different perspectives on the same phenomena.
+For any comprehensive characterization of differences between populations, it is usually necessary to consider both analyses.
+Indeed, they complement each other almost by definition, e.g., a clustering that reduces DE will increase DA and vice versa.
+
 ## Avoiding problems with ambient RNA
 
 ### Motivation
@@ -659,21 +681,6 @@ sum(final$FDR <= 0.05)
 head(final, 10)
 ```
 -->
-
-## Duality of DE and DA analyses
-
-While useful, the distinction between DE and DA analyses is somewhat artificial when dealing with clusters defined from expression data.
-To illustrate this duality, consider a scRNA-seq experiment involving a heterogeneous population and two biological conditions.
-Assume we have a cell type $X$ present in both conditions.
-Within $X$, some genes are differentially expressed between conditions.
-This leads to two possible outcomes:
-
-- The DE between conditions causes $X$ to form two separate clusters in expression space (or the low-dimensional space derived from the gene expression values).
-This manifests as differential abundance where one cluster is enriched in each condition.
-- The DE between conditions is not sufficient to split $X$ into two separate clusters, e.g., because `fastMNN()` identifies them as corresponding cell types and merges them together.
-This means that the differences between conditions manifests directly as DE within the single cluster corresponding to $X$.
-
-Thus, it is often necessary to consider both differential expression and abundance to fully characterize the differences between conditions in scRNA-seq experiments.
 
 ## Session Info {-}
 
