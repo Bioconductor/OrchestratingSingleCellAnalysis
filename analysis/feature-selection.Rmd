@@ -46,7 +46,7 @@ sce.416b
 
 ### Variance of the log-counts
 
-The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as "log-counts" for simplicity) for each gene across all cells in the population.
+The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as "log-counts" for simplicity) for each gene across all cells in the population [@lun2016step].
 This has an advantage in that the feature selection is based on the same log-values that are used for later downstream steps.
 Genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells.
 By using log-values here, we ensure that our quantitative definition of heterogeneity is consistent throughout the entire analysis.
@@ -54,14 +54,14 @@ By using log-values here, we ensure that our quantitative definition of heteroge
 Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. 
 As discussed briefly in the last chapter, the log-transformation does not achieve perfect variance stabilization.
 This means that the variance of a gene is more affected by its abundance than the underlying biological heterogeneity. 
-To account for this effect, we use the `trendVar()` function to fit a trend to the variance with respect to abundance across all genes (Figure \@ref(fig:trend-plot-pbmc)).
+To account for this effect, we use the `modelGeneVar()` function to fit a trend to the variance with respect to abundance across all genes (Figure \@ref(fig:trend-plot-pbmc)).
 
 ```{r trend-plot-pbmc, fig.cap="Variance in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the trend fitted to all genes."}
 library(scran)
+dec.pbmc <- modelGeneVar(sce.pbmc)
 
-# No spike-ins, so setting 'use.spikes=FALSE'.
-fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE)
-
+# Visualizing the fit:
+fit.pbmc <- metadata(dec.pbmc)
 plot(fit.pbmc$mean, fit.pbmc$var, xlab="Mean of log-expression",
     ylab="Variance of log-expression")
 curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
@@ -69,13 +69,11 @@ curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 
 At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see \@ref(sec:spikeins) for details).
 Under this assumption, our trend represents an estimate of the technical noise as a function of abundance.
-We then use the `decomposeVar()` function to break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene's abundance;
+We then break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene's abundance;
 and the biological component, defined as the difference between the total variance and the technical component.
 This biological component represents the "interesting" variation for each gene and can be used as the metric for HVG selection.
 
 ```{r}
-dec.pbmc <- decomposeVar(fit=fit.pbmc)
-
 # Ordering by most interesting genes for inspection.
 dec.pbmc[order(dec.pbmc$bio, decreasing=TRUE),] 
 ```
@@ -88,12 +86,10 @@ They are inevitable when fitting a trend to the per-gene variances, as approxima
 
 An alternative approach to quantification uses the squared coefficient of variation (CV^2^) of the normalized expression values prior to log-transformation.
 The CV^2^ is a widely used metric for describing variation in non-negative data and is closely related to the dispersion parameter of the negative binomial distribution in packages like `r Biocpkg("edgeR")` and `r Biocpkg("DESeq2")`.
-We compute the CV^2^ for each gene in the PBMC dataset using the `improvedCV2()` function, which provides a more robust implementation of the approach described by @brennecke2013accounting.
+We compute the CV^2^ for each gene in the PBMC dataset using the `modelGeneCV2()` function, which provides a robust implementation of the approach described by @brennecke2013accounting.
 
 ```{r}
-# TODO: upgrade scran to use the latest version of this.
-# No spike-ins, so setting 'spike.type=NA'.
-cv2.pbmc <- improvedCV2(sce.pbmc, spike.type=NA) 
+dec.cv2.pbmc <- modelGeneCV2(sce.pbmc)
 ```
 
 This allows us to model the mean-variance relationship when considering the relevance of each gene (Figure \@ref(fig:cv2-pbmc)).
@@ -101,17 +97,16 @@ Again, our assumption is that most genes contain random noise and that the trend
 Large CV$^2$ values that deviate strongly from the trend are likely to represent genes affected by biological structure.
 
 ```{r cv2-pbmc, fig.cap="CV^2^ in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the fitted trend."}
-plot(cv2.pbmc$mean, cv2.pbmc$cv2, log="xy")
-o <- order(cv2.pbmc$mean)
-lines(cv2.pbmc$mean[o], cv2.pbmc$trend[o], col="dodgerblue", lwd=2)
+fit.cv2.pbmc <- metadata(dec.cv2.pbmc)
+plot(fit.cv2.pbmc$mean, fit.cv2.pbmc$cv2, log="xy")
+curve(fit.cv2.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
 For each gene, we quantify the deviation from the trend in terms of the ratio of its CV^2^ to the fitted value of trend at its abundance.
 This is more appropriate than the directly subtracting the trend from the CV^2^, as the magnitude of the ratio is not affected by the mean.
 
 ```{r}
-diff <- cv2.pbmc$cv2/cv2.pbmc$trend
-cv2.pbmc[order(diff, decreasing=TRUE),]
+dec.cv2.pbmc[order(dec.cv2.pbmc$ratio, decreasing=TRUE),]
 ```
 
 Both the CV^2^ and the variance of log-counts are effective metrics for quantifying variation in gene expression.
@@ -133,34 +128,30 @@ We can avoid this problem by fitting a mean-dependent trend to the variance of t
 The premise here is that spike-ins should not be affected by biological variation, so the fitted value of the spike-in trend should represent a better estimate of the technical component for each gene.
 
 ```{r spike-416b, fig.cap="Variance in the 416B data set as a function of the mean. Each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
-fit.416b <- trendVar(sce.416b)
-dec.416b <- decomposeVar(sce.416b, fit.416b)
-dec.416b[order(dec.416b$bio, decreasing=TRUE),]
+dec.spike.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC")
+dec.spike.416b[order(dec.spike.416b$bio, decreasing=TRUE),]
 
-plot(dec.416b$mean, dec.416b$total, xlab="Mean of log-expression",
+plot(dec.spike.416b$mean, dec.spike.416b$total, xlab="Mean of log-expression",
     ylab="Variance of log-expression")
-is.spike <- isSpike(sce.416b)
-points(dec.416b$mean[is.spike], dec.416b$total[is.spike], col="red", pch=16)
-curve(fit.416b$trend(x), col="dodgerblue", add=TRUE, lwd=2)
+fit.spike.416b <- metadata(dec.spike.416b)
+points(fit.spike.416b$mean, fit.spike.416b$var, col="red", pch=16)
+curve(fit.spike.416b$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
 In the absence of spike-in data, one can attempt to create a trend by making some distributional assumptions about the noise.
 For example, UMI counts typically exhibit near-Poisson noise when only technical effects are considered.
-This can be used to construct a mean-variance trend in the log-counts (Figure \@ref(fig:tech-pbmc)) with the `makeTechTrend()` function.
+This can be used to construct a mean-variance trend in the log-counts (Figure \@ref(fig:tech-pbmc)) with the `modelGeneVarByPoisson()` function.
 Note the increased residuals of the high-abundance genes, which can be interpreted as the amount of biological variation that was assumed to be "uninteresting" when fitting the gene-based trend in Figure \@ref(fig:trend-plot-pbmc).
 
-```{r tech-pbmc, fig.cap="Variance of normalized log-expression values for each gene in the PBMC dataset, plotted against the mean log-expression. The blue line represents the mean-dependent trend fitted to the variances, while the red line represents the Poisson noise."}
-tech.trend <- makeTechTrend(x=sce.pbmc)
+```{r tech-pbmc, fig.cap="Variance of normalized log-expression values for each gene in the PBMC dataset, plotted against the mean log-expression. The blue line represents represents the mean-variance relationship corresponding to Poisson noise."}
+set.seed(0010101)
+dec.pois.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+dec.pois.pbmc <- dec.pois.pbmc[order(dec.pois.pbmc$bio, decreasing=TRUE),]
+head(dec.pois.pbmc)
 
-fit.pbmc2 <- fit.pbmc
-fit.pbmc2$trend <- tech.trend # overwrite trend.
-dec.pbmc2 <- decomposeVar(fit=fit.pbmc2) 
-dec.pbmc2 <- dec.pbmc2[order(dec.pbmc2$bio, decreasing=TRUE),]
-head(dec.pbmc2)
-
-plot(dec.pbmc2$mean, dec.pbmc2$total, pch=16, xlab="Mean of log-expression",
+plot(dec.pois.pbmc$mean, dec.pois.pbmc$total, pch=16, xlab="Mean of log-expression",
     ylab="Variance of log-expression")
-curve(fit.pbmc2$trend(x), col="dodgerblue", add=TRUE)
+curve(metadata(dec.pois.pbmc)$trend(x), col="dodgerblue", add=TRUE)
 ```
 
 ### Accounting for blocking factors
@@ -171,12 +162,12 @@ Data containing multiple batches will often exhibit batch effects (see Chapter ?
 We are (usually) not interested in HVGs that are driven by batch effects.
 Rather, we want to focus on genes that are highly variable within each batch.
 This is naturally achieved by performing trend fitting and variance decomposition separately for each batch.
-We demonstrate this approach by treating each plate (`block`) in the 416B dataset as a different batch, using the `multiBlockVar()` function.
+We demonstrate this approach by treating each plate (`block`) in the 416B dataset as a different batch, using the `modelGeneVarWithSpikes()` function.
+(The same argument is available in all other variance-modelling functions.)
 
 ```{r}
-sce.416b.2 <- multiBlockNorm(sce.416b, block=sce.416b$block)
-dec.416b <- multiBlockVar(sce.416b.2, block=sce.416b$block)
-head(dec.416b[order(dec.416b$bio, decreasing=TRUE),1:6])
+dec.block.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=sce.416b$block)
+head(dec.block.416b[order(dec.block.416b$bio, decreasing=TRUE),1:6])
 ```
 
 The use of a batch-specific trend fit is useful as it accommodates differences in the mean-variance trends between batches.
@@ -186,43 +177,35 @@ The analysis of each plate yields estimates of the biological and technical comp
 
 ```{r blocked-fit, fig.asp=0.5, fig.wide=TRUE, fig.cap="Variance in the 416B data set as a function of the mean after blocking on the plate of origin. Each plot represents the results for a single plate, each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
 par(mfrow=c(1,2))
-blocked.stats <- dec.416b$per.block
+blocked.stats <- dec.block.416b$per.block
 for (i in colnames(blocked.stats)) {
     current <- blocked.stats[[i]]
     plot(current$mean, current$total, main=i, pch=16, cex=0.5,
         xlab="Mean of log-expression", ylab="Variance of log-expression")
-    is.spike <- isSpike(sce.416b.2)
-    points(current$mean[is.spike], current$total[is.spike], col="red", pch=16)
-    curve(metadata(current)$trend(x), col='dodgerblue', add=TRUE, lwd=2) 
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2) 
 }
 ```
-
-Incidentally, we run `multiBlockNorm()` to adjust the size factors within each level of the blocking factor.
-Specifically, the spike-in size factors across cells in a given batch is scaled so that the mean is equal to that of the gene-based size factors for the same set of cells.
-Log-normalized expression values are then recalculated using these centred size factors.
-This procedure ensures that the average abundances of the spike-in transcripts are comparable to the endogenous genes,
-avoiding problems due to differences in the quantity of spike-in RNA between batches.
-Of course, this is not necessary if no spike-ins were available, in which case we should set `trend.var=list(use.spikes=FALSE)` in the `multiBlockVar()` call.
 
 #### Using a design matrix
 
 The use of block-specific trends is the recommended approach for experiments with a single blocking factor.
 However, this is not practical for studies involving a large number of blocking factors and/or covariates.
 In such cases, we can use the `design=` argument to specify a design matrix with uninteresting factors of variation.
-`decomposeVar()` will then focus on genes with large residual variances, i.e., beyond that explained by the design matrix.
 We illustrate again with the 416B data set, blocking on the plate of origin and oncogene induction.
+(The same argument is available in `modelGeneVar()` when spike-ins are not available.)
 
 ```{r}
 design <- model.matrix(~factor(block) + phenotype, colData(sce.416b))
-fit.416b.2 <- trendVar(sce.416b, design=design)
-dec.416b.2 <- decomposeVar(sce.416b, fit.416b.2)
-dec.416b.2[order(dec.416b.2$bio, decreasing=TRUE),]
+dec.design.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC", design=design)
+dec.design.416b[order(dec.design.416b$bio, decreasing=TRUE),]
 ```
 
 This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level.
 Briefly, the technical component is estimated as the fitted value of the trend at the average abundance for each gene.
 However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships.
-The `multiBlockVar()` approach is safer and should be preferred in all situations where it is applicable.
+The `block=` approach is safer and should be preferred in all situations where it is applicable.
 
 ## Selecting highly variable genes
 
@@ -230,17 +213,17 @@ The `multiBlockVar()` approach is safer and should be preferred in all situation
 
 Once we have quantified the per-gene variation, the next step is to select the subset of HVGs to use in downstream analyses.
 The simplest approach is to simply take the top $X$ genes with the largest values for the relevant measure of variation.
-For `decomposeVar()`,  this would be the genes with the largest biological components:
+For `modelGeneVar()` and `modelGeneVarWithSpikes()`,  this would be the genes with the largest biological components:
 
 ```{r}
 hvg.pbmc.var <- head(order(dec.pbmc$bio, decreasing=TRUE), 1000)
 hvg.pbmc.var <- rownames(dec.pbmc)[hvg.pbmc.var]
 ```
 
-For `improvedCV2()`, this would instead be the genes with the largest ratios:
+For `modelGeneCV2()` (and its relative, `modelGeneCV2WithSpikes()`), this would instead be the genes with the largest ratios:
 
 ```{r}
-hvg.pbmc.cv2 <- head(order(diff, decreasing=TRUE), 1000)
+hvg.pbmc.cv2 <- head(order(dec.cv2.pbmc$ratio, decreasing=TRUE), 1000)
 hvg.pbmc.cv2 <- rownames(dec.pbmc)[hvg.pbmc.cv2]
 ```
 
@@ -268,7 +251,8 @@ The $p$-value for each gene is generated by testing against the null hypothesis 
 For example, we might define our HVGs as all genes that have adjusted $p$-values below 0.05.
 
 ```{r}
-hvg.pbmc.var.2 <- rownames(dec.pbmc)[dec.pbmc$FDR <= 0.05]
+# 'which()' automatically removes 'NA' FDR values.
+hvg.pbmc.var.2 <- rownames(dec.pbmc)[which(dec.pbmc$FDR <= 0.05)]
 length(hvg.pbmc.var.2)
 ```
 
@@ -300,7 +284,8 @@ length(hvg.pbmc.var.3)
 For `improvedCV2()`, this involves keeping all ratios above 1:
 
 ```{r}
-hvg.pbmc.cv2.3 <- rownames(cv2.pbmc)[diff > 0]
+# 'which()' automatically removes 'NA' ratios.
+hvg.pbmc.cv2.3 <- rownames(dec.cv2.pbmc)[which(dec.cv2.pbmc$ratio > 1)]
 length(hvg.pbmc.cv2.3)
 ```
 
@@ -315,8 +300,7 @@ From a practical perspective, the use of more genes involves more computational 
 The few lines of code below will select the top 10% of genes with the highest biological components.
 
 ```{r}
-fit.pbmc <- trendVar(sce.pbmc, use.spikes=FALSE)
-dec.pbmc <- decomposeVar(fit=fit.pbmc)
+dec.pbmc <- modelGeneVar(sce.pbmc)
 chosen <- rownames(dec.pbmc)[order(dec.pbmc$bio, decreasing=TRUE)]
 chosen <- head(chosen, nrow(dec.pbmc) * 0.1)
 length(chosen)
@@ -333,9 +317,10 @@ dim(sce.pbmc)
 Alternatively, some methods may allow users to pass in the full `SingleCellExperiment` object and specify the genes to use via an extra argument like `subset.row=`.
 This may be more convenient in the context of the overall analysis, where genes outside of this subset may still be of interest during DE analyses or for visualization.
 
-
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
+
+## References {-}
