@@ -13,19 +13,18 @@ pbmc3k <- TENxPBMCData('pbmc3k')
 is.mito <- grep("MT", rowData(pbmc3k)$Symbol_TENx)
 
 library(scater)
-pbmc3k <- calculateQCMetrics(pbmc3k, feature_controls=list(Mito=is.mito))
-high.mito <- isOutlier(pbmc3k$pct_counts_Mito, nmads=3, type="higher")
+qc.stats <- perCellQCMetrics(pbmc3k, subsets=list(Mito=is.mito))
+high.mito <- isOutlier(qc.stats$subsets_Mito_percent, nmads=3, type="higher")
 pbmc3k <- pbmc3k[,!high.mito]
 ```
 
 ```{r normalization}
-pbmc3k <- normalize(pbmc3k)
+pbmc3k <- logNormCounts(pbmc3k)
 ```
 
 ```{r variance-modelling}
 library(scran)
-fit3k <- trendVar(pbmc3k, use.spikes = FALSE)
-dec3k <- decomposeVar(pbmc3k, fit3k)
+dec3k <- modelGeneVar(pbmc3k)
 ```
 
 ```{r feature-selection}
@@ -33,17 +32,16 @@ chosen.hvgs <- which(dec3k$bio > 0)
 ```
 
 ```{r dimensionality-reduction}
-# Using randomized SVD, which is more efficient for 
-# file-backed matrices.
+# Using randomized SVD, which is more efficient for file-backed matrices.
 set.seed(10000)
 pbmc3k <- runPCA(pbmc3k, feature_set=chosen.hvgs, ncomponents=25,
     BSPARAM=BiocSingular::RandomParam())
 
 set.seed(100000)
-pbmc3k <- runTSNE(pbmc3k, use_dimred="PCA")
+pbmc3k <- runTSNE(pbmc3k, dimred="PCA")
 
 set.seed(1000000)
-pbmc3k <- runUMAP(pbmc3k, use_dimred="PCA")
+pbmc3k <- runUMAP(pbmc3k, dimred="PCA")
 ```
 
 ```{r clustering}
