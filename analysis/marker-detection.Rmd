@@ -47,14 +47,14 @@ markers.pbmc
 ```
 
 ```{r, echo=FALSE}
-chosen <- 9
+chosen <- 13
 ```
 
 To demonstrate, we use cluster `r chosen` as our cluster of interest for this section.
 The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values [@simes1986improved] across the pairwise comparisons involving `r chosen`.
 
 ```{r}
-chosen <- "9"
+chosen <- "13"
 interesting <- markers.pbmc[[chosen]]
 colnames(interesting)
 ```
@@ -79,12 +79,17 @@ Here, we examine the top 5 genes from each pairwise comparison (Figure \@ref(fig
 Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (_PF4_) and pro-platelet basic protein (_PPBP_).
 
 ```{r heat-basic-pbmc, fig.asp=2, fig.cap="Heatmap of log-fold changes for cluster `r chosen` over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range."}
-best.set <- interesting[interesting$Top <= 5,]
+best.set <- interesting[interesting$Top <= 6,]
 logFCs <- as.matrix(best.set[,-(1:3)])
 colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
 
 library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+```
+
+```{r, echo=FALSE}
+# This had better be TRUE!
+stopifnot(all(c("PPBP", "PF4") %in% rownames(logFCs)))
 ```
 
 We intentionally use pairwise comparisons between clusters rather than comparing each cluster to the average of all other cells.
@@ -175,10 +180,8 @@ The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have th
 We demonstrate below by detecting upregulated genes in each cluster with `direction="up"`.
 
 ```{r}
-# TODO: make findMarkers() accept a method= option that
-# switches between these things, rather than having a 
-# different function altogether. Also need a lfc= option.
-markers.pbmc.wmw <- overlapExprs(sce.pbmc, sce.pbmc$cluster, direction="up")
+markers.pbmc.wmw <- findMarkers(sce.pbmc, test="wilcox",
+    sce.pbmc$cluster, direction="up")
 names(markers.pbmc.wmw)
 ```
 
@@ -224,9 +227,8 @@ Large positive log-fold changes indicate that the gene is more frequently expres
 Here, we focus on genes that are upregulated in each cluster compared to the others by setting `direction="up"`.
 
 ```{r}
-# TODO: push this into another findMarkers() option. 
-b.pairs <- pairwiseBinom(sce.pbmc, sce.pbmc$cluster, direction="up")
-markers.pbmc.binom <- combineMarkers(b.pairs$statistics, b.pairs$pairs)
+markers.pbmc.binom <- findMarkers(sce.pbmc, test="binom",
+    sce.pbmc$cluster, direction="up")
 names(markers.pbmc.binom)
 interesting.binom <- markers.pbmc.binom[[chosen]]
 colnames(interesting.binom)
@@ -424,9 +426,10 @@ The latter is arguably the more important level of replication as different samp
 Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
 This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
 
-
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
+
+## References {-}
