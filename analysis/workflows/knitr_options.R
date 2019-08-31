@@ -1,7 +1,7 @@
 ## knitr options for every section
 library(Cairo)
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
-                      cache = TRUE,
+                      cache = FALSE,
                       cache.extra = list(
                           R.version, sessionInfo(), format(Sys.Date(), '%Y-%m')
                       ),
