@@ -93,9 +93,9 @@ stopifnot(all(c("PPBP", "PF4") %in% rownames(logFCs)))
 ```
 
 We intentionally use pairwise comparisons between clusters rather than comparing each cluster to the average of all other cells.
-The latter approach is sensitive to the population composition, potentially resulting in wildly different sets of markers when cell type abundances change in different contexts.
+The latter approach is sensitive to the population composition, potentially resulting in substantially different sets of markers when cell type abundances change in different contexts.
 In the worst case, the presence of a single dominant subpopulation will drive the selection of top markers for every other cluster, pushing out useful genes that can resolve the various minor subpopulations.
-Moreover, pairwise comparisons naturally provide more information to interpret of the utility of a marker, e.g., by providing log-fold changes to indicate which clusters are distinguished by this gene.
+Moreover, pairwise comparisons naturally provide more information to interpret of the utility of a marker, e.g., by providing log-fold changes to indicate which clusters are distinguished by each gene.
 
 ### Using the log-fold change 
 
@@ -162,7 +162,18 @@ This is likely to discard many interesting genes, especially if the clusters are
 To give a concrete example, consider a mixed population of CD4^+^-only, CD8^+^-only, double-positive and double-negative T cells.
 With `pval.type="all"`, neither _Cd4_ or _Cd8_ would be detected as subpopulation-specific markers because each gene is expressed in two subpopulations.
 In comparison, `pval.type="any"` will detect both of these genes as they will be DE between at least one pair of subpopulations.
-This reliability motivates the use of the latter setting as the default in `findMarkers()`.
+
+If `pval.type="all"` is too stringent yet `pval.type="any"` is too generous, a compromise is to set `pval.type="some"`.
+This orders genes in the marker list by the Simes' combined $p$-value, which favors genes that are strongly DE in multiple comparisons but is still sensitive to strong DE in a single pairwise comparison.
+The aim is to improve the conciseness of the top markers for defining a cluster while mitigating the risk of discarding useful genes.
+The downside is that taking this compromise position sacrifices the theoretical certainties offered at the other two extremes.
+
+```{r}
+markers.pbmc.up4 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
+    pval.type="some", direction="up")
+interesting.up4 <- markers.pbmc.up4[[chosen]]
+interesting.up4[1:10,1:2]
+```
 
 ## Alternative testing regimes
 
