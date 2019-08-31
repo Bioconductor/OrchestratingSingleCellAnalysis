@@ -6,6 +6,10 @@ bibliography: ../ref.bib
 
 # Cell type annotation
 
+```{r setup, echo=FALSE, results="asis"}
+source("workflows/knitr_options.R")
+```
+
 ## Motivation
 
 The most challenging task in scRNA-seq data analysis is arguably the interpretation of the results.
@@ -26,4 +30,86 @@ We demonstrate on SOME DATA TO BE DECIDED.
 
 ## Assigning cluster labels from markers
 
-*WIP*
+Perhaps the simplest strategy for annotation is to perform a gene set enrichment analysis on the marker genes defining each cluster.
+This identifies the pathways and processes that are active in each cluster based on upregulation of the associated genes.
+We will demonstrate on the mouse mammary dataset from @bach2017differentiation, using markers that are identified by `findMarkers()` as being upregulated at a log-fold change threshold of 1.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/bach-mammary", "marker-detection", c("sce.mam", "markers.mam"))
+```
+
+```{r}
+markers.mam
+```
+
+```{r, echo=FALSE}
+chosen.text <- 4
+```
+
+As an example, we obtain annotations for the marker genes that define cluster `r chosen.text`.
+We will use gene sets defined by the Gene Ontology (GO) project, which describe a comprehensive range of biological processes and functions.
+We define our subset of relevant marker genes at a FDR of 5% and apply the `goana()` function from the `r Biocpkg("limma")` package.
+This performs a hypergeometric test to identify GO terms that are overrepresented in our marker subset.
+(The log-fold change threshold mentioned above is useful here, as it avoids including an excessive number of genes from the overpowered nature of per-cell DE comparisons.)
+
+```{r}
+chosen <- "4"
+cur.markers <- markers.mam[[chosen]]
+
+# goana() requires Entrez IDs.
+library(org.Mm.eg.db)
+entrez.ids <- mapIds(org.Mm.eg.db, keys=rownames(cur.markers), 
+    column="ENTREZID", keytype="SYMBOL")
+
+library(limma)
+keep <- cur.markers$FDR <= 0.05 & !duplicated(entrez.ids)
+summary(keep)
+
+go.out <- goana(entrez.ids[keep], species="Mm", universe=unique(entrez.ids))
+go.out <- go.out[order(go.out$P.DE),]
+
+# Only keeping biological process terms that are not overly general.
+go.useful <- go.out[go.out$Ont=="BP" & go.out$N <= 200,]
+head(go.useful, 20)
+```
+
+We see an enrichment for genes involved lipid synthesis, cell adhesion and tube formation.
+Given that this is a mammary gland experiment, we might guess that cluster `r chosen.text` contains luminal epithelial cells responsible for milk production and secretion.
+Indeed, a closer examination of the marker list indicates that this cluster upregulates milk proteins _Csn2_ and _Csn3_ (Figure \@ref(fig:violin-milk)).
+
+```{r}
+# Checking that the above statements are correct.
+stopifnot(c("GO:0035148", "GO:0022408", "GO:0019432") %in% head(rownames(go.useful), 20))
+chosen <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
+stopifnot(all(as.matrix(chosen)>0))
+```
+
+```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
+library(scater)
+plotExpression(sce.mam, features=c("Csn2", "Csn3"), x="cluster",
+    colour_by="cluster")
+```
+
+Further inspection of interesting GO terms is achieved by extracting the relevant genes. 
+This is usually desirable to confirm that the interpretation of the annotated biological process is appropriate.
+Many terms have overlapping gene sets, so a term may only be highly ranked because it shares genes with a more relevant term that represents the active pathway.
+
+```{r}
+# Extract symbols for each gene set; done once.
+tab <- select(org.Mm.eg.db, keytype="SYMBOL", 
+    keys=rownames(sce.mam), columns="GOALL")
+by.go <- split(tab[,1], tab[,2])
+
+# Identify genes associated with an interesting gene set.
+adhesion <- unique(by.go[["GO:0022408"]])
+head(cur.markers[adhesion,1:3], 10)
+```
+
+A vast array of gene set testing methods are available from various Bioconductor packages (see [here](https://bioconductor.org/packages/release/BiocViews.html#___GeneSetEnrichment) for a listing). 
+In principle, any of these could be applied to the `findMarkers()` output provided that they can accept a subset or ranking.
+We tend to favor competitive gene set tests that are based on defining a subset of genes (e.g., `goana()`) as they can focus on enrichment in the very top markers that exhibit strong DE.
+Ranking-based methods (e.g., `cameraPR()`, `r Biocpkg("fgsea")`) can detect more subtle effects but inferences based on weak markers are less helpful when the aim is to establish cell type identity.
+
+## References {-}
+
+

@@ -94,3 +94,10 @@ We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` la
 snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
 sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
+
+### Marker detection
+
+```{r marker-detection}
+markers.mam <- findMarkers(sce.mam, cluster=sce.mam$cluster,
+    direction="up", lfc=1)
+```
