@@ -28,6 +28,96 @@ We demonstrate on SOME DATA TO BE DECIDED.
 
 ## Assigning cell labels from gene sets
 
+A related strategy is to explicitly identify sets of marker genes that are highly expressed in each individual cell.
+This does not require matching of individual cells to the expression values of the reference dataset, which is faster and more convenient when only the identities of the markers are available.
+We demonstrate this approach using neuronal cell type markers derived from the @zeisel2015brain study.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/zeisel-brain", "normalization", c("sce.zeisel"))
+```
+
+```{r}
+library(scran)
+wilcox.z <- pairwiseWilcox(logcounts(sce.zeisel), 
+    sce.zeisel$level1class, lfc=1, direction="up")
+markers.z <- getTopMarkers(wilcox.z$statistics, wilcox.z$pairs,
+    pairwise=FALSE, n=50)
+lengths(markers.z)
+```
+
+Our test dataset will be another brain scRNA-seq experiment from @tasic2016adult.
+
+```{r}
+library(scRNAseq)
+sce.tasic <- TasicBrainData()
+sce.tasic
+```
+
+We use the `r Biocpkg("AUCell")` package to identify marker sets that are highly expressed in each cell.
+This method ranks genes by their expression values within each cell, and constructs a response curve detailing the number of genes from each marker set that are present with increasing rank.
+It then computes the area under the curve (AUC) for each marker set, quantifying the enrichment of those markers among the most highly expressed genes in that cell.
+This is roughly similar to performing a Wilcoxon rank sum test between genes in and outside of the set, but involving only the top ranking genes by expression in each cell.
+
+```{r}
+library(GSEABase)
+all.sets <- lapply(names(markers.z), function(x) {
+    GeneSet(markers.z[[x]], setName=x)        
+})
+all.sets <- GeneSetCollection(all.sets)
+
+library(AUCell)
+rankings <- AUCell_buildRankings(counts(sce.tasic))
+cell.aucs <- AUCell_calcAUC(all.sets, rankings)
+results <- t(assay(cell.aucs))
+head(results)
+```
+
+We assign cell type identity to each cell in the test dataset by taking the marker set with the top AUC as the label for that cell.
+Our new labels mostly agree with the original annotation from @tasic2016adult, which is encouraging.
+The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be acceptable given that they are derived from a common lineage.
+In the absence of prior annotation, a more general diagnostic check is to compare the assigned labels to cluster identities, under the expectation that most cells of a single cluster would have the same label (or, if multiple labels are present, they should at least represent closely related cell states).
+
+```{r}
+new.labels <- colnames(results)[max.col(results)]
+tab <- table(new.labels, sce.tasic$broad_type)
+tab
+```
+
+```{r, echo=FALSE}
+stopifnot(tab["astrocytes_ependymal","Oligodendrocyte Precursor Cell"] > 0)
+library(fossil)
+stopifnot(rand.index(
+    as.integer(factor(new.labels)), 
+    as.integer(factor(sce.tasic$broad_type))
+) > 0.95)
+```
+
+Another simple diagnostic metric is the difference $\Delta$ between the maximum and median AUCs for each cell.
+An umambiguous assignment should manifest as a large $\Delta$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
+If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta$, e.g., to achieve greater agreement with the clustering results or prior annotation.
+The example below removes small outlier $\Delta$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
+
+```{r aucell-boxplots, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label."}
+deltas <- rowMaxs(results) - rowMedians(results)
+boxplot(split(deltas, new.labels))
+
+library(scater)
+discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
+table(new.labels[!discard], sce.tasic$broad_type[!discard])
+```
+
+Interpretation of the `r Biocpkg("AUCell")` results is most straightforward when the marker sets are mutually exclusive, as shown above for the cell type markers.
+In other applications, one might consider computing AUCs for gene sets associated with signalling or metabolic pathways.
+It is likely that multiple pathways will be active in any given cell, and it is tempting to use the AUCs to quantify this activity for comparison across cells.
+However, such comparisons must be interpreted with much caution as the AUCs are competitive values - any increase in one pathway's activity will naturally reduce the AUCs for all other pathways, potentially resulting in spurious differences across the population.
+
+As we mentioned previously, the advantage of the `r Biocpkg("AUCell")` approach is that it does not require reference expression values.
+This is particularly useful when dealing with gene sets derived from the literature or other qualitative forms of biological knowledge.
+(In this particular example, we _do_ have the original expression values, so we could have used `r Biocpkg("SingleR")` directly.
+However, this may not always be the case.)
+The flipside is that information on relative expression is lost when only the marker identities are used.
+The net effect of ignoring expression values is difficult to predict - it may reduce performance for resolving more subtle cell types, but may also improve performance if the per-cell expression was too noisy to be useful. 
+
 ## Assigning cluster labels from markers
 
 Perhaps the simplest strategy for annotation is to perform a gene set enrichment analysis on the marker genes defining each cluster.
