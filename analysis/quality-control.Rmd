@@ -153,7 +153,7 @@ DataFrame(LibSize=sum(qc.lib2), NExprs=sum(qc.nexprs2),
 ```
 
 Alternatively, this entire process can be done in a single step using the `quickCellQC()` function.
-This is a convenient wrapper function that simply calls `isOutlier()` with the settings demonstrated above.
+This is a wrapper that simply calls `isOutlier()` with the settings described above.
 
 ```{r}
 reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
@@ -202,20 +202,16 @@ filtered3 <- sce.416b[,!batch.reasons$discard]
 
 TODO.
 
-## Droplet-specific procedures
+## Cell calling in droplet data
 
 ### Background
 
-An interesting aspect of droplet-based data is that we have no prior knowledge about whether a particular library (i.e., cell barcode) corresponds to cell-containing or empty droplets.
+An unique aspect of droplet-based data is that we have no prior knowledge about whether a particular library (i.e., cell barcode) corresponds to cell-containing or empty droplets.
 Thus, we need to call cells from empty droplets based on the observed expression profiles.
 This is not entirely straightforward as empty droplets can contain ambient (i.e., extracellular) RNA that can be captured and sequenced, resulting in non-zero counts for libraries that do not contain any cell.
-
 To demonstrate, we obtain the **unfiltered** count matrix for the PBMC dataset from 10X Genomics.
-This has not been subjected to the cell filtering algorithm method in the _CellRanger_ software suite, allowing us to apply our own algorithms for identifying the libraries that correspond to cells.
 
 ```{r}
-# Hoping to shovel this code into TENxPBMCData.
-# Just bear with it for now.
 library(BiocFileCache)
 bfc <- BiocFileCache("raw_data", ask = FALSE)
 raw.path <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com/samples",
@@ -230,6 +226,8 @@ sce.pbmc
 ```
 
 The distribution of total counts exhibits a sharp transition between barcodes with large and small total counts (Figure \@ref(fig:rankplot)), probably corresponding to cell-containing and empty droplets respectively.
+A simple approach would be to apply a threshold on the total count to only retain those barcodes with large totals.
+However, this unnecessarily discards libraries derived from cell types with low RNA content.
 
 ```{r rankplot, fig.cap="Total UMI count for each barcode in the PBMC dataset, plotted against its rank (in decreasing order of total counts). The inferred locations of the inflection and knee points are also shown."}
 bcrank <- barcodeRanks(counts(sce.pbmc))
@@ -250,6 +248,7 @@ legend("bottomleft", legend=c("Inflection", "Knee"),
 
 We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool [@lun2018distinguishing].
 Any significant deviation indicates that the barcode corresponds to a cell-containing droplet.
+This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(rankplot).
 We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
 
 ```{r}
@@ -272,17 +271,8 @@ To retain only the detected cells, we subset our `SingleCellExperiment` object.
 Discerning readers will notice the use of `which()`, which conveniently removes the `NA`s prior to the subsetting.
 
 ```{r}
-# using which() to automatically remove NAs.
 sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
 ```
-
-Users wanting to use the cell calling algorithm from the _CellRanger_ pipeline (version 2) can call `defaultDrops()` instead.
-This tends to be quite conservative as it often discards genuine cells with low RNA content (and thus low total counts).
-It also requires an _a priori_ estimate of the expected number of cells in the experiment, which may or may not be accurate.
-
-(As an aside, _CellRanger_ version 3 automatically performs cell calling using an algorithm similar to `emptyDrops()`.
-If we had started our analysis with the **filtered** count matrix, we would not need to run `emptyDrops()` manually as shown here.
-Nonetheless, it may be desirable on occasions where more detailed inspection or control of the cell-calling statistics is desired.)
 
 ### Examining cell-calling diagnostics
 
@@ -313,12 +303,31 @@ hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0],
 Large peaks near zero indicate that barcodes with total counts below `lower` are not all ambient in origin.
 This can be resolved by decreasing `lower` further to ensure that barcodes corresponding to droplets with very small cells are not used to estimate the ambient profile.
 
+### Relationship with other QC metrics
+
 While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells.
 It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
-This can be done using the outlier-based strategy to set data-adaptive thresholds on the mitochondrial proportion.
-(`emptyDrops()` will already remove cells with low library sizes or number of expressed genes, so further filtering on these metrics is generally not necessary.)
+This can be done using the same outlier-based strategy described in Section \@ref(quality-control-outlier).
+Filtering on the mitochondrial proportion provides the most additional benefit in this situation. 
 
-## Assumptions of outlier detection
+```{r}
+is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
+pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets=list(MT=is.mito))
+discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher", nmads=3)
+summary(discard.mito)
+```
+
+`emptyDrops()` already removes cells with very low library sizes or (by association) low numbers of expressed genes.
+Thus, further filtering on these metrics is not strictly necessary.
+It may still be desirable to filter on both of these metrics to remove non-empty droplets containing cell fragments or stripped nuclei that were not caught by the mitochondrial filter.
+However, this should be weighed against the risk of losing genuine cell types as discussed in Section \@ref(outlier-assumptions).
+
+Note that _CellRanger_ version 3 automatically performs cell calling using an algorithm similar to `emptyDrops()`.
+If we had started our analysis with the **filtered** count matrix, we could go straight to computing other QC metrics.
+We would not need to run `emptyDrops()` manually as shown here, and indeed, attempting to do so would lead to nonsensical results if not outright software errors.
+Nonetheless, it may still be desirable to load the **unfiltered** matrix and apply `emptyDrops()` ourselves, on occasions where more detailed inspection or control of the cell-calling statistics is desired.
+
+## Assumptions of outlier detection {#outlier-assumptions}
 
 ### Overview
 
