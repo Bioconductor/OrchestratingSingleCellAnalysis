@@ -171,7 +171,7 @@ With this strategy, the thresholds adapt to both the location and spread of the 
 This allows the QC procedure to adjust to changes in sequencing depth, cDNA capture efficiency, mitochondrial content, etc. without requiring any user intervention or prior experience.
 However, it does require some implicit assumptions that are discussed below in more detail.
 
-### Considering experimental factors 
+### Considering experimental factors {#qc-batch}
 
 More complex studies may involve batches of cells generated at different times or in different systems.
 In such cases, the adaptive strategy should be applied to each batch separately. 

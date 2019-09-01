@@ -8,6 +8,7 @@ bibliography: ../ref.bib
 
 ```{r setup, echo=FALSE, results="asis"}
 source("workflows/knitr_options.R")
+knitr::opts_chunk$set(cache=TRUE)
 ```
 
 ## Motivation
@@ -27,8 +28,8 @@ This allows them to be used in workflows for exploratory analyses of scRNA-seq d
 To demonstrate, we will use two separate 10X Genomics PBMC datasets generated in two different batches.
 Each dataset was obtained from the `r Biocpkg("TENxPBMCData")` package and separately subjected to basic processing steps.
 Separate processing prior to the batch correction step is more convenient, scalable and (on occasion) more reliable.
-For example, outlier-based QC on the cells is more effective when performed within a batch (Chapter ???).
-The same can also be said for trend fitting when modelling the mean-variance relationship (Section ???).
+For example, outlier-based QC on the cells is more effective when performed within a batch (Section \@ref(qc-batch)).
+The same can also be said for trend fitting when modelling the mean-variance relationship (Section \@ref(variance-batch)).
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/tenx-batch-pbmc/3k", "clustering",
@@ -72,7 +73,7 @@ This improves the quality of the correction by removing one aspect of the techni
 
 3. We perform feature selection by averaging the variance components across all batches with the `combineVar()` function.
 We use the average as it is responsive to batch-specific HVGs while still preserving the within-batch ranking of genes.
-This allows us to use the same strategies described in Chapter ??? to select genes of interest.
+This allows us to use the same strategies described in Section \@ref(hvg-selection) to select genes of interest.
 For example, if we were to retain all genes with positive biological components, convergence of the average towards zero for non-HVGs ensures that the expected number of retained genes is stable with more batches.
 In contrast, approaches based on taking the intersection or union of HVGs across batches become increasingly conservative or liberal, respectively, with an increasing number of batches.
 
@@ -393,7 +394,7 @@ We previously demonstrated the application of clustering methods to the batch-co
 At this point, it is also tempting to use the batch-corrected values for gene-based analyses like DE-based marker gene detection. 
 This is not generally recommended as an arbitrary correction algorithm is not obliged to preserve the magnitude (or even direction) of differences in per-gene expression when attempting to align multiple batches.
 For example, cosine normalization in `fastMNN()` shrinks the magnitude of the expression values so that any subsequent log-fold change calculations are meaningless.
-Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed i Chapter ???.
+Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed i Section \@ref(marker-batch).
 This strategy is based on the expectation that any genuine DE between clusters should still be present in a within-batch comparison where batch effects are absent.
 It penalizes genes that exhibit inconsistent DE across batches, thus protecting against misleading conclusions when a population in one batch is aligned to a similar-but-not-identical population in another batch.
 

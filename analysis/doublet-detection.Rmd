@@ -191,7 +191,7 @@ While clustering is still required, this approach is more robust than `doubletCl
 
 (As an aside, the issue of unknown combining proportions can be solved completely if spike-in information is available, e.g., in plate-based protocols.
 This will provide an accurate estimate of the total RNA content of each cell.
-To this end, spike-in-based size factors from Section ??? can be supplied to the `doubletCells()` function via the `size.factors.content=` argument.
+To this end, spike-in-based size factors from Section \@ref(spike-norm) can be supplied to the `doubletCells()` function via the `size.factors.content=` argument.
 This will use the spike-in size factors to scale the contribution of each cell to a doublet library.)
 
 ## Further comments 

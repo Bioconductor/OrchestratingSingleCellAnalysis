@@ -174,7 +174,7 @@ This suggests that we should set $d$ to the number of unique subpopulations minu
 By doing so, we guarantee separation of all subpopulations while retaining as few dimensions (and noise) as possible.
 
 The number of subpopulations is usually not known in advance so instead we use the number of clusters as a proxy.
-However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (see Chapter ???).
+However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (Chapter \@ref(clustering)).
 To handle this circularity, we test multiple choices for $d$ and we pick a value that is closest to the number of clusters minus 1.
 This aims to achieve self-consistency in the number of PCs and clusters based on the reasoning above.
 
@@ -331,13 +331,13 @@ For that reason alone, it is increasingly displacing $t$-SNE as the method of ch
 ### Interpreting the plots
 
 Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells.
-One might then ask whether the results of such extreme data compression can be trusted.
+One might wonder whether the results of such extreme data compression can be trusted.
 Indeed, it would probably be unwise to directly analyze the low-dimensional coordinates used for plotting.
-Rather, the plots should be used to interpret/communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
+Rather, the plots should only be used to interpret or communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
 
 To illustrate, consider the interaction between clustering and $t$-SNE.
 As a general rule, we would not perform clustering on the $t$-SNE coordinates.
-Rather, we would cluster on the first 10-50 PCs (see Chapter ???) and then visualize the cluster identities on the $t$-SNE plot.
+Rather, we would cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on the $t$-SNE plot.
 This ensures that clustering makes use of the information that was lost during compression into two dimensions.
 Given a discrepancy between the visible clusters on a $t$-SNE plot and those identified by our clustering, we would be inclined to favour the latter.
 

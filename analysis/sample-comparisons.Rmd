@@ -43,8 +43,8 @@ merged
 
 The differential analyses are predicated on many of the pre-processing steps covered in previous chapters.
 For brevity, we will not explicitly repeat them here,
-only noting that we have already merged cells from all samples into the same coordinate system (see Section ???)
-and clustered the merged dataset to obtain a common partitioning across all samples.
+only noting that we have already merged cells from all samples into the same coordinate system (Chapter \@ref(data-integration))
+and clustered the merged dataset to obtain a common partitioning across all samples (Chapter \@ref(clustering)).
 A brief inspection of the results indicates that clusters contain similar contributions from all batches with only modest differences associated with td-Tomato expression (Figure \@ref(fig:tsne-initial)).
 
 ```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
@@ -148,7 +148,7 @@ summary(keep)
 ```
 
 Finally, we correct for composition biases by computing normalization factors with the trimmed mean of M-values method [@robinson2010scaling].
-We do not need the methods in Chapter ??? as the counts for our pseudo-bulk samples are large enough to apply bulk normalization methods.
+We do not need the bespoke single-cell methods described in Chapter \@ref(normalization), as the counts for our pseudo-bulk samples are large enough to apply bulk normalization methods.
 (Readers should be aware that `r Biocpkg("edgeR")` normalization factors are closely related but _not the same_ as the size factors described elsewhere in this book.)
 
 ```{r}
@@ -195,7 +195,7 @@ DEGs are defined as those with non-zero log-fold changes at a false discovery ra
 Very few genes are significantly DE, indicating that injection has little effect on the transcriptome of "`r label`" cells.
 (Note that this logic is somewhat circular, 
 as a large transcriptional effect may have caused cells of this type to be re-assigned to a different label.
-We discuss this in more detail in Section ??? below.)
+We discuss this in more detail in Section \@ref(de-da-duality) below.)
 
 ```{r}
 res <- glmQLFTest(fit, coef=ncol(design))
@@ -454,7 +454,7 @@ This ensures that any non-DA subpopulation is not reported as being depleted aft
 Some caution is still required, though - even if the external numbers are accurate, we need to assume that cell capture efficiency is (on average) equal between conditions to justify their use as $\tau$.
 And obviously, the use of a non-zero $\tau$ will reduce power to detect real changes when the composition bias is not present.
 
-## DE or DA? Two sides of the same coin
+## DE or DA? Two sides of the same coin {#de-da-duality}
 
 While useful, the distinction between DA and DE analyses is inherently artificial for scRNA-seq data.
 This is because the labels used in the former are defined based on the genes to be tested in the latter.
@@ -468,7 +468,7 @@ This manifests as DA where $X_1$ is enriched in one condition and $X_2$ is enric
 e.g., because the data integration procedure identifies them as corresponding cell types and merges them together.
 This means that the differences between conditions manifest as DE within the single cluster corresponding to $X$.
 
-We have described the example above in terms of clustering, but the same arguments apply for any labelling strategy based on the expression profiles, e.g., automated cell type assignment (Chapter ???).
+We have described the example above in terms of clustering, but the same arguments apply for any labelling strategy based on the expression profiles, e.g., automated cell type assignment (Chapter \@ref(cell-annotation)). 
 Moreover, the choice between outcomes 1 and 2 is made implicitly by the combined effect of the data merging, clustering and label assignment procedures.
 For example, differences between conditions are more likely to manifest as DE for coarser clusters but as DA for finer clusters, but this is difficult to predict reliably.
 

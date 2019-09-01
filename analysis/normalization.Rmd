@@ -129,7 +129,7 @@ For example, composition biases can compromise DE analyses by systematically shi
 However, it tends to provide less benefit over simple library size normalization for cell-based analyses such as clustering.
 The presence of composition biases already implies strong differences in expression profiles, so changing the normalization strategy is unlikely to affect the outcome of a clustering procedure.
 
-## Normalization by spike-ins
+## Normalization by spike-ins {#spike-norm}
 
 Spike-in normalization is based on the assumption that the same amount of spike-in RNA was added to each cell [@lun2017assessing].
 Systematic differences in the coverage of the spike-in transcripts can only be due to cell-specific biases, e.g., in capture efficiency or sequencing depth.

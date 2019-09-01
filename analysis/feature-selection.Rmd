@@ -156,9 +156,9 @@ curve(metadata(dec.pois.pbmc)$trend(x), col="dodgerblue", add=TRUE)
 
 ### Accounting for blocking factors
 
-#### Fitting block-specific trends
+#### Fitting block-specific trends {#variance-batch}
 
-Data containing multiple batches will often exhibit batch effects (see Chapter ??? for more details).
+Data containing multiple batches will often exhibit batch effects (see Chapter \@ref(data-integration) for more details).
 We are (usually) not interested in HVGs that are driven by batch effects.
 Rather, we want to focus on genes that are highly variable within each batch.
 This is naturally achieved by performing trend fitting and variance decomposition separately for each batch.
@@ -207,7 +207,7 @@ Briefly, the technical component is estimated as the fitted value of the trend a
 However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships.
 The `block=` approach is safer and should be preferred in all situations where it is applicable.
 
-## Selecting highly variable genes
+## Selecting highly variable genes {#hvg-selection}
 
 ### Based on the largest metrics
 
