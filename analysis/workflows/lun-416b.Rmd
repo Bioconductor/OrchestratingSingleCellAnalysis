@@ -66,8 +66,7 @@ sce.416b <- logNormCounts(sce.416b)
 We take all of the genes with positive biological components.
 
 ```{r variance-modelling}
-dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC")
-chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
+dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=sce.416b$block)
 ```
 
 ### Batch correction
@@ -83,12 +82,15 @@ assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b),
 
 ### Dimensionality reduction
 
+`denoisePCA()` automatically does its own feature selection, 
+so further subsetting is not strictly required unless we wanted to be more stringent.
+
 ```{r dimensionality-reduction}
 sce.416b <- denoisePCA(sce.416b, technical=dec.416b, 
-    subset.row=chosen.hvgs, assay.type="corrected")
+    assay.type="corrected")
 
 set.seed(1010)
-sce.416b <- runTSNE(sce.416b, use_dimred="PCA", perplexity=10)
+sce.416b <- runTSNE(sce.416b, dimred="PCA", perplexity=10)
 ```
 
 ### Clustering
@@ -107,20 +109,30 @@ sce.416b$cluster <- factor(my.clusters)
 
 ### Quality control statistics
 
-```{r, fig.asp=0.5}
-par(mfrow=c(1,2))
-plot(stats$sum, stats$detected, xlab="Library size",
-    ylab="Number of detected genes", log="xy")     
-plot(stats$sum, stats$subsets_Mt_percent, xlab="Library size",
-    ylab="Number of detected genes", log="x")
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$block <- factor(unfiltered$block)
+unfiltered$discard <- qc$discard
 
-par(mfrow=c(1,2))
-boxplot(split(log10(stats$sum), unfiltered$block), ylab="Log10 library size")
-boxplot(split(log10(stats$detected), unfiltered$block), ylab="Log10 number of genes")
+gridExtra::grid.arrange(
+    plotColData(unfiltered, x="block", y="sum", 
+        colour_by="discard") + scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, x="block", y="detected", 
+        colour_by="discard") + scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, x="block", y="subsets_Mt_percent", 
+        colour_by="discard") + ggtitle("Mito percent"),
+    plotColData(unfiltered, x="block", y="altexps_ERCC_percent", 
+        colour_by="discard") + ggtitle("ERCC percent"),
+    nrow=2,
+    ncol=2
+)
+```
 
-par(mfrow=c(1,2))
-boxplot(split(log10(stats$sum), unfiltered$phenotype), ylab="Log10 library size")
-boxplot(split(log10(stats$detected), unfiltered$phenotype), ylab="Log10 number of genes")
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mt_percent", 
+    colour_by="discard") + scale_x_log10()
+plotColData(unfiltered, x="altexps_ERCC_percent", y="subsets_Mt_percent",
+    colour_by="discard") 
 ```
 
 ```{r}
@@ -140,12 +152,17 @@ plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
 
 ### Variance modelling
 
-```{r}
-plot(dec.416b$mean, dec.416b$total, col="black", pch=16,
-    xlab="Mean log-expression", ylab="Variance of log-expression")     
-fit.416b <- metadata(dec.416b)
-points(fit.416b$mean, fit.416b$var, col="red", pch=16)
-curve(fit.416b$trend(x), add=TRUE, col="dodgerblue")
+```{r, fig.asp=0.5}
+par(mfrow=c(1,2))
+blocked.stats <- dec.416b$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
 ```
 
 ### Clustering
