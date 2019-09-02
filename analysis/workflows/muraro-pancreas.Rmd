@@ -1,10 +1,13 @@
-# Human pancreas CEL-seq2 dataset 
+# Human pancreas dataset (Muraro)
 
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
 
 ## Introduction
+
+This performs an analysis of the @muraro2016singlecell CEL-seq dataset,
+consisting of human pancreas cells from various donors.
 
 ## Analysis code
 
@@ -34,11 +37,14 @@ rownames(sce.muraro) <- gene.ids[keep]
 
 ### Quality control
 
+```{r}
+unfiltered <- sce.muraro
+```
+
 ```{r quality-control}
 library(scater)
-qcstats <- perCellQCMetrics(sce.muraro)
-filtered <- quickCellQC(qcstats, nmads=3,
-    percent_subsets="altexps_ERCC_percent")
+stats <- perCellQCMetrics(sce.muraro)
+qc <- quickCellQC(stats, nmads=3, percent_subsets="altexps_ERCC_percent")
 sce.muraro <- sce.muraro[,!filtered$discard]
 ```
 
@@ -59,3 +65,86 @@ sce.muraro <- logNormCounts(sce.muraro)
 block <- paste0(sce.muraro$plate, "_", sce.muraro$donor)
 dec.muraro <- modelGeneVarWithSpikes(sce.muraro, "ERCC", block=block)
 ```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101011001)
+sce.muraro <- denoisePCA(sce.muraro, technical=dec.muraro, BSPARAM=IrlbaParam())
+sce.muraro <- runTSNE(sce.muraro, dimred="PCA")
+```
+
+### Clustering
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.muraro, use.dimred="PCA")
+sce.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="altexps_ERCC_percent",
+        colour_by="discard") + ggtitle("ERCC percent"),
+    ncol=2
+)
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.muraro))
+```
+
+```{r}
+plot(librarySizeFactors(sce.muraro), sizeFactors(sce.muraro), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r, fig.asp=2, fig.height=10}
+par(mfrow=c(8,4))
+blocked.stats <- dec.muraro$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.muraro, "PCA"))
+```
+
+### Clustering
+
+```{r}
+table(sce.muraro$cluster)
+```
+
+```{r}
+plotTSNE(sce.muraro, colour_by="cluster")
+```
+
+## References {-}
