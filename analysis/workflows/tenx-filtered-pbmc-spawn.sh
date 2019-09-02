@@ -3,5 +3,5 @@
 # Modifications should be applied to the template rather 
 # than any of the individual realizations!
 
-echo -e "<!-- AUTOMATICALLY GENERATED, DO NOT EDIT! -->\n" | cat - <(cat template.Rmd | sed "s/ID/3k/g")  > 3k.Rmd
-echo -e "<!-- AUTOMATICALLY GENERATED, DO NOT EDIT! -->\n" | cat - <(cat template.Rmd | sed "s/ID/4k/g")  > 4k.Rmd
+echo -e "<!-- AUTOMATICALLY GENERATED, DO NOT EDIT! -->\n" | cat - <(cat tenx-filtered-pbmc-template.Rmd | sed "s/ID/3k/g")  > tenx-filtered-pbmc3k.Rmd
+echo -e "<!-- AUTOMATICALLY GENERATED, DO NOT EDIT! -->\n" | cat - <(cat tenx-filtered-pbmc-template.Rmd | sed "s/ID/4k/g")  > tenx-filtered-pbmc4k.Rmd
