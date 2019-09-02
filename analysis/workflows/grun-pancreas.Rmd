@@ -66,20 +66,26 @@ block <- paste0(sce.grun$sample, "_", sce.grun$donor)
 dec.grun <- modelGeneVarWithSpikes(sce.grun, spikes="ERCC", block=block)
 ```
 
+### Data integration
+
+```{r data-integration}
+library(batchelor)
+set.seed(1001010)
+merged.grun <- fastMNN(sce.grun, batch=sce.grun$donor)
+```
+
 ### Dimensionality reduction
 
 ```{r dimensionality-reduction}
-library(BiocSingular)
-set.seed(101011001)
-sce.grun <- denoisePCA(sce.grun, technical=dec.grun, BSPARAM=IrlbaParam())
-sce.grun <- runTSNE(sce.grun, dimred="PCA")
+set.seed(100111)
+merged.grun <- runTSNE(merged.grun, dimred="corrected")
 ```
 
 ### Clustering
 
 ```{r clustering}
-snn.gr <- buildSNNGraph(sce.grun, use.dimred="PCA")
-sce.grun$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+snn.gr <- buildSNNGraph(merged.grun, use.dimred="corrected")
+merged.grun$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ## Results
@@ -131,21 +137,21 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
-### Dimensionality reduction
+### Data integration
 
 ```{r}
-ncol(reducedDim(sce.grun, "PCA"))
+metadata(merged.grun)$merge.info$lost.var
 ```
 
 ### Clustering
 
 ```{r}
-table(sce.grun$cluster)
+table(Cluster=merged.grun$cluster, Donor=merged.grun$batch)
 ```
 
 ```{r}
-plotTSNE(sce.grun, colour_by="cluster")
-plotTSNE(sce.grun, colour_by="donor")
+plotTSNE(merged.grun, colour_by="cluster")
+plotTSNE(merged.grun, colour_by="donor")
 ```
 
 ## References {-}

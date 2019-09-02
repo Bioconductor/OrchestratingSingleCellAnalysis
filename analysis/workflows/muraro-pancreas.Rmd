@@ -62,26 +62,33 @@ sce.muraro <- logNormCounts(sce.muraro)
 
 ### Variance modelling
 
+We block on a combined plate and donor factor.
+
 ```{r variance-modelling}
-# Blocking on a combined plate and donor factor.
 block <- paste0(sce.muraro$plate, "_", sce.muraro$donor)
 dec.muraro <- modelGeneVarWithSpikes(sce.muraro, "ERCC", block=block)
+```
+
+### Data integration
+
+```{r data-integration}
+library(batchelor)
+set.seed(1001010)
+merged.muraro <- fastMNN(sce.muraro, batch=sce.muraro$donor)
 ```
 
 ### Dimensionality reduction
 
 ```{r dimensionality-reduction}
-library(BiocSingular)
-set.seed(101011001)
-sce.muraro <- denoisePCA(sce.muraro, technical=dec.muraro, BSPARAM=IrlbaParam())
-sce.muraro <- runTSNE(sce.muraro, dimred="PCA")
+set.seed(100111)
+merged.muraro <- runTSNE(merged.muraro, dimred="corrected")
 ```
 
 ### Clustering
 
 ```{r clustering}
-snn.gr <- buildSNNGraph(sce.muraro, use.dimred="PCA")
-sce.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+snn.gr <- buildSNNGraph(merged.muraro, use.dimred="corrected")
+merged.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ## Results
@@ -133,20 +140,23 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
-### Dimensionality reduction
+### Data integration
 
 ```{r}
-ncol(reducedDim(sce.muraro, "PCA"))
+metadata(merged.muraro)$merge.info$lost.var
 ```
 
 ### Clustering
 
 ```{r}
-table(sce.muraro$cluster)
+table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
 ```
 
 ```{r}
-plotTSNE(sce.muraro, colour_by="cluster")
+plotTSNE(merged.muraro, colour_by="cluster")
+plotTSNE(merged.muraro, colour_by="batch")
 ```
+
+### Clustering
 
 ## References {-}
