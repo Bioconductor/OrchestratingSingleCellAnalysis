@@ -151,7 +151,7 @@ table(Cluster=merged.grun$cluster, Donor=merged.grun$batch)
 
 ```{r}
 plotTSNE(merged.grun, colour_by="cluster")
-plotTSNE(merged.grun, colour_by="donor")
+plotTSNE(merged.grun, colour_by="batch")
 ```
 
 ## References {-}
