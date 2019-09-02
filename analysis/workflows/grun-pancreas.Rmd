@@ -1,31 +1,53 @@
+# Human pancreas dataset (Grun)
+
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
+
+## Introduction
+
+This performs an analysis of the @grun2016denovo CEL-seq2 dataset,
+consisting of human pancreas cells from various donors.
+
+## Analysis code
+
+### Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.grun <- GrunPancreasData()
 ```
 
+### Gene annotation
+
+We convert to Ensembl identifiers, and we remove duplicated genes or genes without Ensembl IDs.
+
 ```{r gene-annotation}
-# Converting back to Ensembl identifiers.
 library(org.Hs.eg.db)
-gene.symb <- sub("__chr.*$", "", rownames(sce.grun))
-gene.ids <- mapIds(org.Hs.eg.db, keys=gene.symb, 
+gene.ids <- mapIds(org.Hs.eg.db, keys=rowData(sce.grun)$symbol,
     keytype="SYMBOL", column="ENSEMBL")
 
-# Removing duplicated genes or genes without Ensembl IDs.
 keep <- !is.na(gene.ids) & !duplicated(gene.ids)
 sce.grun <- sce.grun[keep,]
 rownames(sce.grun) <- gene.ids[keep]
 ```
 
+### Quality control
+
+All batches have quite few cells, considering the complexity of the tissue, so we will not block on batch here.
+
+```{r}
+unfiltered <- sce.grun
+```
+
 ```{r quality-control}
 library(scater)
-QC <- perCellQCMetrics(sce.grun)
-filter <- quickCellQC(QC, percent_subsets="altexps_ERCC_percent", nmads=3)
-sce.grun <- sce.grun[,!filter$discard]
+stats <- perCellQCMetrics(sce.grun)
+qc <- quickCellQC(stats, percent_subsets="altexps_ERCC_percent", nmads=3)
+sce.grun <- sce.grun[,!qc$discard]
 ```
+
+### Normalization 
 
 ```{r normalization}
 library(scran)
@@ -35,8 +57,90 @@ sce.grun <- computeSumFactors(sce.grun, min.mean=0.1, clusters=clusters)
 sce.grun <- logNormCounts(sce.grun)
 ```
 
+### Variance modelling
+
+We block on a combined plate and donor factor.
+
 ```{r variance-modelling}
-# Blocking on a combined plate and donor factor.
 block <- paste0(sce.grun$sample, "_", sce.grun$donor)
 dec.grun <- modelGeneVarWithSpikes(sce.grun, spikes="ERCC", block=block)
 ```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101011001)
+sce.grun <- denoisePCA(sce.grun, technical=dec.grun, BSPARAM=IrlbaParam())
+sce.grun <- runTSNE(sce.grun, dimred="PCA")
+```
+
+### Clustering
+
+We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` later).
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.grun, use.dimred="PCA")
+sce.grun$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="altexps_ERCC_percent",
+        colour_by="discard") + ggtitle("ERCC percent"),
+    ncol=2
+)
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.grun))
+```
+
+```{r}
+plot(librarySizeFactors(sce.grun), sizeFactors(sce.grun), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r, fig.asp=2, fig.height=10}
+par(mfrow=c(6,3))
+blocked.stats <- dec.grun$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Clustering
+
+```{r}
+table(sce.grun$cluster)
+```
+
+```{r}
+plotTSNE(sce.grun, colour_by="cluster")
+```
+
+## References {-}
