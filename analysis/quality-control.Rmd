@@ -200,7 +200,49 @@ filtered3 <- sce.416b[,!batch.reasons$discard]
 ```
 ## Checking diagnostic plots
 
-TODO.
+It is good practice to inspect the distributions of QC metrics (Figure \@ref(fig:qc-dist-416b)) to identify possible problems.
+In the most ideal case, we would see normal distributions that would justify the 3 MAD threshold described previously.
+A large proportion of cells in another mode suggests that the QC metrics might be correlated with some biological state, reflecting a potential violation of some of the assumptions of outlier detection (discussed in Section \@ref(outlier-assumptions)).
+For example, we see an association between the ERCC percentage and oncogene induction status - not a problem here, but this could be concerning if one of the modes was discarded by filtering on this metric.
+Batches with systematically poor values for any metric can also be quickly identified for further troubleshooting.
+
+```{r qc-dist-416b, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of QC metrics for each batch in the 416B dataset. Each point represents a cell with color and shape according to its oncogene induction status and whether it was discarded, respectively."}
+colData(sce.416b) <- cbind(colData(sce.416b), df)
+sce.416b$block <- factor(sce.416b$block)
+sce.416b$phenotype <- ifelse(grepl("induced", sce.416b$phenotype),
+    "induced", "wild type")
+sce.416b$discard <- reasons$discard
+
+gridExtra::grid.arrange(
+    plotColData(sce.416b, x="block", y="sum", colour_by="phenotype",
+        shape_by="discard") + scale_y_log10() + ggtitle("Total count"),
+    plotColData(sce.416b, x="block", y="sum", colour_by="phenotype", 
+        shape_by="discard") + scale_y_log10() + ggtitle("Detected features"),
+    plotColData(sce.416b, x="block", y="subsets_Mito_percent", 
+        shape_by="discard", colour_by="phenotype") + ggtitle("Mito percent"),
+    plotColData(sce.416b, x="block", y="altexps_ERCC_percent", 
+        shape_by="discard", colour_by="phenotype") + ggtitle("ERCC percent"),
+    nrow=2,
+    ncol=2
+)
+```
+
+Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics (Figure \@ref(fig:qc-plots-416b-mito)).
+Here, the aim is to confirm that there are no cells with both large total counts and large mitochondrial counts, to ensure that we are not inadvertently removing high-quality cells that happen to be highly metabolically active (e.g., hepatocytes).
+
+```{r qc-mito-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size."}
+plotColData(sce.416b, x="sum", y="subsets_Mito_percent", 
+    colour_by="phenotype", shape_by="discard") + scale_x_log10()
+```
+
+Comparison of the ERCC and mitochondrial percentages can also be informative (Figure \@ref(fig:qc-mito2-416b)).
+Low-quality cells with large ERCC percentages and small mitochondrial percentages are likely to be stripped nuclei, i.e., they are so damaged that they have lost all cytoplasmic content.
+Conversely, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
+
+```{r qc-mito2-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the percentage of reads assigned to ERCC transcripts."}
+plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
+    colour_by="phenotype", shape_by="discard") + scale_x_log10()
+```
 
 ## Cell calling in droplet data
 
@@ -308,13 +350,15 @@ This can be resolved by decreasing `lower` further to ensure that barcodes corre
 While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells.
 It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
 This can be done using the same outlier-based strategy described in Section \@ref(quality-control-outlier).
-Filtering on the mitochondrial proportion provides the most additional benefit in this situation. 
+Filtering on the mitochondrial proportion provides the most additional benefit in this situation, provided that we check that we are not removing a subpopulation of metabolically active cells (Figure \@ref(fig:qc-mito-pbmc)). 
 
-```{r}
+```{r qc-mito-pbmc, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size."}
 is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
 pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets=list(MT=is.mito))
 discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher", nmads=3)
 summary(discard.mito)
+plot(pbmc.qc$sum, pbmc.qc$subsets_MT_percent, log="x",
+    xlab="Total count", ylab='Mitochondrial %')
 ```
 
 `emptyDrops()` already removes cells with very low library sizes or (by association) low numbers of expressed genes.
@@ -332,7 +376,7 @@ Nonetheless, it may still be desirable to load the **unfiltered** matrix and app
 ### Overview
 
 The use of `isOutlier()` (Section \@ref(quality-control-outlier)) is a general and effective strategy for identifying and removing low-quality cells.
-However, it involves a number of assumptions about the experiment and biological system, and while these assumptions are mostly reasonable, users should still keep them in mind when interpreting the results^["Be alert, not alarmed" - for those who remember the Australian Government's indoctrination - uh, I mean, counter-terror campaign.].
+However, it involves a number of assumptions about the experiment and biological system, and while these assumptions are mostly reasonable, users should still keep them in mind when interpreting the results^["Be alert, not alarmed" - for those who remember that particular piece of government advertising.].
 
 An outlier-based definition for low-quality cells assumes that most cells are of acceptable quality.
 This is usually a reasonable expectation and can be experimentally supported in some situations by visually checking that the cells are intact, e.g., on the microwell plate.
