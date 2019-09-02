@@ -1,11 +1,24 @@
+# Human pancreas dataset (Lawlor)
+
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
+
+## Introduction
+
+This performs an analysis of the @lawlor2017singlecell dataset,
+consisting of human pancreas cells from various donors.
+
+## Analysis code
+
+### Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.lawlor <- LawlorPancreasData()
 ```
+
+### Gene annotation
 
 ```{r gene-annotation}
 library(AnnotationHub)
@@ -15,22 +28,117 @@ anno <- select(edb, keys=rownames(sce.lawlor), keytype="GENEID",
 rowData(sce.lawlor) <- anno[match(rownames(sce.lawlor), anno[,1]),-1]
 ```
 
+### Quality control
+
+```{r}
+unfiltered <- sce.lawlor
+```
+
 ```{r quality-control}
 library(scater)
-qcstats <- perCellQCMetrics(sce.lawlor, 
+stats <- perCellQCMetrics(sce.lawlor, 
     subsets=list(Mito=which(rowData(sce.lawlor)$SEQNAME=="MT")))
-filtered <- quickCellQC(qcstats, percent_subsets="subsets_Mito_percent", nmads=3)
-sce.lawlor <- sce.lawlor[,!filtered$discard]
+qc <- quickCellQC(stats, percent_subsets="subsets_Mito_percent", nmads=3)
+sce.lawlor <- sce.lawlor[,!qc$discard]
 ```
+
+### Normalization
 
 ```{r normalization}
 library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.lawlor)
 sce.lawlor <- computeSumFactors(sce.lawlor, clusters=clusters)
-sce.lawlor <- normalize(sce.lawlor)
+sce.lawlor <- logNormCounts(sce.lawlor)
 ```
 
+### Variance modelling
+
+Using age as a proxy for the donor.
+
 ```{r variance-modelling}
-dec.lawlor <- modelGeneVar(sce.lawlor, block=sce.lawlor$Donor)
+dec.lawlor <- modelGeneVar(sce.lawlor, block=sce.lawlor$age)
+chosen.genes <- head(order(dec.lawlor$bio, decreasing=TRUE), 2000)
 ```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101011001)
+sce.lawlor <- runPCA(sce.lawlor, subset_row=chosen.genes, 
+    ncomponents=25, BSPARAM=IrlbaParam())
+sce.lawlor <- runTSNE(sce.lawlor, dimred="PCA")
+```
+
+### Clustering
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.lawlor, use.dimred="PCA")
+sce.lawlor$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
+    colour_by="discard") + scale_x_log10()
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.lawlor))
+```
+
+```{r}
+plot(librarySizeFactors(sce.lawlor), sizeFactors(sce.lawlor), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r, fig.asp=2, fig.height=10}
+par(mfrow=c(4,2))
+blocked.stats <- dec.lawlor$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Clustering
+
+```{r}
+table(sce.lawlor$cluster)
+```
+
+```{r}
+plotTSNE(sce.lawlor, colour_by="cluster")
+```
+
+## References {-}
