@@ -24,7 +24,7 @@ These choices parametrize the theroetical differences between the various marker
 We will demonstrate using the 10X PBMC dataset:
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-pbmc4k", "clustering", "sce.pbmc")
+extractCached("workflows/tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
 ```
 
 ```{r}
@@ -47,14 +47,14 @@ markers.pbmc
 ```
 
 ```{r, echo=FALSE}
-chosen <- 13
+chosen <- 9
 ```
 
 To demonstrate, we use cluster `r chosen` as our cluster of interest for this section.
 The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values [@simes1986improved] across the pairwise comparisons involving `r chosen`.
 
 ```{r}
-chosen <- "13"
+chosen <- "9"
 interesting <- markers.pbmc[[chosen]]
 colnames(interesting)
 ```
@@ -78,7 +78,7 @@ We use the `Top` value to identify a set of genes that is guaranteed to distingu
 Here, we examine the top 5 genes from each pairwise comparison (Figure \@ref(fig:heat-basic-pbmc)).
 Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (_PF4_) and pro-platelet basic protein (_PPBP_).
 
-```{r heat-basic-pbmc, fig.asp=2, fig.cap="Heatmap of log-fold changes for cluster `r chosen` over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range."}
+```{r heat-basic-pbmc, fig.asp=2, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
 best.set <- interesting[interesting$Top <= 6,]
 logFCs <- as.matrix(best.set[,-(1:3)])
 colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
@@ -209,7 +209,7 @@ A value greater than 0.5 indicates that the gene is upregulated in the current c
 while values less than 0.5 correspond to downregulation.
 We would typically expect AUCs of 0.7-0.8 for a strongly upregulated candidate marker.
 
-```{r heat-wmw-pbmc, fig.cap="Heatmap of AUCs for cluster `r chosen` over all other clusters."}
+```{r heat-wmw-pbmc, fig.cap=sprintf("Heatmap of AUCs for cluster %s compared to all other clusters.", chosen)}
 best.set <- interesting.wmw[interesting.wmw$Top <= 5,]
 AUCs <- as.matrix(best.set[,-(1:3)])
 colnames(AUCs) <- sub("AUC.", "", colnames(AUCs))
