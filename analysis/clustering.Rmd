@@ -20,16 +20,16 @@ Clustering is thus a critical step for extracting biological insights from scRNA
 Here, we demonstrate the application of several commonly used methods with the 10X PBMC dataset. 
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-pbmc4k", "dimensionality-reduction", "sce.pbmc")
+extractCached("workflows/tenx-unfiltered-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 ```
 
 ```{r}
 sce.pbmc
 ```
 
-## Comments on Truth
+## What is the "true clustering"?
 
-At this point^[Pretty deep title here. I'm not a Doctor of Philosophy for nothing, y'know.], it is worth stressing the distinction between clusters and cell types.
+At this point, it is worth stressing the distinction between clusters and cell types.
 The former is an empirical construct while the latter is a biological truth (albeit a vaguely defined one).
 For this reason, questions like "what is the true number of clusters?" are usually meaningless.
 We can define as many clusters as we like, with whatever algorithm we like - each clustering will represent its own partitioning of the high-dimensional expression space, and is as "real" as any other clustering.
@@ -37,7 +37,7 @@ We can define as many clusters as we like, with whatever algorithm we like - eac
 A more relevant question is "how well do the clusters approximate the cell types?"
 Unfortunately, this is difficult to answer given the context-dependent interpretation of biological truth.
 Some analysts will be satisfied with resolution of the major cell types; other analysts may want resolution of subtypes; and others still may require resolution of different states (e.g., metabolic activity, stress) within those subtypes.
-Two clusterings can also be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
+Morevoer, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
 Indeed, asking for an unqualified "best" clustering is akin to asking for the best magnification on a microscope without any context.
 
 It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data.
@@ -170,23 +170,19 @@ Larger modularity values indicate that there most edges occur within clusters, s
 
 The standard approach is to report a single modularity value for a clustering on a given graph.
 This is useful for comparing different clusterings on the same graph - and indeed, some community detection algorithms are designed with the aim of maximizing the modularity - but it is less helpful for interpreting a given clustering.
-Rather, we use the `clusterModularity()` function with `get.values=TRUE`, which returns the observed and expected sum of weights between each pair of clusters.
+Rather, we use the `clusterModularity()` function with `as.ratio=TRUE`, which returns the ratio of the observed to expected sum of weights between each pair of clusters.
+We use the ratio instead of the difference as the former is less dependent on the number of cells in each cluster.
 
 ```{r}
-mod <- clusterModularity(g, clust, get.values=TRUE)
-names(mod)
-mod$observed
+ratio <- clusterModularity(g, clust, as.ratio=TRUE)
+ratio
 ```
 
-In each matrix, each row/column corresponds to a cluster, and each entry of the matrix contains the total weight of edges between cells in the respective clusters.
+In each matrix, each row/column corresponds to a cluster, and each entry of the matrix contains the ratio of the observed to total weight of edges between cells in the respective clusters.
 A dataset containing well-separated clusters should contain most of the observed total weight on the diagonal entries, i.e., most edges occur between cells in the same cluster.
-We visualize this by computing the log-ratio of observed to expected weights (Figure \@ref(fig:cluster-mod)).
-Concentration of the weight on the diagonal indicates that most of the clusters are well-separated, while some modest off-diagonal entries represent closely related clusters with more inter-connecting edges.
-(We use the log-ratio instead of the difference as the latter's scale depends on the number of cells in each cluster, meaning that any visualization would be dominated by large differences for large clusters.)
+Indeed, concentration of the weight on the diagonal of (Figure \@ref(fig:cluster-mod)) indicates that most of the clusters are well-separated, while some modest off-diagonal entries represent closely related clusters with more inter-connecting edges.
 
 ```{r cluster-mod, fig.cap="Heatmap of the log~2~-ratio of the total weight between nodes in the same cluster or in different clusters, relative to the total weight expected under a null model of random links."}
-ratio <- mod$observed/mod$expected
-
 library(pheatmap)
 pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
     color=colorRampPalette(c("white", "blue"))(100))
@@ -198,10 +194,12 @@ We can then repeat our graph operations on this new cluster-level graph.
 For example, we could obtain clusters of clusters, or we could simply create a new cluster-based layout for visualization (Figure \@ref(fig:cluster-graph)).
 This is analogous to the "graph abstraction" approach described by @wolf2017graph.
 
-```{r cluster-graph, fig.cap="Force-directed layout showing the relationships between clusters based on the ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding ratio."}
+```{r cluster-graph, fig.cap="Force-directed layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
 cluster.gr <- igraph::graph_from_adjacency_matrix(ratio, 
-    mode="undirected", weighted=TRUE, diag=FALSE)
-plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*10)  
+    mode="upper", weighted=TRUE, diag=FALSE)
+
+set.seed(11001010)
+plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*20)
 ```
 
 Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` commands were prefixed with `igraph::`.
@@ -215,20 +213,17 @@ Rather unfortunately, this `normalize` function accepts any argument and returns
 $k$-means clustering is a classic technique that aims to partition cells into $k$ clusters.
 Each cell is assigned to the cluster with the closest centroid, which is done by minimizing the within-cluster sum of squares using a random starting configuration for the $k$ centroids.
 The main advantage of this approach lies in its speed, given the simplicity and ease of implementation of the algorithm.
-However, it suffers from a number of serious shortcomings:
+However, it suffers from a number of serious shortcomings that reduce its appeal for obtaining interpretable clusters:
 
 - It implicitly favours spherical clusters of equal radius.
-This can result in inappropriate partitionings on real datasets that contain groupings with irregular sizes and shapes.
+This can lead to unintuitive partitionings on real datasets that contain groupings with irregular sizes and shapes.
 - The number of clusters $k$ must be specified beforehand and represents a hard cap on the resolution of the clustering..
 For example, setting $k$ to be below the number of cell types will always lead to co-clustering of two cell types, regardless of how well separated they are.
 In contrast, other methods like graph-based clustering will respect strong separation even if the relevant resolution parameter is set to a low value.
 - It is dependent on the randomly chosen initial coordinates.
 This requires multiple runs to verify that the clustering is stable.
 
-These issues reduce the appeal of $k$-means clustering for scRNA-seq data analysis.
-Despite this, it is still used widely as it is fast and - frankly - often good enough.
-
-Even if we were to forgo $k$-means for obtaining clusters to interpret, it is still one of the best approaches for sample-based data compression. 
+That said, $k$-means clustering is still one of the best approaches for sample-based data compression. 
 In this application, we set $k$ to a large value such as the square root of the number of cells to obtain fine-grained clusters.
 These are not meant to be interpreted directly, but rather, the centroids are treated as "samples" for further analyses.
 The idea here is to obtain a single representative of each region of the expression space, reducing the number of samples and computational work in later steps like, e.g., trajectory reconstruction [@ji2016tscan].
@@ -258,6 +253,7 @@ Instead, we choose the most parsimonious $k$ beyond which the increases in the g
 
 ```{r kmeans-gap, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
 library(cluster)
+set.seed(110010101)
 gaps <- clusGap(reducedDim(sce.pbmc, "PCA"), kmeans, K.max=20)
 best.k <- maxSE(gaps$Tab[,"gap"], gaps$Tab[,"SE.sim"])
 best.k
@@ -266,7 +262,7 @@ plot(gaps$Tab[,"gap"], xlab="Number of clusters", ylab="Gap statistic")
 abline(v=best.k, col="red")
 ```
 
-It is then straightforwad to repeat the clustering with the `best.k` (Figure \@ref(fig:tsne-clust-kmeans-best).
+It is then straightforward to repeat the clustering with the `best.k` (Figure \@ref(fig:tsne-clust-kmeans-best).
 
 ```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering. Here, $k$ is chosen based on the gap statistic."}
 set.seed(100)
@@ -275,6 +271,12 @@ table(clust.kmeans2$cluster)
 
 sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
 plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+```
+
+```{r, echo=FALSE}
+# Check that the results are reasonable, as sometimes
+# the gap statistic gets funny stochastic results.
+stopifnot(identical(best.k, 8L))
 ```
 
 ### Assessing cluster separation
@@ -290,12 +292,12 @@ tab$rms <- sqrt(tab$wcss/tab$ncells)
 tab
 ```
 
-As an aside, clusters with the largest RMSD appear to be the least dispersed in Figure \@ref(fig:pbmc-kmeans-best).
-This highlights the risks of attempting to quantitatively interpret $t$-SNE plots.
+(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:pbmc-kmeans-best).
+This highlights the risks of attempting to quantitatively interpret the shape of visual clusters in $t$-SNE plots.)
 
 ```{r, echo=FALSE}
 # Content checking for the above text statement.
-stopifnot(identical(tab$WithinSS > 1e5, tab$NCells < 30))
+stopifnot(identical(which.max(tab$rms), which.max(-tab$ncells)))
 ```
 
 To explore the relationships between $k$-means clusters, a natural approach is to compute distances between their centroids.
@@ -415,9 +417,10 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
 
-
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
+
+## References {-}
