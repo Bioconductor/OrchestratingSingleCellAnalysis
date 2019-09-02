@@ -20,11 +20,23 @@ As such, intepretation of scRNA-seq data is often manual and a common bottleneck
 
 To expedite this step, we can use various computational approaches that exploit prior information to assign meaning to an uncharacterized scRNA-seq dataset.
 The most obvious sources of prior information are the curated gene sets associated with particular biological processes, e.g., from the Gene Ontology (GO) or the Kyoto Encyclopedia of Genes and Genomes (KEGG) collections.
-Alternatively, we can use published reference datasets where each sample or cell has already been annotated with its putative biological state by domain experts.
-The aim of the analyses in this chapter is to annotate the expression profiles in our scRNA-seq data based on this prior knowledge.
-We demonstrate on SOME DATA TO BE DECIDED.
+Alternatively, we can directly compare our expression profiles to published reference datasets where each sample or cell has already been annotated with its putative biological state by domain experts.
+Here, we will demonstrate both approaches with several different scRNA-seq datasets.
 
-## Assigning cell labels from a reference
+## Assigning cell labels from reference data
+
+### Overview
+
+A conceptually straightforward annotation approach is to compare the single-cell expression profiles with previously annotated reference datasets.
+Labels can then be assigned to each cell in our uncharacterized test dataset based on the most similar reference sample(s), for some definition of "similar".
+This is a standard classification challenge that can be tackled by standard machine learning techniques such as random forests and support vector machines.
+Any published and labelled RNA-seq dataset (bulk or single-cell) can be used as a reference, though its reliability depends greatly on the expertise of the original authors who assigned the labels in the first place. 
+
+In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method for cell type annotation.
+This method assigns labels to cells based on the reference samples with the highest Spearman rank correlations, and thus can be considered a rank-based variant of $k$-nearest-neighbor classification.
+To reduce noise, `r Biocpkg("SingleR")` identifies marker genes between pairs of labels and computes the correlation using only those markers.
+It also performs a fine-tuning step for each cell where calculation of the correlations is repeated with just the marker genes for the top-scoring labels.
+This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels. 
 
 ## Assigning cell labels from gene sets
 
@@ -120,7 +132,7 @@ The net effect of ignoring expression values is difficult to predict - it may re
 
 ## Assigning cluster labels from markers
 
-Perhaps the simplest strategy for annotation is to perform a gene set enrichment analysis on the marker genes defining each cluster.
+Yet another strategy for annotation is to perform a gene set enrichment analysis on the marker genes defining each cluster.
 This identifies the pathways and processes that are (relatively) active in each cluster based on upregulation of the associated genes compared to other clusters.
 We demonstrate on the mouse mammary dataset from @bach2017differentiation, using markers that are identified by `findMarkers()` as being upregulated at a log-fold change threshold of 1.
 
@@ -196,9 +208,9 @@ adhesion <- unique(by.go[["GO:0022408"]])
 head(cur.markers[adhesion,1:3], 10)
 ```
 
-While simple, gene set testing of marker lists is the most reliable approach for detecting whether certain pathways are up- or down-regulated between clusters.
+Gene set testing of marker lists is a reliable approach for determining if pathways are up- or down-regulated between clusters.
 As the top marker genes are simply DEGs, we can directly apply well-established procedures for testing gene enrichment in DEG lists (see [here](https://bioconductor.org/packages/release/BiocViews.html#___GeneSetEnrichment) for relevant packages).
-Unlike the other methods, there are no concerns about the validity of comparing scores across cells.
+This contrasts with the `r Biocpkg("AUCell")` approach where scores are not easily comparable across cells.
 The downside is that all conclusions are made relative to the other clusters, making it more difficult to determine cell identity if an "outgroup" is not present in the same study.
 
 ## References {-}
