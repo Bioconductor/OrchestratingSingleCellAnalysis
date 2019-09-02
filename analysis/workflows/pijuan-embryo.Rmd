@@ -6,9 +6,9 @@ knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
 
 ## Introduction
 
-This performs an analysis of the pijuan2019singlcell dataset studying mouse gastrulation.
+This performs an analysis of the @pijuan2019singlcell dataset on mouse gastrulation.
 Here, we examine chimeric embryos at the E7.5 stage of development 
-where Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
+where td-Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
 
 ## Analysis code
 
@@ -20,7 +20,7 @@ sce.chimera <- WTChimeraData(samples=5:10)
 sce.chimera
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, results="hide"}
 gc()
 ```
 
@@ -48,8 +48,6 @@ We use the pre-computed size factors in `sce.chimera`.
 
 ```{r normalization}
 sce.chimera <- logNormCounts(sce.chimera)
-
-# TODO: put in multiBatchNorm() in here.
 ```
 
 ### Variance modelling
@@ -58,8 +56,8 @@ Retaining all genes with any positive biological component, to preserve as much 
 
 ```{r variance-modelling}
 library(scran)
-dec <- modelGeneVar(sce.chimera, block=sce.chimera$sample)
-chosen.hvgs <- dec$bio > 0
+dec.chimera <- modelGeneVar(sce.chimera, block=sce.chimera$sample)
+chosen.hvgs <- dec.chimera$bio > 0
 ```
 
 ### Merging
@@ -103,3 +101,38 @@ We use an external algorithm to compute nearest neighbors for greater speed.
 merged <- runTSNE(merged, dimred="corrected", external_neighbors=TRUE)
 merged <- runUMAP(merged, dimred="corrected", external_neighbors=TRUE)
 ```
+
+## Results
+
+### Variance modelling
+
+```{r, fig.asp=0.5, fig.wide=TRUE}
+par(mfrow=c(1,2))
+blocked.stats <- dec.chimera$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Batch correction
+
+```{r}
+metadata(merged)$merge.info$lost.var
+```
+
+### Clustering
+
+```{r}
+table(merged$cluster)
+```
+
+```{r}
+plotTSNE(merged, colour_by="cluster")
+plotUMAP(merged, colour_by="cluster")
+```
+
+## References {-}
