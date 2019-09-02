@@ -32,7 +32,7 @@ For example, outlier-based QC on the cells is more effective when performed with
 The same can also be said for trend fitting when modelling the mean-variance relationship (Section \@ref(variance-batch)).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/3k", "clustering",
+extractCached("workflows/tenx-filtered-pbmc3k", "clustering",
     c("pbmc3k", "dec3k"))
 ```
 
@@ -41,7 +41,7 @@ pbmc3k
 ```
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-batch-pbmc/4k", "clustering",
+extractCached("workflows/tenx-filtered-pbmc4k", "clustering",
     c("pbmc4k", "dec4k"))
 ```
 
@@ -202,12 +202,6 @@ The `r Biocpkg("batchelor")` package provides an implementation of the MNN appro
 We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen`.
 To reduce computational work and technical noise, all cells in all batches are projected into the low-dimensional space defined by the top `d` principal components.
 Identification of MNNs and calculation of correction vectors are then performed in this low-dimensional space.
-
-```{r, echo=FALSE}
-## NOTE: Hack, as HDF5Matrix class seems to be broken.
-logcounts(pbmc3k) <- as(logcounts(pbmc3k), "dgCMatrix")
-logcounts(pbmc4k) <- as(logcounts(pbmc4k), "dgCMatrix")
-```
 
 ```{r}
 # Using randomized SVD here, as this is faster than 
