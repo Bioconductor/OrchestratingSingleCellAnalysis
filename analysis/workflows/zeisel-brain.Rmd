@@ -1,48 +1,141 @@
+# Mouse brain dataset 
+
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 ```
 
+## Introduction
+
+This performs an analysis of the @zeisel2015brain C1 dataset,
+consisting of mouse brain cells.
+
+## Analysis
+
+### Data loading
+
+We remove repeats and merge together redundant rows for the same gene.
+
 ```{r loading}
 library(scRNAseq)
 sce.zeisel <- ZeiselBrainData()
-
-# Removing repeats.
 sce.zeisel <- sce.zeisel[rowData(sce.zeisel)$featureType!="repeat",]
 
-# Merging together redundant rows for the same gene.
-raw.names <- sub("_loc[0-9]+$", "", rownames(sce.zeisel))
-new.counts <- rowsum(counts(sce.zeisel), group=raw.names, reorder=FALSE)
-sce.zeisel <- sce.zeisel[match(rownames(new.counts), raw.names),]
-counts(sce.zeisel) <- new.counts
-rownames(sce.zeisel) <- rownames(new.counts)
+library(scater)
+sce.zeisel <- aggregateAcrossFeatures(sce.zeisel, 
+    id=sub("_loc[0-9]+$", "", rownames(sce.zeisel)))
 ```
 
+### Gene annotation
+
 ```{r gene-annotation}
-# Adding Ensembl IDs.
 library(org.Mm.eg.db)
 ensembl <- mapIds(org.Mm.eg.db, keys=rownames(sce.zeisel), 
     keytype="SYMBOL", column="ENSEMBL")
 rowData(sce.zeisel)$ENSEMBL <- ensembl
 ```
 
-```{r quality-control}
-# Skipping: assuming that QC was performed by the original authors.
+### Quality control
+
+```{r}
+unfiltered <- sce.zeisel
 ```
+
+```{r quality-control}
+stats <- perCellQCMetrics(sce.zeisel)
+qc <- quickCellQC(stats, percent_subsets="altexps_ERCC_percent", nmads=3)
+sce.zeisel <- sce.zeisel[,!qc$discard]
+```
+
+### Normalization
 
 ```{r normalization}
 library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.zeisel)
 sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clusters, min.mean=0.1)
-
-library(scater)
 sce.zeisel <- logNormCounts(sce.zeisel)
 ```
 
+### Variance modelling
+
 ```{r variance-modelling}
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
-
-# Taking 10% of the genes with the top biological components.
-ordered.genes <- rownames(dec.zeisel)[order(dec.zeisel$bio, decreasing=TRUE)]
-chosen.hvgs <- head(ordered.genes, 0.1 * nrow(dec.zeisel))
 ```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101011001)
+sce.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, BSPARAM=IrlbaParam())
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA")
+```
+
+### Clustering
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.zeisel, use.dimred="PCA")
+sce.zeisel$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="altexps_ERCC_percent",
+        colour_by="discard") + ggtitle("ERCC percent"),
+    ncol=2
+)
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.zeisel))
+```
+
+```{r}
+plot(librarySizeFactors(sce.zeisel), sizeFactors(sce.zeisel), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r}
+plot(dec.zeisel$mean, dec.zeisel$total, pch=16, cex=0.5,
+    xlab="Mean of log-expression", ylab="Variance of log-expression")
+curfit <- metadata(dec.zeisel)
+points(curfit$mean, curfit$var, col="red", pch=16)
+curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.zeisel, "PCA"))
+```
+
+### Clustering
+
+```{r}
+table(sce.zeisel$cluster)
+```
+
+```{r}
+plotTSNE(sce.zeisel, colour_by="cluster")
+```
+
+## References {-}
