@@ -153,6 +153,12 @@ curfit <- metadata(dec.mam)
 curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
 ```
 
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.mam, "PCA"))
+```
+
 ### Clustering
 
 ```{r}

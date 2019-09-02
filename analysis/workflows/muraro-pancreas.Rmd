@@ -37,6 +37,8 @@ rownames(sce.muraro) <- gene.ids[keep]
 
 ### Quality control
 
+This dataset lacks mitochondrial genes so we will do without.
+
 ```{r}
 unfiltered <- sce.muraro
 ```
@@ -91,11 +93,11 @@ colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 
 gridExtra::grid.arrange(
-    plotColData(unfiltered, y="sum", colour_by="discard") +
+    plotColData(unfiltered, x="donor", y="sum", colour_by="discard") +
         scale_y_log10() + ggtitle("Total count"),
-    plotColData(unfiltered, y="detected", colour_by="discard") +
+    plotColData(unfiltered, x="donor", y="detected", colour_by="discard") +
         scale_y_log10() + ggtitle("Detected features"),
-    plotColData(unfiltered, y="altexps_ERCC_percent",
+    plotColData(unfiltered, x="donor", y="altexps_ERCC_percent",
         colour_by="discard") + ggtitle("ERCC percent"),
     ncol=2
 )

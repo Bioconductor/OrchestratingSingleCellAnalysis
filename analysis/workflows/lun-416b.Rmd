@@ -47,7 +47,8 @@ unfiltered <- sce.416b
 ```{r quality-control}
 mito <- which(rowData(sce.416b)$SEQNAME=="MT")
 stats <- perCellQCMetrics(sce.416b, subsets=list(Mt=mito))
-qc <- quickCellQC(stats, percent_subsets="subsets_Mt_percent")
+qc <- quickCellQC(stats, percent_subsets="subsets_Mt_percent",
+    nmads=3, batch=sce.416b$block)
 sce.416b <- sce.416b[,!qc$discard]
 ```
 
@@ -163,6 +164,12 @@ for (i in colnames(blocked.stats)) {
     points(curfit$mean, curfit$var, col="red", pch=16)
     curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
 }
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.mam, "PCA"))
 ```
 
 ### Clustering

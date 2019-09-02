@@ -34,7 +34,7 @@ rownames(sce.grun) <- gene.ids[keep]
 
 ### Quality control
 
-All batches have quite few cells, considering the complexity of the tissue, so we will not block on batch here.
+This dataset lacks mitochondrial genes so we will do without.
 
 ```{r}
 unfiltered <- sce.grun
@@ -77,8 +77,6 @@ sce.grun <- runTSNE(sce.grun, dimred="PCA")
 
 ### Clustering
 
-We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` later).
-
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.grun, use.dimred="PCA")
 sce.grun$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
@@ -93,11 +91,11 @@ colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 
 gridExtra::grid.arrange(
-    plotColData(unfiltered, y="sum", colour_by="discard") +
+    plotColData(unfiltered, x="donor", y="sum", colour_by="discard") +
         scale_y_log10() + ggtitle("Total count"),
-    plotColData(unfiltered, y="detected", colour_by="discard") +
+    plotColData(unfiltered, x="donor", y="detected", colour_by="discard") +
         scale_y_log10() + ggtitle("Detected features"),
-    plotColData(unfiltered, y="altexps_ERCC_percent",
+    plotColData(unfiltered, x="donor", y="altexps_ERCC_percent",
         colour_by="discard") + ggtitle("ERCC percent"),
     ncol=2
 )
@@ -133,6 +131,12 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.grun, "PCA"))
+```
+
 ### Clustering
 
 ```{r}
@@ -141,6 +145,7 @@ table(sce.grun$cluster)
 
 ```{r}
 plotTSNE(sce.grun, colour_by="cluster")
+plotTSNE(sce.grun, colour_by="donor")
 ```
 
 ## References {-}
