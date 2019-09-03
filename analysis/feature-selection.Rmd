@@ -25,7 +25,7 @@ Several methods are available to quantify the variation per gene and to select t
 For demonstration, we will use the 10X PBMC dataset:
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/tenx-filtered-pbmc4k", "normalization", "sce.pbmc")
+extractCached("workflows/tenx-unfiltered-pbmc4k", "normalization", "sce.pbmc")
 ```
 
 ```{r}
