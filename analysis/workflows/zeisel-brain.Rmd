@@ -60,7 +60,7 @@ sce.zeisel <- logNormCounts(sce.zeisel)
 
 ```{r variance-modelling}
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
-chosen.hvgs <- dec.zeisel$bio > 0
+chosen.hvgs <- which(dec.zeisel$bio > 0)
 ```
 
 ### Dimensionality reduction
