@@ -191,7 +191,9 @@ for (i in n) {
 }
 
 data.frame(n.pcs=n, n.clusters=collected)
-n[collected-1==n]
+
+# Getting (one of) the closest n.pcs to n.clusters - 1.
+n[which.min(abs(collected-1-n))]
 ```
 
 This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
