@@ -88,7 +88,7 @@ In the example below, we demonstrate that an `iSEE` app can be preconfigured to 
 
 ```{r}
 # Rank cells by decreasing library size
-colData(sce.pbmc)[["total_counts_rank"]] <- rank(-colData(sce.pbmc)[["total_counts"]])
+colData(sce.pbmc)[["total_counts_rank"]] <- rank(colSums(counts(sce.pbmc)))
 
 # Configure a "Column data plot" panel
 colDataArgs <- colDataPlotDefaults(sce.pbmc, 1)
