@@ -169,7 +169,7 @@ for (i in colnames(blocked.stats)) {
 ### Dimensionality reduction
 
 ```{r}
-ncol(reducedDim(sce.mam, "PCA"))
+ncol(reducedDim(sce.416b, "PCA"))
 ```
 
 ### Clustering
