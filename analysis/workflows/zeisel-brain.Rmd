@@ -60,10 +60,12 @@ sce.zeisel <- logNormCounts(sce.zeisel)
 
 ```{r variance-modelling}
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
-chosen.hvgs <- which(dec.zeisel$bio > 0)
 ```
 
 ### Dimensionality reduction
+
+Note that `denoisePCA()` automatically selects for genes with positive components, 
+so explicit specification of `subset.row=` is not required.
 
 ```{r dimensionality-reduction}
 library(BiocSingular)

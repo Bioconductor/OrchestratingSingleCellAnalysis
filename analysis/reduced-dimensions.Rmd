@@ -29,7 +29,7 @@ We will use the @zeisel2015brain dataset to demonstrate the applications of vari
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/zeisel-brain", "variance-modelling", 
-    c("sce.zeisel", "chosen.hvgs", "dec.zeisel"))
+    c("sce.zeisel", "dec.zeisel"))
 ```
 
 ```{r}
@@ -61,24 +61,24 @@ This motivates the use of the earlier PCs in our downstream analyses, which conc
 
 ### Performing the PCA
 
-We perform the PCA on the log-normalized expression values using the HVGs we selected earlier.
-By restricting to the HVGs, we reduce computational work and noise to improve the performance of the PCA.
-(While PCA is robust to noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure.)
-The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and store the coordinates in the output object.
+We perform the PCA on the log-normalized expression values using the `runPCA()` function from `r Biocpkg("scater")`.
+This is based on a mathematical technique called the singular decomposition decomposition (SVD).
+By default, `runPCA()` will use an exact SVD based on base R's `svd()` function and return the first 50 PCs for downstream analysis.
+These PCs are stored in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
 
 ```{r}
+chosen.hvgs <- head(order(dec.zeisel$bio, decreasing=TRUE), 2000)
+
 library(scater)
 sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs) 
 reducedDimNames(sce.zeisel)
-```
-
-The PCA is based on a mathematical technique called the singular decomposition decomposition (SVD).
-By default, `runPCA()` will use an exact SVD based on base R's `svd()` function.
-It then only keeps the first 50 PCs for downstream analysis.
-
-```{r}
 dim(reducedDim(sce.zeisel, "PCA"))
 ```
+
+In the example above, the PCA is performed on the top 2000 genes with the largest biological components to reduce computational work and noise.
+Specifically, PCA is generally robust to noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
+This effect can be avoided - or at least mitigated - by restricting the PCA to HVGs with large biological components. 
+Any of the selection strategies described in Chapter \@ref(feature-selection) could be used for feature selection here.
 
 For large data sets, greater efficiency is obtained by using approximate SVD algorithms that only compute the top PCs.
 For example, we can use methods from the `r CRANpkg("irlba")` package:
@@ -112,7 +112,7 @@ How many of the top PCs should we retain for downstream analyses?
 The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
 Using more PCs will avoid discarding biological signal in later PCs, at the cost of retaining more noise.
 Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
-This is often satisfactory^[Or in other words: if the choice of $d$ is your biggest concern, you must lead a blessed life.] provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
+This is often satisfactory provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
 Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of $d$.
 
 #### Using the elbow point
@@ -143,28 +143,26 @@ Strong biological variation in the early PCs will shift the elbow to the left, p
 Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
 For example, one might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
-Instead, we define $T$ as the proportion of variance in the data that is attributed to the biological component.
-This is done using the `denoisePCA()` function, which uses our estimates from `modelGeneVar()` (or related functions) to determine $d$.
+Instead, we obtain a suitable value for $T$ by calculating the proportion of variance in the data that is attributed to the biological component.
+This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVar()` or related functions.
 
 ```{r}
 library(scran)
 set.seed(001001001)
-
-# Setting max.rank=200 to circumvent the default max of 100.
-# Also setting BSPARAM to perform a fast SVD with IRLBA.
 denoised <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
-    subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
+    subset.row=chosen.hvgs, BSPARAM=IrlbaParam())
 ncol(reducedDim(denoised))
 ```
 
-This choice of $d$ represents the lower bound on the number of PCs required to retain all biological variation.
-Any fewer PCs will definitely discard variance in the biological component.
-In reality, the choice returned by `denoisePCA()` will only be optimal if the early PCs capture all the biological signal with minimal noise.
-This is unlikely to be true as the PCA cannot distinguish between technical noise and weak biological signal in the later PCs.
+The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation.
+Any fewer PCs will definitely discard some aspect of biological signal.
+Note that the converse is not true, i.e., there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.
+The returned value of $d$ provides a reasonable choice of rank when we want to retain as much signal as possible while still removing some noise.
 
 From a practical perspective, the `denoisePCA()` approach retains more PCs than the elbow point method.
 This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
-Whether this is a "better" outcome depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
+Thus, whether this is a "better" approach depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
 
 #### Based on population structure
 
@@ -193,7 +191,9 @@ for (i in n) {
 }
 
 data.frame(n.pcs=n, n.clusters=collected)
-n[collected-1==n]
+
+# Getting (one of) the closest n.pcs to n.clusters - 1.
+n[which.min(abs(collected-1-n))]
 ```
 
 This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
