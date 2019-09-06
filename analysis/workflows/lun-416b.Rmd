@@ -1,5 +1,3 @@
-# (PART) Workflows {-}
-
 # 416B Smart-seq2 dataset
 
 ```{r, echo=FALSE}
