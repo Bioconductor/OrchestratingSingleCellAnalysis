@@ -2,7 +2,7 @@
 
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE,
-                      dev = 'CairoPNG')
+                      dev = 'png')
 ```
 
 ## Introduction

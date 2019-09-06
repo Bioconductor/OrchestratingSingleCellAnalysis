@@ -5,7 +5,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE,
                       cache.extra = list(
                           R.version, sessionInfo(), format(Sys.Date(), '%Y-%m')
                       ),
-                      dev = 'CairoPNG')
+                      dev = 'png')
 options(digits = 4)
 library(BiocStyle)
 source("workflows/extractor.R")
