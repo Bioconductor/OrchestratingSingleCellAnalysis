@@ -1,7 +1,8 @@
 # Human pancreas dataset (Segerstolpe)
 
 ```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE,
+                      dev = 'CairoPNG')
 ```
 
 ## Introduction
