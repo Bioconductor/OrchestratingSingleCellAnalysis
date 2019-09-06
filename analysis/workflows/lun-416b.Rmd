@@ -188,4 +188,4 @@ table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
 plotTSNE(sce.416b, colour_by="cluster")
 ```
 
-## References
+## References {-}
