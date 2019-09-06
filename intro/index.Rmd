@@ -42,5 +42,5 @@ knitr::write_bib(c(
 ), 'packages.bib')
 ```
 
-_Version 0.0.2_
+_Version 0.0.1.9999_
 _Built on `r Sys.Date()`_
