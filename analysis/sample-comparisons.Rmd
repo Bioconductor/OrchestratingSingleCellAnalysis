@@ -688,4 +688,4 @@ head(final, 10)
 prettySessionInfo()
 ```
 
-## References {-}
+

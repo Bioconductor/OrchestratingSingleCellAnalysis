@@ -141,4 +141,4 @@ table(sce.lawlor$cluster)
 plotTSNE(sce.lawlor, colour_by="cluster")
 ```
 
-## References {-}
+

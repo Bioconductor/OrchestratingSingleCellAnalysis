@@ -160,4 +160,4 @@ table(sce.pbmc$cluster)
 plotTSNE(sce.pbmc, colour_by="cluster")
 ```
 
-## References {-}
+

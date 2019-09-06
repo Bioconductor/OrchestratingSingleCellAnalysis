@@ -126,4 +126,4 @@ plotUMAP(sce, colour_by="clusters")
 prettySessionInfo()
 ```
 
-## References {-}
+

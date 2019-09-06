@@ -397,4 +397,4 @@ It penalizes genes that exhibit inconsistent DE across batches, thus protecting 
 prettySessionInfo()
 ```
 
-## References {-}
+

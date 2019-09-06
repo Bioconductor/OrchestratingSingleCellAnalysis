@@ -285,4 +285,4 @@ For demontration and inspiration, we refer readers to the following examples of 
 prettySessionInfo()
 ```
 
-## References {-}
+

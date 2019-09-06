@@ -443,4 +443,4 @@ This reinforces the inappropriateness of using the marker gene $p$-values to mak
 prettySessionInfo()
 ```
 
-## References {-}
+

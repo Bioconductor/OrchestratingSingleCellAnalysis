@@ -238,4 +238,4 @@ In practice, though, the log-transformation is a good default choice due its sim
 prettySessionInfo()
 ```
 
-## References {-}
+

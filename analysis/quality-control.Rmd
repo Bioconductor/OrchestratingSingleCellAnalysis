@@ -473,4 +473,4 @@ Indeed, concerns over the computational removal of cell types during QC are prob
 prettySessionInfo()
 ```
 
-## References {-}
+

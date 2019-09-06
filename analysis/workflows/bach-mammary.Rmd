@@ -169,4 +169,4 @@ table(sce.mam$cluster)
 plotTSNE(sce.mam, colour_by="cluster")
 ```
 
-## References {-}
+
