@@ -18,8 +18,8 @@
 #' @importFrom knitr opts_chunk
 chapterPreamble <- function() {
     opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
-    suppressPackageStartUpMessages(require(BiocStyle))
-    if (require(Cairo, quietly=TRUE)) {
+    suppressPackageStartupMessages(require(BiocStyle))
+    if (suppressWarnings(require(Cairo, quietly=TRUE))) {
         opts_chunk$set(dev="CairoPNG")
     }
     options(digits = 4)
