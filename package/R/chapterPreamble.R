@@ -1,4 +1,4 @@
-#' Execute preamble code
+#' Execute chapter preamble code
 #'
 #' Execute code to set up knitr compilation flags, HTML content, load required packages, etc. at the start of every chapter.
 #'
@@ -16,7 +16,7 @@
 #' 
 #' @export
 #' @importFrom knitr opts_chunk
-executePreamble <- function() {
+chapterPreamble <- function() {
     opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE)
     suppressPackageStartUpMessages(require(BiocStyle))
     if (require(Cairo, quietly=TRUE)) {

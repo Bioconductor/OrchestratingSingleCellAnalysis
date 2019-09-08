@@ -1,52 +1,41 @@
-setupHTML <- function() 
-# Sets up the JS and CSS for the collapsible element.
-{
-    cat('<script>
-document.addEventListener("click", function (event) {
-    if (event.target.classList.contains("aaron-collapse")) {
-        event.target.classList.toggle("active");
-        var content = event.target.nextElementSibling;
-        if (content.style.display === "block") {
-          content.style.display = "none";
-        } else {
-          content.style.display = "block";
-        }
-    }
-})
-</script>
-
-<style>
-.aaron-collapse {
-  background-color: #eee;
-  color: #444;
-  cursor: pointer;
-  padding: 18px;
-  width: 100%;
-  border: none;
-  text-align: left;
-  outline: none;
-  font-size: 15px;
-}
-
-.aaron-content {
-  padding: 0 18px;
-  display: none;
-  overflow: hidden;
-  background-color: #f1f1f1;
-}
-</style>')
-}
-
-extractCached <- function(prefix, chunk, objects)
-# This function extracts the requested objects up to a requested chunk.
-# It expects that:
-# - all chunks to be stored are named.
-# - all chunks to be stored are executed (i.e., no eval=FALSE).
-# - all code occurs within triple backticks.
-# - all triple backticks occur at the start of the line.
-# - the report has already been compiled and its results cached.
-# - any modifications to variables are assumed to be done with '<-'.
-{
+#' Extract cached objects
+#' 
+#' Extract specific R objects from the knitr cache of a previously compiled Rmarkdown file.
+#'
+#' @param prefix String containing the prefix of the Rmarkdown file.
+#' @param chunk String containing the name of the requested chunk.
+#' @param objects Character vector containing variable names for one or more objects to be extracted.
+#'
+#' @details
+#' Each object is extracted in its state at the requested chunk at \code{chunk}.
+#' Note that the object does not have to be generated or even referenced in \code{chunk},
+#' provided it was generated in a previous chunk.
+#'
+#' The Rmarkdown file is also subject to several constraints.
+#' \itemize{
+#' \item All chunks that can be referenced by \code{chunk} are named.
+#' \item All named chunks are executed, i.e., no \code{eval=FALSE}.
+#' \item All relevant code occurs within triple backticks, i.e., any inline code should be read-only.
+#' \item All triple backticks occur at the start of the line, i.e., no code nested in list elements.
+#' \item The report with prefix \code{prefix} has already been compiled with \code{cache=TRUE}.
+#' \item Any assignment or modifications to variables are done \emph{correctly} with \code{<-}.
+#' }
+#' 
+#' Unnamed chunks are allowed but cannot be referenced and will not be shown in the output of this function.
+#' This should not be used for code that might affects varaiables in the named chunks.
+#'
+#' @return Variables with names \code{objects} are created in the global environment.
+#' A markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
+#' based on the code in the named chunks of the Rmarkdown file.
+#' 
+#' @author Aaron Lun
+#'
+#' @seealso
+#' \code{\link{setupHTML}} and \code{\link{chapterPreamble}}, to set up the code for the collapsible element.
+#' 
+#' @export
+#' @importFrom knitr opts_chunk load_cache
+extractCached <- function(prefix, chunk, objects) {
     all.lines <- readLines(paste0(prefix, ".Rmd"))
 
     # Extracting chunks until we get to the one with 'chunk'.
@@ -79,9 +68,9 @@ extractCached <- function(prefix, chunk, objects)
     chunks <- chunks[seq_len(m)]
 
     # Collecting all variable names and loading them into the global namespace.
-    if (is.null(old <- knitr::opts_knit$get("output.dir"))) {
-        knitr::opts_knit$set(output.dir=".")
-        on.exit(knitr::opts_knit$set(output.dir=old))
+    if (is.null(old <- opts_knit$get("output.dir"))) {
+        opts_knit$set(output.dir=".")
+        on.exit(opts_knit$set(output.dir=old))
     }
     cache_path <- file.path(paste0(prefix, "_cache"), "html/")
 
@@ -93,7 +82,7 @@ extractCached <- function(prefix, chunk, objects)
         for (x in rev(names(chunks))) {
             if (found <- any(grepl(assign.pattern, chunks[[x]]))) {
                 assign(obj, envir=.GlobalEnv, 
-                    value=knitr::load_cache(label=x, object=obj, path=cache_path))
+                    value=load_cache(label=x, object=obj, path=cache_path))
                 break
             }
         }
@@ -124,20 +113,3 @@ extractCached <- function(prefix, chunk, objects)
 </div>\n")
     invisible(NULL)
 }
-
-
-## Pretty (collapsible) printing of R Session info
-## must follow after setupHTML() is run that defines collapsible div class
-prettySessionInfo <- function() {
-    ## grab session info printed output
-    X <- capture.output(sessionInfo())
-
-    ## print session info out into collapsible div
-    cat('<button class="aaron-collapse">View session info</button>
-<div class="aaron-content">\n')
-    cat(c("```", X, "```"), sep="\n")
-    cat("</div>\n")
-
-    invisible(NULL)
-}
-
