@@ -176,11 +176,11 @@ We can use this reasoning to loosely motivate an _a priori_ choice for $d$ -
 for example, if we expect around 10 different cell types in our population, we would set $d \approx 10$.
 
 In practice, the number of subpopulations is usually not known in advance.
-Earlier PCs may also be driven by internal variation within large subpopulations, requiring us to retain more PCs than expected to resolve minor subpopulations.
-To deal with these issues, we use a heuristic approach that uses the number of clusters as a proxy for the number of subpopulations.
-The `getClusteredPCs()` approach performs graph-based clustering (Chapter \@ref(clustering)) to identify the number of clusters across a range of choices for $d$.
-We then set $d$ to the number of PCs that yields the largest number of clusters that is no more than $d+1$ (Figure \@ref(fig:cluster-pc-choice)).
-This attempts to capture as many distinct (putative) subpopulations as possible by retaining biological signal in later PCs - up until the point that the additional noise reduces resolution - while respecting the theoretical constraints on the minimum number of PCs required to resolve those subpopulations.
+Rather, we use a heuristic approach that uses the number of clusters as a proxy for the number of subpopulations.
+We perform clustering (graph-based by default, see Chapter \@ref(clustering)) on the first $d^*$ PCs and only consider the values of $d^*$ that yield no more than $d^*+1$ clusters.
+If we detect more clusters with fewer dimensions, we consider this to represent overclustering rather than distinct subpopulations, assuming that multiple subpopulations should not be distinguishable on the same axes.
+We test a range of $d^*$ and set $d$ to the value that maximizes the number of clusters while satisfying the above condition.
+This attempts to capture as many distinct (putative) subpopulations as possible by retaining biological signal in later PCs, up until the point that the additional noise reduces resolution.
 
 ```{r cluster-pc-choice, fig.cap="Number of clusters detected in the Zeisel brain dataset as a function of the number of PCs. The red unbroken line represents the theoretical upper constraint on the number of clusters, while the grey dashed line is the number of PCs suggested by `getClusteredPCs()`."}
 pcs <- reducedDim(sce.zeisel)
