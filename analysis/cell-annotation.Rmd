@@ -33,11 +33,83 @@ Labels can then be assigned to each cell in our uncharacterized test dataset bas
 This is a standard classification challenge that can be tackled by standard machine learning techniques such as random forests and support vector machines.
 Any published and labelled RNA-seq dataset (bulk or single-cell) can be used as a reference, though its reliability depends greatly on the expertise of the original authors who assigned the labels in the first place. 
 
-In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method for cell type annotation.
+In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method [@aran2019reference] for cell type annotation.
 This method assigns labels to cells based on the reference samples with the highest Spearman rank correlations, and thus can be considered a rank-based variant of $k$-nearest-neighbor classification.
 To reduce noise, `r Biocpkg("SingleR")` identifies marker genes between pairs of labels and computes the correlation using only those markers.
 It also performs a fine-tuning step for each cell where calculation of the correlations is repeated with just the marker genes for the top-scoring labels.
-This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels. 
+This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels.
+
+### Using the in-built references
+
+`r Biocpkg("SingleR")` contains a number of built-in reference datasets, mostly assembled from bulk RNA-seq or microarray data of sorted cell types.
+These built-in references are often good enough for most applications, provided that they contain the cell types that are expected in the test population.
+We will demonstrate on the 10X PBMC dataset using a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated].
+
+```{r}
+extractCached("workflows/tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+```
+
+```{r}
+sce.pbmc
+```
+
+We label our PBMCs using the `SingleR()` function with the main cell type labels in the reference.
+This returns a `DataFrame` where each row corresponds to a cell in the test dataset and contains its label assignments.
+Alternatively, we could use the labels in `ref$label.fine`, which provide more resolution at the cost of speed and increased ambiguity in the assignments.
+
+```{r}
+library(SingleR)
+ref <- BlueprintEncodeData()
+pred <- SingleR(test=sce.pbmc, ref=ref, labels=ref$label.main)
+table(pred$labels)
+```
+
+We inspect the results using a heatmap of the per-cell and label scores (Figure \@ref(fig:singler-heat-pbmc)).
+Ideally, each cell should exhibit a high score in one label relative to all of the others, indicating that the assignment to that label was unambiguous.
+This is largely the case for monocytes and B cells, whereas we see more ambiguity between CD4^+^ and CD8^+^ T cells (and to a lesser extent, NK cells).
+
+```{r singler-heat-pbmc, fig.wide=TRUE, fig.cap="Heatmap of the assignment score for each cell (column) and label (row). Scores are shown before any fine-tuning and are normalized to [0, 1] within each cell."}
+plotScoreHeatmap(pred)
+```
+
+`SingleR()` will also attempt to prune out low-quality assignments by marking them as `NA`.
+This is done based on the per-cell "delta", i.e., the difference of the assigned label's score from the median score within each cell.
+Small deltas indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
+We set a minimum threshold on the acceptable delta using an outlier-based approach for each label, where deltas that are substantially lower than the majority of deltas for a given label are marked for pruning (Figure \@ref(fig:singler-dist-pbmc)).
+This results in the presence of `NA` labels for a small number of cells in the major types.
+Pruning with custom parameters can be achieved by explicitly calling the `pruneScores()` function.
+
+```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell deltas for each label. Each panel corresponds to one label and contains the deltas for cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label. The red lines marks the delta of zero."}
+sum(is.na(pred$pruned.labels))
+plotScoreDistribution(pred, show.min.diff=0)
+```
+
+We compare the assignments with the clustering results to determine the identity of each cluster.
+The monocyte and B cell labels correspond to a number of nested clusters, suggesting the the latter represent finer subdivisions within the former.
+However, the clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cells.
+We attribute this to the fact that the clustering is driven by other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated).
+
+```{r}
+table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+```
+
+```{r, echo=FALSE}
+tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+tab <- t(t(tab)/colSums(tab))*100
+
+# Checking that no cluster is enriched for CD4 T cells, supporting
+# the text 
+stopifnot(all(tab["CD4+ T-cells",] < 90, na.rm=TRUE))
+stopifnot(any(tab["CD8+ T-cells",] > 90, na.rm=TRUE))
+```
+
+This episode highlights some of the differences between reference-based annotation and unsupervised clustering.
+The former explicitly focuses on aspects of the data that are known to be interesting, simplifying the process of biological interpration.
+However, the cost is that the downstream analysis is restricted by the diversity and resolution of the available labels.
+We suggest using both strategies and, if major disagreements are present between label and cluster assignments, use them as the basis for further investigation to discover effects that are not captured by the reference.
+
+### Using custom references
+
 
 ## Assigning cell labels from gene sets
 
