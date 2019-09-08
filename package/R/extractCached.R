@@ -34,7 +34,7 @@
 #' \code{\link{setupHTML}} and \code{\link{chapterPreamble}}, to set up the code for the collapsible element.
 #' 
 #' @export
-#' @importFrom knitr opts_chunk load_cache
+#' @importFrom knitr opts_knit load_cache
 extractCached <- function(prefix, chunk, objects) {
     all.lines <- readLines(paste0(prefix, ".Rmd"))
 
