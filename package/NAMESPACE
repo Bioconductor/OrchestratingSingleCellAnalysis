@@ -2,6 +2,7 @@
 
 export(chapterPreamble)
 export(extractCached)
+export(fetchImage)
 export(prettySessionInfo)
 export(setupHTML)
 importFrom(knitr,load_cache)

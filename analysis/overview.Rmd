@@ -13,12 +13,8 @@ This chapter provides an overview of the framework of a typical scRNA-seq analys
 Subsequent chapters will describe each analysis step in more detail.
 
 ```{r scworkflow, fig.width=6, fig.asp=1.2, fig.cap="Schematic of a typical scRNA-seq analysis workflow. Each stage (separated by dashed lines) consists of a number of specific steps, many of which operate on and modify a `SingleCellExperiment` instance.", echo=FALSE}
-path <- "images/Workflow.png"
-if (!file.exists(path)) {
-    path <- tempfile(fileext=".png")
-    download.file("https://raw.githubusercontent.com/Bioconductor/OrchestratingSingleCellAnalysis/master/images/Workflow.png",
-        path)
-}
+path <- fetchImage(path="images/Workflow.png",
+    url="https://raw.githubusercontent.com/Bioconductor/OrchestratingSingleCellAnalysis/master/images/Workflow.png")
 knitr::include_graphics(path)
 ```
 
