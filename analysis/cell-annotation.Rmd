@@ -85,9 +85,10 @@ plotScoreDistribution(pred, show.min.diff=0)
 ```
 
 We compare the assignments with the clustering results to determine the identity of each cluster.
-The monocyte and B cell labels correspond to a number of nested clusters, suggesting the the latter represent finer subdivisions within the former.
-However, the clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cells.
-We attribute this to the fact that the clustering is driven by other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated).
+Ideally, clusters and labels would have a 1:1 relationship, though some nesting is likely depending on the resolution of the clustering algorithm.
+For example, several clusters are nested within the monocyte and B cell labels, suggesting the the former represent finer subdivisions within the latter.
+Interestingly, the clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
+We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated) that have a stronger influence on the clustering than the CD4/CD8 distinction.
 
 ```{r}
 table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
@@ -218,7 +219,7 @@ head(results)
 
 We assign cell type identity to each cell in the test dataset by taking the marker set with the top AUC as the label for that cell.
 Our new labels mostly agree with the original annotation from @tasic2016adult, which is encouraging.
-The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be acceptable given that they are derived from a common lineage.
+The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be understandable given that they are derived from a common lineage.
 In the absence of prior annotation, a more general diagnostic check is to compare the assigned labels to cluster identities, under the expectation that most cells of a single cluster would have the same label (or, if multiple labels are present, they should at least represent closely related cell states).
 
 ```{r}
@@ -236,18 +237,19 @@ stopifnot(rand.index(
 ) > 0.95)
 ```
 
-Another simple diagnostic metric is the difference $\Delta$ between the maximum and median AUCs for each cell.
-An umambiguous assignment should manifest as a large $\Delta$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
-If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta$, e.g., to achieve greater agreement with the clustering results or prior annotation.
-The example below removes small outlier $\Delta$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
+Another simple diagnostic metric is the difference $\Delta_{AUC}$ between the maximum and median AUCs for each cell.
+An umambiguous assignment should manifest as a large $\Delta_{AUC}$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
+If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta_{AUC}$, e.g., to achieve greater agreement with the clustering results or prior annotation.
+The example below identifies small outlier $\Delta_{AUC}$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
 
-```{r aucell-boxplots, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label."}
-deltas <- rowMaxs(results) - rowMedians(results)
-boxplot(split(deltas, new.labels))
-
-library(scater)
+```{r aucell-boxplots, fig.asp=1, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label. The red cross indicates the threshold below which outliers are pruned."}
 discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
-table(new.labels[!discard], sce.tasic$broad_type[!discard])
+table(new.labels[discard])
+
+par(mar=c(10,4,1,1))
+deltas <- rowMaxs(results) - rowMedians(results)
+boxplot(split(deltas, new.labels), las=2)
+points(attr(discard, "thresholds")[1,], col="red", pch=4, cex=2)
 ```
 
 Interpretation of the `r Biocpkg("AUCell")` results is most straightforward when the marker sets are mutually exclusive, as shown above for the cell type markers.
@@ -312,7 +314,7 @@ We see an enrichment for genes involved lipid synthesis, cell adhesion and tube 
 Given that this is a mammary gland experiment, we might guess that cluster `r chosen.text` contains luminal epithelial cells responsible for milk production and secretion.
 Indeed, a closer examination of the marker list indicates that this cluster upregulates milk proteins _Csn2_ and _Csn3_ (Figure \@ref(fig:violin-milk)).
 
-```{r}
+```{r, echo=FALSE}
 # Checking that the above statements are correct.
 stopifnot(c("GO:0035148", "GO:0022408", "GO:0019432") %in% head(rownames(go.useful), 20))
 chosen <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
@@ -337,7 +339,7 @@ by.go <- split(tab[,1], tab[,2])
 
 # Identify genes associated with an interesting term.
 adhesion <- unique(by.go[["GO:0022408"]])
-head(cur.markers[adhesion,1:3], 10)
+head(cur.markers[rownames(cur.markers) %in% adhesion,1:3], 10)
 ```
 
 Gene set testing of marker lists is a reliable approach for determining if pathways are up- or down-regulated between clusters.
