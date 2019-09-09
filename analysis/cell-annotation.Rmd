@@ -73,11 +73,11 @@ plotScoreHeatmap(pred)
 ```
 
 `SingleR()` will also attempt to prune out low-quality assignments by marking them as `NA`.
-This is done based on the per-cell "delta", i.e., the difference of the assigned label's score from the median score within each cell.
+This is done based on the per-cell "delta", the difference of the assigned label's score from the median score within each cell.
 Small deltas indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
-We set a minimum threshold on the acceptable delta using an outlier-based approach for each label, where deltas that are substantially lower than the majority of deltas for a given label are marked for pruning (Figure \@ref(fig:singler-dist-pbmc)).
-This results in the presence of `NA` labels for a small number of cells in the major types.
-Pruning with custom parameters can be achieved by explicitly calling the `pruneScores()` function.
+We set a minimum threshold on the acceptable delta using an outlier-based approach for each label, where labels with deltas that are substantially lower than the majority of deltas for a given label are marked for pruning (Figure \@ref(fig:singler-dist-pbmc)).
+This results in the presence of `NA` labels for a small number of cells in our example.
+If necessary, users can control the pruning by supplying custom parameters to the `pruneScores()` function.
 
 ```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell deltas for each label. Each panel corresponds to one label and contains the deltas for cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label. The red lines marks the delta of zero."}
 sum(is.na(pred$pruned.labels))
@@ -104,9 +104,9 @@ stopifnot(any(tab["CD8+ T-cells",] > 90, na.rm=TRUE))
 ```
 
 This episode highlights some of the differences between reference-based annotation and unsupervised clustering.
-The former explicitly focuses on aspects of the data that are known to be interesting, simplifying the process of biological interpration.
+The former explicitly focuses on aspects of the data that are known to be interesting, simplifying the process of biological interpretation.
 However, the cost is that the downstream analysis is restricted by the diversity and resolution of the available labels.
-We suggest using both strategies and, if major disagreements are present between label and cluster assignments, use them as the basis for further investigation to discover effects that are not captured by the reference.
+We suggest applying both strategies and, if major disagreements are present between reference label and cluster assignments, using those discrepancies as the basis for further investigation to discover novel effects.
 
 ### Using custom references
 
