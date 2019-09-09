@@ -165,9 +165,11 @@ With `pval.type="all"`, neither _Cd4_ or _Cd8_ would be detected as subpopulatio
 In comparison, `pval.type="any"` will detect both of these genes as they will be DE between at least one pair of subpopulations.
 
 If `pval.type="all"` is too stringent yet `pval.type="any"` is too generous, a compromise is to set `pval.type="some"`.
-This orders genes in the marker list by the Simes' combined $p$-value, which favors genes that are strongly DE in multiple comparisons but is still sensitive to strong DE in a single pairwise comparison.
-The aim is to improve the conciseness of the top markers for defining a cluster while mitigating the risk of discarding useful genes.
-The downside is that taking this compromise position sacrifices the theoretical certainties offered at the other two extremes.
+For each gene, we apply the Holm-Bonferroni correction across its $p$-values and take the middle-most value as the combined $p$-value.
+This effectively tests the global null hypothesis that at least 50% of the individual pairwise comparisons exhibit no DE.
+We then rank the genes by their combined $p$-values to obtain an ordered set of marker candidates.
+The aim is to improve the conciseness of the top markers for defining a cluster while mitigating the risk of discarding useful genes that are not DE to all other clusters.
+The downside is that taking this compromise position sacrifices the theoretical guarantees offered at the other two extremes.
 
 ```{r}
 markers.pbmc.up4 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
