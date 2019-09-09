@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Cell type annotation
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 ## Motivation
@@ -32,11 +33,143 @@ Labels can then be assigned to each cell in our uncharacterized test dataset bas
 This is a standard classification challenge that can be tackled by standard machine learning techniques such as random forests and support vector machines.
 Any published and labelled RNA-seq dataset (bulk or single-cell) can be used as a reference, though its reliability depends greatly on the expertise of the original authors who assigned the labels in the first place. 
 
-In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method for cell type annotation.
+In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method [@aran2019reference] for cell type annotation.
 This method assigns labels to cells based on the reference samples with the highest Spearman rank correlations, and thus can be considered a rank-based variant of $k$-nearest-neighbor classification.
 To reduce noise, `r Biocpkg("SingleR")` identifies marker genes between pairs of labels and computes the correlation using only those markers.
 It also performs a fine-tuning step for each cell where calculation of the correlations is repeated with just the marker genes for the top-scoring labels.
-This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels. 
+This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels.
+
+### Using the in-built references
+
+`r Biocpkg("SingleR")` contains a number of built-in reference datasets, mostly assembled from bulk RNA-seq or microarray data of sorted cell types.
+These built-in references are often good enough for most applications, provided that they contain the cell types that are expected in the test population.
+We will demonstrate on the 10X PBMC dataset using a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated].
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+```
+
+```{r}
+sce.pbmc
+```
+
+We label our PBMCs using the `SingleR()` function with the main cell type labels in the reference.
+This returns a `DataFrame` where each row corresponds to a cell in the test dataset and contains its label assignments.
+Alternatively, we could use the labels in `ref$label.fine`, which provide more resolution at the cost of speed and increased ambiguity in the assignments.
+
+```{r}
+library(SingleR)
+ref <- BlueprintEncodeData()
+pred <- SingleR(test=sce.pbmc, ref=ref, labels=ref$label.main)
+table(pred$labels)
+```
+
+We inspect the results using a heatmap of the per-cell and label scores (Figure \@ref(fig:singler-heat-pbmc)).
+Ideally, each cell should exhibit a high score in one label relative to all of the others, indicating that the assignment to that label was unambiguous.
+This is largely the case for monocytes and B cells, whereas we see more ambiguity between CD4^+^ and CD8^+^ T cells (and to a lesser extent, NK cells).
+
+```{r singler-heat-pbmc, fig.wide=TRUE, fig.cap="Heatmap of the assignment score for each cell (column) and label (row). Scores are shown before any fine-tuning and are normalized to [0, 1] within each cell."}
+plotScoreHeatmap(pred)
+```
+
+`SingleR()` will also attempt to prune out low-quality assignments by marking them as `NA`.
+This is done based on the per-cell "delta", the difference of the assigned label's score from the median score within each cell.
+Small deltas indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
+We set a minimum threshold on the acceptable delta using an outlier-based approach for each label, where labels with deltas that are substantially lower than the majority of deltas for a given label are marked for pruning (Figure \@ref(fig:singler-dist-pbmc)).
+This results in the presence of `NA` labels for a small number of cells in our example.
+If necessary, users can control the pruning by supplying custom parameters to the `pruneScores()` function.
+
+```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell deltas for each label. Each panel corresponds to one label and contains the deltas for cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label. The red lines marks the delta of zero."}
+sum(is.na(pred$pruned.labels))
+plotScoreDistribution(pred, show.min.diff=0)
+```
+
+We compare the assignments with the clustering results to determine the identity of each cluster.
+Ideally, clusters and labels would have a 1:1 relationship, though some nesting is likely depending on the resolution of the clustering algorithm.
+For example, several clusters are nested within the monocyte and B cell labels, suggesting the the former represent finer subdivisions within the latter.
+Interestingly, the clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
+We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated) that have a stronger influence on the clustering than the CD4/CD8 distinction.
+
+```{r}
+table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+```
+
+```{r, echo=FALSE}
+tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+tab <- t(t(tab)/colSums(tab))*100
+
+# Checking that no cluster is enriched for CD4 T cells, supporting
+# the text 
+stopifnot(all(tab["CD4+ T-cells",] < 90, na.rm=TRUE))
+stopifnot(any(tab["CD8+ T-cells",] > 90, na.rm=TRUE))
+```
+
+This episode highlights some of the differences between reference-based annotation and unsupervised clustering.
+The former explicitly focuses on aspects of the data that are known to be interesting, simplifying the process of biological interpretation.
+However, the cost is that the downstream analysis is restricted by the diversity and resolution of the available labels.
+We suggest applying both strategies and, if major disagreements are present between reference label and cluster assignments, using those discrepancies as the basis for further investigation to discover novel effects.
+
+### Using custom references
+
+A similar process is used to use `r Biocpkg("SingleR")` with user-supplied reference datasets.
+For bulk references, the same code shown above can be used, while some additional work is required for single-cell references.
+To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/muraro-pancreas", "normalization", "sce.muraro")
+```
+
+```{r}
+sce.muraro
+sce.muraro <- sce.muraro[,!is.na(sce.muraro$label) & 
+    sce.muraro$label!="unclear"]
+table(sce.muraro$label)
+```
+
+We use methods from `r Biocpkg("scran")` to generate marker sets for every reference label (Chapter \@ref(marker-detection)).
+Here, we use the `pairwiseWilcox()` and `getTopMarkers()` functions to take the top 10 upregulated genes from each pairwise comparison between reference labels, using the Wilcoxon test with a log-fold change threshold of 1.
+This enables us to select a custom set of marker genes that is both discriminative and concise - this is faster to run and often more effective for single-cell references than the default marker set that is auto-generated inside `SingleR()`.
+(We could also use this custom approach for our bulk references, but the default is more convenient and often works well enough.)
+
+```{r}
+library(scran)
+pairwise.muraro <- pairwiseWilcox(logcounts(sce.muraro),
+    sce.muraro$label, direction="up", lfc=1)
+muraro.markers <- getTopMarkers(pairwise.muraro$statistics,
+    pairwise.muraro$pairs, n=10)
+muraro.markers
+```
+
+We use these newly identified markers in `SingleR()` to assign labels to our test dataset from @segerstolpe2016singlecell.
+As it so happens, we are in the fortunate position where our test dataset also contains independently defined labels.
+We see strong consistency between the two sets of labels (Figure \@ref(singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/segerstolpe-pancreas", "normalization", "sce.seger")
+```
+
+```{r singler-comp-pancreas, fig.cap="Heatmap of the confusion matrix between the predicted labels (rows) and the independently defined labels (columns) in the Segerstolpe dataset. The color is proportinal to the log-transformed number of cells with a given combination of labels from each set."}
+pred.seger <- SingleR(test=sce.seger, ref=sce.muraro, 
+    labels=sce.muraro$label, genes=muraro.markers)
+table(pred.seger$labels)
+tab <- table(pred.seger$pruned.labels, sce.seger$CellType)
+library(pheatmap)
+pheatmap(log2(tab+1), color=colorRampPalette(c("white", "blue"))(101))
+```
+
+```{r, echo=FALSE}
+# Checking that I'm not just talking shit.
+library(fossil)
+stopifnot(rand.index(
+    as.integer(factor(pred.seger$labels)), 
+    as.integer(factor(sce.seger$CellType))
+) > 0.95)
+```
+
+An interesting question is - given a single-cell reference dataset, is it better to use it directly or convert it to pseudo-bulk values?
+A single-cell reference preserves the "shape" of the subpopulation in high-dimensional expression space, potentially yielding more accurate predictions when the differences between labels are subtle (or at least capturing ambiguity more accurately to avoid grossly incorrect predictions).
+However, it also requires more computational work to assign each cell in the test dataset.
+We tend to prefer using a single-cell reference directly when one is available, though it is unlikely to make much difference when the labels are well-separated.
 
 ## Assigning cell labels from gene sets
 
@@ -86,7 +219,7 @@ head(results)
 
 We assign cell type identity to each cell in the test dataset by taking the marker set with the top AUC as the label for that cell.
 Our new labels mostly agree with the original annotation from @tasic2016adult, which is encouraging.
-The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be acceptable given that they are derived from a common lineage.
+The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be understandable given that they are derived from a common lineage.
 In the absence of prior annotation, a more general diagnostic check is to compare the assigned labels to cluster identities, under the expectation that most cells of a single cluster would have the same label (or, if multiple labels are present, they should at least represent closely related cell states).
 
 ```{r}
@@ -104,18 +237,19 @@ stopifnot(rand.index(
 ) > 0.95)
 ```
 
-Another simple diagnostic metric is the difference $\Delta$ between the maximum and median AUCs for each cell.
-An umambiguous assignment should manifest as a large $\Delta$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
-If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta$, e.g., to achieve greater agreement with the clustering results or prior annotation.
-The example below removes small outlier $\Delta$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
+Another simple diagnostic metric is the difference $\Delta_{AUC}$ between the maximum and median AUCs for each cell.
+An umambiguous assignment should manifest as a large $\Delta_{AUC}$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
+If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta_{AUC}$, e.g., to achieve greater agreement with the clustering results or prior annotation.
+The example below identifies small outlier $\Delta_{AUC}$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
 
-```{r aucell-boxplots, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label."}
-deltas <- rowMaxs(results) - rowMedians(results)
-boxplot(split(deltas, new.labels))
-
-library(scater)
+```{r aucell-boxplots, fig.asp=1, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label. The red cross indicates the threshold below which outliers are pruned."}
 discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
-table(new.labels[!discard], sce.tasic$broad_type[!discard])
+table(new.labels[discard])
+
+par(mar=c(10,4,1,1))
+deltas <- rowMaxs(results) - rowMedians(results)
+boxplot(split(deltas, new.labels), las=2)
+points(attr(discard, "thresholds")[1,], col="red", pch=4, cex=2)
 ```
 
 Interpretation of the `r Biocpkg("AUCell")` results is most straightforward when the marker sets are mutually exclusive, as shown above for the cell type markers.
@@ -180,7 +314,7 @@ We see an enrichment for genes involved lipid synthesis, cell adhesion and tube 
 Given that this is a mammary gland experiment, we might guess that cluster `r chosen.text` contains luminal epithelial cells responsible for milk production and secretion.
 Indeed, a closer examination of the marker list indicates that this cluster upregulates milk proteins _Csn2_ and _Csn3_ (Figure \@ref(fig:violin-milk)).
 
-```{r}
+```{r, echo=FALSE}
 # Checking that the above statements are correct.
 stopifnot(c("GO:0035148", "GO:0022408", "GO:0019432") %in% head(rownames(go.useful), 20))
 chosen <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
@@ -205,7 +339,7 @@ by.go <- split(tab[,1], tab[,2])
 
 # Identify genes associated with an interesting term.
 adhesion <- unique(by.go[["GO:0022408"]])
-head(cur.markers[adhesion,1:3], 10)
+head(cur.markers[rownames(cur.markers) %in% adhesion,1:3], 10)
 ```
 
 Gene set testing of marker lists is a reliable approach for determining if pathways are up- or down-regulated between clusters.

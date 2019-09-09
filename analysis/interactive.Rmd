@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Interactive Interfaces and Sharing {#interactive-sharing}
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 ## Motivation

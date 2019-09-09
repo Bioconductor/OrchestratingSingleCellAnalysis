@@ -34,11 +34,13 @@ As a consequence, compilation of many of the chapters depends on compilation of 
 Thus, all contributors should compile the latter first.
 Those writing new chapters should move all set-up code into a similar workflow 
 and exploit the `extractCached()` to obtain a starting point for their chapter.
-Also note the `setupHTML()` code chunk that is required at the top of each chapter to set up the code folding Javascript and CSS.
+Also note the `chapterPreamble()` code chunk that is required at the top of each chapter to set up the collapsible elements.
 
 ## Instructions
 
 ### To build the reports
+
+Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
 Before compilation of the chapters, the workflows must be compiled:
 
@@ -52,10 +54,11 @@ for (x in all.workflows) {
 Each chapter should be compilable as a standalone unit, depending only on the workflows and not on other chapters.
 As such, there is no need to compile chapters in any chronological order.
 
-```{r}
+```r
 rmarkdown::render("analysis/clustering.Rmd")
 rmarkdown::render("analysis/quality-control.Rmd")
 rmarkdown::render("analysis/reduced-dimensions.Rmd")
+# and so on.
 ```
 
 ### To contribute reports
@@ -65,5 +68,3 @@ Standard procedure: fork and PR.
 - All chapters must start from a `SingleCellExperiment` object.
 - All workflows should use a `SingleCellExperiment` object throughout the various chunks.
 This allows chapters to pick up the SCE at any point.
-
-@LTLA will review all incoming PRs for `analysis/`-related code.

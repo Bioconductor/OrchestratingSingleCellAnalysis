@@ -1,0 +1,17 @@
+Package: OSCAUtils
+Version: 0.0.1
+Title: Utilities to Compile the OSCA Book
+Authors@R:
+    person("Aaron", "Lun", email="infinite.monkeys.with.keyboards@gmail.com", role=c("aut", "cre", "cph"))
+Description: Provides specific utilities to compile the 
+    "Orchestrating Single Cell Analysis" book. This includes
+    Javascript and HTML chunk generators, setting of highly
+    custom knitr options, and so on. It is not intended for
+    any use other than book compilation.
+Imports:
+    knitr,
+    utils
+Suggests:
+    BiocStyle
+License: GPL-3
+RoxygenNote: 6.1.1

@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Adaptations for Large-scale Data
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 Large datasets such as the Human Cell Atlas (with over 1.3 million cells) have the potential to benefit from special adaptations that enable analysis in compute-constrained environments (such as personal laptops). Here, we briefly cover topics that aim to ease working with scRNA-seq data to make it faster and more tractable.

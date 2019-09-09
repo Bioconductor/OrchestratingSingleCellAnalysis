@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Dimensionality reduction
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 ## Overview
@@ -166,37 +167,32 @@ Thus, whether this is a "better" approach depends on the analyst's willingness t
 
 #### Based on population structure
 
-Yet another choice for $d$ uses information about the number of subpopulations in the data.
-We assume that each subpopulation differs from the others along a different axis in the high-dimensional space.
-This suggests that we should set $d$ to the number of unique subpopulations minus 1.
-By doing so, we guarantee separation of all subpopulations while retaining as few dimensions (and noise) as possible.
+Yet another method to choose $d$ uses information about the number of subpopulations in the data.
+Consider a situation where each subpopulation differs from the others along a different axis in the high-dimensional space
+(e.g., because it is defined by a unique set of marker genes).
+This suggests that we should set $d$ to the number of unique subpopulations minus 1,
+which guarantees separation of all subpopulations while retaining as few dimensions (and noise) as possible.
+We can use this reasoning to loosely motivate an _a priori_ choice for $d$ -
+for example, if we expect around 10 different cell types in our population, we would set $d \approx 10$.
 
-The number of subpopulations is usually not known in advance so instead we use the number of clusters as a proxy.
-However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (Chapter \@ref(clustering)).
-To handle this circularity, we test multiple choices for $d$ and we pick a value that is closest to the number of clusters minus 1.
-This aims to achieve self-consistency in the number of PCs and clusters based on the reasoning above.
+In practice, the number of subpopulations is usually not known in advance.
+Rather, we use a heuristic approach that uses the number of clusters as a proxy for the number of subpopulations.
+We perform clustering (graph-based by default, see Chapter \@ref(clustering)) on the first $d^*$ PCs and only consider the values of $d^*$ that yield no more than $d^*+1$ clusters.
+If we detect more clusters with fewer dimensions, we consider this to represent overclustering rather than distinct subpopulations, assuming that multiple subpopulations should not be distinguishable on the same axes.
+We test a range of $d^*$ and set $d$ to the value that maximizes the number of clusters while satisfying the above condition.
+This attempts to capture as many distinct (putative) subpopulations as possible by retaining biological signal in later PCs, up until the point that the additional noise reduces resolution.
 
-```{r}
+```{r cluster-pc-choice, fig.cap="Number of clusters detected in the Zeisel brain dataset as a function of the number of PCs. The red unbroken line represents the theoretical upper constraint on the number of clusters, while the grey dashed line is the number of PCs suggested by `getClusteredPCs()`."}
 pcs <- reducedDim(sce.zeisel)
-n <- seq(10, 20, by=1)
-collected <- integer(0)
-
-# Using graph-based clustering here, but this can be
-# replaced with any clustering method of choice, provided
-# that the method determines the number of clusters by itself.
-for (i in n) {
-    g <- buildSNNGraph(pcs[,seq_len(i)], transposed=TRUE)
-    clust <- igraph::cluster_walktrap(g)$membership
-    collected <- c(collected, length(unique(clust)))
-}
-
-data.frame(n.pcs=n, n.clusters=collected)
-
-# Getting (one of) the closest n.pcs to n.clusters - 1.
-n[which.min(abs(collected-1-n))]
+choices <- getClusteredPCs(pcs)
+metadata(choices)$chosen
+plot(choices$n.pcs, choices$n.clusters,
+    xlab="Number of PCs", ylab="Number of clusters")
+abline(a=1, b=1, col="red")
+abline(v=metadata(choices)$chosen, col="grey80", lty=2)
 ```
 
-This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
+This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses, specifically clustering.
 There is no need to preserve biological signal beyond what is distinguishable in later steps.
 However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
 
