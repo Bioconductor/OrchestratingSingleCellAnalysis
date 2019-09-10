@@ -11,21 +11,24 @@ library(OSCAUtils)
 chapterPreamble()
 ```
 
-## Motivation
+## Motivation {#quality-control-motivation}
 
 Low-quality libraries in scRNA-seq data can arise from a variety of sources such as cell damage during dissociation or failure in library preparation (e.g., inefficient reverse transcription or PCR amplification).
 These usually manifest as "cells" with low total counts, few expressed genes and high mitochondrial or spike-in proportions.
 These low-quality libraries are problematic as they can contribute to misleading results in downstream analyses:
 
 - They form their own distinct cluster(s), complicating interpretation of the results.
-This can be most obviously driven by increased mitochondrial proportions or enrichment for nuclear RNAs after cell damage.
-However, very small libraries can also form their own clusters due to shifts in the mean upon transformation [@lun2018overcoming].
-- They contain genes that appear to be strongly "upregulated" due to aggressive scaling to normalize for small library sizes.
-This is most problematic for contaminating transcripts (e.g., from the ambient solution) that are present in all libraries at low but constant levels.
-Increased scaling in low-quality libraries transforms small counts for these transcripts in large normalized expression values, resulting in apparent upregulation compared to other cells.
+This is most obviously driven by increased mitochondrial proportions or enrichment for nuclear RNAs after cell damage.
+In the worst case, low-quality libraries generated from different cell types can cluster together based on similarities in the damage-induced expression profiles, creating artificial intermediate states or trajectories between otherwise distinct subpopulations. 
+Additionally, very small libraries can form their own clusters due to shifts in the mean upon transformation [@lun2018overcoming].
 - They distort the characterization of population heterogeneity during variance estimation or principal components analysis.
 The first few principal components will capture differences in quality rather than biology, reducing the effectiveness of dimensionality reduction.
 Similarly, genes with the largest variances will be driven by differences between low- and high-quality cells.
+The most obvious example involves low-quality libraries with very low counts where scaling normalization inflates the apparent variance of genes that happen to have a non-zero count in those libraries.
+- They contain genes that appear to be strongly "upregulated" due to aggressive scaling to normalize for small library sizes.
+This is most problematic for contaminating transcripts (e.g., from the ambient solution) that are present in all libraries at low but constant levels.
+Increased scaling in low-quality libraries transforms small counts for these transcripts in large normalized expression values, resulting in apparent upregulation compared to other cells.
+This can be misleading as the affected genes are often biologically sensible but are actually expressed in another subpopulation.
 
 To avoid - or at least mitigate - these problems, we need to remove these cells at the start of the analysis.
 This step is commonly referred to as quality control (QC) on the cells.
@@ -101,9 +104,10 @@ filtered <- sce.416b[,!discard]
 dim(filtered)
 ```
 
-While simple, this strategy generally requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system.
-For example, thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa.
-Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth.
+While simple, this strategy requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system.
+Thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa.
+Differences in mitochondrial activity or total RNA content require constant adjustment of the mitochondrial and spike-in thresholds, respectively, for different biological systems.
+Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth per cell.
 
 ### With adaptive thresholds {#quality-control-outlier}
 
@@ -236,7 +240,7 @@ The use of the MAD mitigates this problem to some extent by accounting for biolo
 A heterogeneous population should have higher variability in the metrics among high-quality cells, increasing the MAD and reducing the chance of incorrectly removing particular cell types (at the cost of reducing power to remove low-quality cells).
 
 In general, these assumptions are either reasonable or their violations have little effect on downstream conclusions.
-Nonetheless, users should still keep them in mind when interpreting the results^["Be alert, not alarmed".].
+Nonetheless, it is helpful to keep them in mind when interpreting the results.
 A healthy dose of diagnostics like those described in Section \@ref(quality-control-plots) and Section \@ref(quality-control-discarded) can provide some indication of whether these assumptions might be problematic in any particular dataset.
 
 ### Considering experimental factors {#qc-batch}
