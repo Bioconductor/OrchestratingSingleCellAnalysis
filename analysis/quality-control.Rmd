@@ -81,6 +81,11 @@ df <- perCellQCMetrics(sce.416b, subsets=list(Mito=is.mito))
 df
 ```
 
+A key assumption here is that the QC metrics are independent of the biological state of each cell.
+Poor values (e.g., low library sizes, high mitochondrial proportions) are presumed to be driven by technical factors rather than biological processes, meaning that the subsequent removal of cells will not misrepresent the biology in downstream analyses.
+Major violations of this assumption would potentially result in the loss of cell types that have, say, systematically low RNA content or high numbers of mitochondria.
+We can check for such violations using some diagnostics described in Sections \@ref(quality-control-plots) and \@ref(quality-control-discarded).
+
 ## Identifying low-quality cells
 
 ### With fixed thresholds
@@ -110,6 +115,8 @@ Differences in mitochondrial activity or total RNA content require constant adju
 Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth per cell.
 
 ### With adaptive thresholds {#quality-control-outlier}
+
+#### Identifying outliers
 
 To obtain an adaptive threshold, we assume that most of the dataset consists of high-quality cells.
 We then identify cells that are outliers for the various QC metrics, based on the median absolute deviation (MAD) from the median value of each metric across all cells.
@@ -178,11 +185,69 @@ With this strategy, the thresholds adapt to both the location and spread of the 
 This allows the QC procedure to adjust to changes in sequencing depth, cDNA capture efficiency, mitochondrial content, etc. without requiring any user intervention or prior experience.
 However, it does require some implicit assumptions that are discussed below in more detail.
 
+#### Assumptions of outlier detection {#outlier-assumptions}
+
+Outlier detection assumes that most cells are of acceptable quality.
+This is usually reasonable and can be experimentally supported in some situations by visually checking that the cells are intact, e.g., on the microwell plate.
+If most cells are of (unacceptably) low quality, the adaptive thresholds will obviously fail as they cannot remove the majority of cells.
+Of course, what is acceptable or not is in the eye of the beholder - neurons, for example, are notoriously difficult to dissociate, and we would often retain cells in a neuronal scRNA-seq dataset with QC metrics that would be unacceptable in a more amenable system like embryonic stem cells.
+
+Another assumption discussed earlier is that the QC metrics are independent of the biological state of each cell.
+This assumption is most likely to be violated in highly heterogeneous cell populations where cell types that naturally have less RNA or more mitochondria are more likely to be considered outliers and removed, even if they are of high quality.
+The use of the MAD mitigates this problem to some extent by accounting for biological variability in the QC metrics.
+A heterogeneous population should have higher variability in the metrics among high-quality cells, increasing the MAD and reducing the chance of incorrectly removing particular cell types (at the cost of reducing power to remove low-quality cells).
+
+In general, these assumptions are either reasonable or their violations have little effect on downstream conclusions.
+Nonetheless, it is helpful to keep them in mind when interpreting the results.
+
+#### Considering experimental factors {#qc-batch}
+
+More complex studies may involve batches of cells generated with different experimental parameters (e.g., sequencing depth).
+In such cases, the adaptive strategy should be applied to each batch separately. 
+It makes little sense to compute medians and MADs from a mixture distribution containing samples from multiple batches.
+For example, if the sequencing coverage is lower in one batch compared to the others, it will drag down the median and inflate the MAD.
+This will reduce the suitability of the adaptive threshold for the other batches.
+
+If each batch is represented by its own `SingleCellExperiment`, the `isOutlier()` function can be directly applied to each batch as shown above.
+However, if cells from all batches have been merged into a single `SingleCellExperiment`, the `batch=` argument should be used to ensure that outliers are identified _within_ each batch.
+This allows `isOutlier()` to accommodate systematic differences in the QC metrics across batches.
+
+We will again illustrate using the 416B dataset, which contains two experimental factors - plate of origin and oncogene induction status.
+We combine these factors together and use this in the `batch=` argument to `isOutlier()` via `quickCellQC()`.
+This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
+
+```{r}
+batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
+batch.reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
+    "altexps_ERCC_percent"), nmads=3, batch=batch)
+
+colSums(as.matrix(batch.reasons))
+
+# Retain only high-quality cells in the SingleCellExperiment.
+filtered3 <- sce.416b[,!batch.reasons$discard]
+```
+
+That said, the use of `batch=` involves the stronger assumption that most cells in each batch are of high quality.
+If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
+For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(qc-plot-pancreas)).
+This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
+In such cases, it is better to either not use `batch=` or to apply a custom filter to the problematic batches (possibly based on the thresholds for the other batches in `attr(discard.ercc, "thresholds")`).
+
+```{r qc-plot-pancreas, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier within each batch."}
+library(scRNAseq)
+sce.grun <- GrunPancreasData()
+sce.grun <- addQCPerCell(sce.grun)
+discard.ercc <- isOutlier(sce.grun$altexps_ERCC_percent,
+    nmads=3, type="higher", batch=sce.grun$donor)
+plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
+    colour_by=I(discard.ercc))
+```
+
 ## Checking diagnostic plots {#quality-control-plots}
 
 It is good practice to inspect the distributions of QC metrics (Figure \@ref(fig:qc-dist-416b)) to identify possible problems.
-In the most ideal case, we would see normal distributions that would justify the 3 MAD threshold described previously.
-A large proportion of cells in another mode suggests that the QC metrics might be correlated with some biological state, reflecting a potential violation of some of the assumptions of outlier detection (discussed in Section \@ref(outlier-assumptions)).
+In the most ideal case, we would see normal distributions that would justify the 3 MAD threshold used in outlier detection.
+A large proportion of cells in another mode suggests that the QC metrics might be correlated with some biological state, potentially leading to the loss of distinct cell types during filtering.
 Batches with systematically poor values for any metric can also be quickly identified for further troubleshooting or outright removal.
 
 ```{r qc-dist-416b, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of QC metrics for each batch in the 416B dataset. Each point represents a cell with color and shape according to its oncogene induction status and whether it was discarded, respectively."}
@@ -221,69 +286,6 @@ Conversely, cells with high mitochondrial percentages and low ERCC percentages m
 ```{r qc-mito2-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the percentage of reads assigned to ERCC transcripts."}
 plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
     colour_by="phenotype", shape_by="discard") 
-```
-
-## Further comments on outlier-based QC
-
-### Assumptions of outlier detection {#outlier-assumptions}
-
-The outlier-based QC strategy (Section \@ref(quality-control-outlier)) makes assumes that most cells are of acceptable quality.
-This is usually reasonable and can be experimentally supported in some situations by visually checking that the cells are intact, e.g., on the microwell plate.
-If most cells are of (unacceptably) low quality, the adaptive thresholds will fail as they cannot remove the majority of cells.
-Of course, what is acceptable or not is in the eye of the beholder - neurons, for example, are notoriously difficult to dissociate, and we would often retain cells in a neuronal scRNA-seq dataset with QC metrics that would be unacceptable in a more amenable system like embryonic stem cells.
-
-Another assumption is that the QC metrics are independent of the biological state of each cell.
-Any outlier values are presumed to be driven by technical factors rather than biological processes, meanining that the subsequent removal of cells will not misrepresent the biology in downstream analyses.
-This assumption is most likely to be violated in highly heterogeneous cell populations where some cell types may naturally have less RNA or express fewer genes than other cell types.
-These cell types are more likely to be considered outliers and removed, even if they are of high quality.
-The use of the MAD mitigates this problem to some extent by accounting for biological variability in the QC metrics.
-A heterogeneous population should have higher variability in the metrics among high-quality cells, increasing the MAD and reducing the chance of incorrectly removing particular cell types (at the cost of reducing power to remove low-quality cells).
-
-In general, these assumptions are either reasonable or their violations have little effect on downstream conclusions.
-Nonetheless, it is helpful to keep them in mind when interpreting the results.
-A healthy dose of diagnostics like those described in Section \@ref(quality-control-plots) and Section \@ref(quality-control-discarded) can provide some indication of whether these assumptions might be problematic in any particular dataset.
-
-### Considering experimental factors {#qc-batch}
-
-More complex studies may involve batches of cells generated with different experimental parameters (e.g., sequencing depth).
-In such cases, the adaptive strategy should be applied to each batch separately. 
-It makes little sense to compute medians and MADs from a mixture distribution containing samples from multiple batches.
-For example, if the sequencing coverage is lower in one batch compared to the others, it will drag down the median and inflate the MAD.
-This will reduce the suitability of the adaptive threshold for the other batches.
-
-If each batch is represented by its own `SingleCellExperiment`, the `isOutlier()` function can be directly applied to each batch as shown above.
-However, if cells from all batches have been merged into a single `SingleCellExperiment`, the `batch=` argument should be used to ensure that outliers are identified _within_ each batch.
-This allows `isOutlier()` to accommodate systematic differences in the QC metrics across batches.
-
-We will again illustrate using the 416B dataset, which contains two experimental factors - plate of origin and oncogene induction status.
-We combine these factors together and use this in the `batch=` argument to `isOutlier()` via `quickCellQC()`.
-This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
-
-```{r}
-batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
-batch.reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
-    "altexps_ERCC_percent"), nmads=3, batch=batch)
-
-colSums(as.matrix(batch.reasons))
-
-# Retain only high-quality cells in the SingleCellExperiment.
-filtered3 <- sce.416b[,!batch.reasons$discard]
-```
-
-That said, the use of `batch=` involves the stronger assumption that most cells in each batch are of high quality.
-If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
-For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(qc-plot-pancreas)).
-This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
-In such cases, it is better to either not use `batch=` or to apply a custom filter to the problematic batches (possibly based on the thresholds for the other batches in `attr(discard.ercc, "thresholds")`).
-
-```{r qc-plot-pancreas, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier."}
-library(scRNAseq)
-sce.grun <- GrunPancreasData()
-sce.grun <- addQCPerCell(sce.grun)
-discard.ercc <- isOutlier(sce.grun$altexps_ERCC_percent,
-    nmads=3, type="higher", batch=sce.grun$donor)
-plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
-    colour_by=I(discard.ercc))
 ```
 
 ## Cell calling in droplet data
