@@ -416,7 +416,8 @@ Nonetheless, it may still be desirable to load the **unfiltered** matrix and app
 ## Checking for discarded cell types {#quality-control-discarded}
 
 The biggest practical concern during QC is whether an entire cell type is inadvertently discarded.
-This can be diagnosed by looking for systematic differences in gene expression between the discarded and retained cells.
+There is always some risk of this occurring as the QC metrics are never fully independent of biological state.
+We can diagnose cell type loss by looking for systematic differences in gene expression between the discarded and retained cells.
 To demonstrate, we compute the average count across the discarded and retained pools in the 416B data set, and we compute the log-fold change between the pool averages.
 
 ```{r}
@@ -465,6 +466,7 @@ points(abundance[ids], logFC[ids], col="orange", pch=16)
 If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters.
 For example, outlier detection can be relaxed by increasing `nmads=` in the `isOutlier()` calls.
 We can also avoid filtering altogether on metrics that are associated with genuine biological differences between cell types.
+Of course, this increases the risk of retaining more low-quality cells and encountering the problems discussed in Section \@ref(quality-control-motivation).
 
 As an aside, it is worth mentioning that the true technical quality of a cell may also be correlated with its type.
 (This differs from a correlation between the cell type and the QC metrics, as the latter are our imperfect proxies for quality.)
@@ -477,5 +479,3 @@ Indeed, concerns over the computational removal of cell types during QC are prob
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
