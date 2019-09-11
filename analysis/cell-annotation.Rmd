@@ -72,23 +72,22 @@ This is largely the case for monocytes and B cells, whereas we see more ambiguit
 plotScoreHeatmap(pred)
 ```
 
-`SingleR()` will also attempt to prune out low-quality assignments by marking them as `NA`.
-This is done based on the per-cell "delta", the difference of the assigned label's score from the median score within each cell.
-Small deltas indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
-We set a minimum threshold on the acceptable delta using an outlier-based approach for each label, where labels with deltas that are substantially lower than the majority of deltas for a given label are marked for pruning (Figure \@ref(fig:singler-dist-pbmc)).
-This results in the presence of `NA` labels for a small number of cells in our example.
-If necessary, users can control the pruning by supplying custom parameters to the `pruneScores()` function.
+`SingleR()` will attempt to prune out low-quality assignments by marking them as `NA`.
+This is done based on the difference $\Delta_{med}$ of the assigned label's score from the median score within each cell.
+Small $\Delta_{med}$ values indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
+We set a minimum threshold on the acceptable $\Delta_{med}$ using an outlier-based approach for each label, where labels with $\Delta_{med}$ that are substantially lower than the majority of values for a given label are marked as `NA` (Figure \@ref(fig:singler-dist-pbmc)).
+If necessary, more control over the pruning can be achieved by supplying custom parameters to the `pruneScores()` function.
 
-```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell deltas for each label. Each panel corresponds to one label and contains the deltas for cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label. The red lines marks the delta of zero."}
+```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell $\\Delta_{med}$ for each label. Each panel corresponds to one label and stratifies the population into cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label."}
 sum(is.na(pred$pruned.labels))
-plotScoreDistribution(pred, show.min.diff=0)
+plotScoreDistribution(pred)
 ```
 
 We compare the assignments with the clustering results to determine the identity of each cluster.
 Ideally, clusters and labels would have a 1:1 relationship, though some nesting is likely depending on the resolution of the clustering algorithm.
 For example, several clusters are nested within the monocyte and B cell labels, suggesting the the former represent finer subdivisions within the latter.
-Interestingly, the clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
-We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated) that have a stronger influence on the clustering than the CD4/CD8 distinction.
+Interestingly, our clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
+We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated) that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
 
 ```{r}
 table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
@@ -111,7 +110,7 @@ We suggest applying both strategies and, if major disagreements are present betw
 
 ### Using custom references
 
-A similar process is used to use `r Biocpkg("SingleR")` with user-supplied reference datasets.
+It is also straightforward to apply `r Biocpkg("SingleR")` to user-supplied reference datasets.
 For bulk references, the same code shown above can be used, while some additional work is required for single-cell references.
 To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
 
@@ -128,7 +127,7 @@ table(sce.muraro$label)
 
 We use methods from `r Biocpkg("scran")` to generate marker sets for every reference label (Chapter \@ref(marker-detection)).
 Here, we use the `pairwiseWilcox()` and `getTopMarkers()` functions to take the top 10 upregulated genes from each pairwise comparison between reference labels, using the Wilcoxon test with a log-fold change threshold of 1.
-This enables us to select a custom set of marker genes that is both discriminative and concise - this is faster to run and often more effective for single-cell references than the default marker set that is auto-generated inside `SingleR()`.
+This enables us to select a custom set of marker genes that is both discriminative and concise, which is faster to run and often more effective for single-cell references than the default marker set that is auto-generated inside `SingleR()`.
 (We could also use this custom approach for our bulk references, but the default is more convenient and often works well enough.)
 
 ```{r}
@@ -199,7 +198,7 @@ sce.tasic
 ```
 
 We use the `r Biocpkg("AUCell")` package to identify marker sets that are highly expressed in each cell.
-This method ranks genes by their expression values within each cell, and constructs a response curve detailing the number of genes from each marker set that are present with increasing rank.
+This method ranks genes by their expression values within each cell and constructs a response curve of the number of genes from each marker set that are present with increasing rank.
 It then computes the area under the curve (AUC) for each marker set, quantifying the enrichment of those markers among the most highly expressed genes in that cell.
 This is roughly similar to performing a Wilcoxon rank sum test between genes in and outside of the set, but involving only the top ranking genes by expression in each cell.
 
@@ -211,7 +210,8 @@ all.sets <- lapply(names(markers.z), function(x) {
 all.sets <- GeneSetCollection(all.sets)
 
 library(AUCell)
-rankings <- AUCell_buildRankings(counts(sce.tasic))
+rankings <- AUCell_buildRankings(counts(sce.tasic),
+    plotStats=FALSE, verbose=FALSE)
 cell.aucs <- AUCell_calcAUC(all.sets, rankings)
 results <- t(assay(cell.aucs))
 head(results)
@@ -243,11 +243,13 @@ If necessary, we can remove uncertain assignments by applying a minimum threshol
 The example below identifies small outlier $\Delta_{AUC}$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
 
 ```{r aucell-boxplots, fig.asp=1, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label. The red cross indicates the threshold below which outliers are pruned."}
+library(scater)
+library(DelayedMatrixStats)
+deltas <- rowMaxs(results) - rowMedians(results)
 discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
 table(new.labels[discard])
 
 par(mar=c(10,4,1,1))
-deltas <- rowMaxs(results) - rowMedians(results)
 boxplot(split(deltas, new.labels), las=2)
 points(attr(discard, "thresholds")[1,], col="red", pch=4, cex=2)
 ```
@@ -322,7 +324,6 @@ stopifnot(all(as.matrix(chosen)>0))
 ```
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
-library(scater)
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
     x="cluster", colour_by="cluster")
 ```
