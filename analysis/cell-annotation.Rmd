@@ -243,6 +243,7 @@ If necessary, we can remove uncertain assignments by applying a minimum threshol
 The example below identifies small outlier $\Delta_{AUC}$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
 
 ```{r aucell-boxplots, fig.asp=1, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label. The red cross indicates the threshold below which outliers are pruned."}
+library(scater)
 discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
 table(new.labels[discard])
 
@@ -322,7 +323,6 @@ stopifnot(all(as.matrix(chosen)>0))
 ```
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
-library(scater)
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
     x="cluster", colour_by="cluster")
 ```
