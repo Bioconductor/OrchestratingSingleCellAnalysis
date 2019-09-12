@@ -84,7 +84,7 @@ In contrast, approaches based on taking the intersection or union of HVGs across
     combined.dec[,1:6]
     ```
 
-## Diagnosing batch effects
+## Diagnosing batch effects {#batch-diagnosis}
 
 Before we actually perform any correction, it is worth examining whether there is any batch effect in this dataset.
 We combine the two `SingleCellExperiment`s and perform a PCA on the log-expression values for all genes with positive (average) biological components.
@@ -387,8 +387,28 @@ We previously demonstrated the application of clustering methods to the batch-co
 
 At this point, it is also tempting to use the batch-corrected values for gene-based analyses like DE-based marker gene detection. 
 This is not generally recommended as an arbitrary correction algorithm is not obliged to preserve the magnitude (or even direction) of differences in per-gene expression when attempting to align multiple batches.
-For example, cosine normalization in `fastMNN()` shrinks the magnitude of the expression values so that any subsequent log-fold change calculations are meaningless.
-Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed i Section \@ref(marker-batch).
+For example, cosine normalization in `fastMNN()` shrinks the magnitude of the expression values so that the computed log-fold changes have no obvious interpretation.
+Of greater concern is the possibility that the correction introduces artificial agreement across batches.
+To illustrate:
+
+1. Consider a dataset (first batch) with two cell types, $A$ and $B$. 
+Consider a second batch with the same cell types, denoted as $A'$ and $B'$. 
+Assume that, for some reason, gene $X$ is expressed in $A$ but not in $A'$, $B$ or $B'$ - 
+possibly due to some difference in how the cells were treated, or maybe due to a donor effect.
+2. We then merge the batches together based on the shared cell types.
+This yields a result where $A$ and $A'$ cells are intermingled and the difference due to $X$ is eliminated.
+One can debate whether this _should_ be the case, but in general,
+it is necessary for batch correction methods to smooth over small biological differences (as discussed in Section \@ref(batch-diagnosis)).
+3. Now, if we corrected the second batch to the first, we must have coerced the expression values of $X$ in $A'$ to non-zero values to align with those of $A$, while leaving the expression of $X$ in $B'$ and $B$ at zero. 
+Thus, we have artificially introduced DE between $A'$ and $B'$ for $X$ in the second batch to align with the DE between $A$ and $B$ in the first batch.
+(The converse is also possible where DE in the first batch is artificially removed to align with the second batch, depending on the order of merges.)
+4. The artificial DE has implications for the identification of the cell types and interpretation of the results.
+We would be misled into believing that both $A$ and $A'$ are $X$-positive, when in fact this is only true for $A$.
+At best, this is only a minor error - after all, we do actually have $X$-positive cells of that overall type, we simply do not see that $A'$ is $X$-negative.
+At worst, this can compromise the conclusions, e.g., if the first batch was drug treated and the second batch was a control,
+we might mistakenly think that a $X$-positive population exists in the latter and conclude that our drug has no effect.
+
+Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed in Section \@ref(marker-batch).
 This strategy is based on the expectation that any genuine DE between clusters should still be present in a within-batch comparison where batch effects are absent.
 It penalizes genes that exhibit inconsistent DE across batches, thus protecting against misleading conclusions when a population in one batch is aligned to a similar-but-not-identical population in another batch.
 
