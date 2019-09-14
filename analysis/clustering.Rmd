@@ -246,8 +246,8 @@ sce.pbmc$cluster <- factor(clust.kmeans$cluster)
 plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 ```
 
-We obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
-This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributingn cells throughout high-dimensional space using the bounding box of the original data.
+If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
+This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributing cells within the minimum bounding box of the original data.
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
 Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters results in a large choice $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
@@ -263,28 +263,31 @@ plot(gaps$Tab[,"gap"], xlab="Number of clusters", ylab="Gap statistic")
 abline(v=best.k, col="red")
 ```
 
-It is then straightforward to repeat the clustering with the `best.k` (Figure \@ref(fig:tsne-clust-kmeans-best).
-
-```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering. Here, $k$ is chosen based on the gap statistic."}
-set.seed(100)
-clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=best.k)
-table(clust.kmeans2$cluster)
-
-sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
-```
-
 ```{r, echo=FALSE}
 # Check that the results are reasonable, as sometimes
 # the gap statistic gets funny stochastic results.
 stopifnot(identical(best.k, 8L))
 ```
 
+A more practical use of $k$-means is to deliberately set $k$ to a large value to achieve overclustering.
+This will forcibly partition cells inside broad clusters that do not have well-defined internal structure.
+For example, we might be interested in the change in expression from one "side" of a cluster to the other, but the lack of any clear separation within the cluster makes it difficult to separate with graph-based methods, even at the highest resolution.
+$k$-means has no such problems and will readily split these broad clusters for greater resolution, though obviously one must be prepared for the additional work involved in interpreting a greater number of clusters.
+
+```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering with $k=20$."}
+set.seed(100)
+clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=20)
+table(clust.kmeans2$cluster)
+
+sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster", text_by="cluster")
+```
+
 ### Assessing cluster separation
 
-The within-cluster sum of squares (WCSS) for each cluster is the relevant diagnostic for $k$-means, given that the algorithm aims to find a clustering that minimizes the WCSS.
+The within-cluster sum of squares (WCSS) for each cluster is the most relevant diagnostic for $k$-means, given that the algorithm aims to find a clustering that minimizes the WCSS.
 Specifically, we use the WCSS to compute the root-mean-squared deviation (RMSD) that represents the spread of cells within each cluster.
-A cluster is more likely to have a low RMSD if it has no internal structure and is separated from other clusters (such that there are not many cells on the boundaries between clusters, which results in a higher sum of squares from the centroid).
+A cluster is more likely to have a low RMSD if it has no internal structure and is separated from other clusters (such that there are not many cells on the boundaries between clusters, which would result in a higher sum of squares from the centroid).
 
 ```{r}
 ncells <- tabulate(clust.kmeans2$cluster)
@@ -298,7 +301,7 @@ This highlights the risks of attempting to quantitatively interpret the shape of
 
 ```{r, echo=FALSE}
 # Content checking for the above text statement.
-stopifnot(identical(which.max(tab$rms), which.max(-tab$ncells)))
+stopifnot(identical(which.max(tab$rms), 19L))
 ```
 
 To explore the relationships between $k$-means clusters, a natural approach is to compute distances between their centroids.
@@ -423,5 +426,3 @@ This can be helpful to automatically obtain a "reasonable" clustering, though in
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
