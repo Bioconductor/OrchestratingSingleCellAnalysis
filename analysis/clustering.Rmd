@@ -421,6 +421,59 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
 
+## Nested clustering 
+
+Another simple approach to improving resolution is to repeat the feature selection and clustering _within_ a single cluster.
+This aims to select HVGs and PCs that are more relevant to internal structure, improving resolution by avoiding noise from unnecessary features.
+Subsetting also encourages clustering methods to separate cells according to more modest heterogeneity in the absence of distinct subpopulations.
+We demonstrate with a cluster of putative memory T cells from the PBMC dataset, identified according to several markers (Figure \@ref(ccr7-dist-memory)).
+
+```{r ccr7-dist-memory, fig.cap="Distribution of log-normalized expression values for several T cell markers within each cluster in the 10X PBMC dataset. Each cluster is color-coded for convenience."}
+g.full <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust.full <- igraph::cluster_walktrap(g.full)$membership
+plotExpression(sce.pbmc, features=c("CD3E", "CCR7", "CD69", "CD44"),
+    x=I(factor(clust.full)), colour_by=I(factor(clust.full)))
+
+# Repeating modelling and PCA on the subset.
+memory <- 8L
+sce.memory <- sce.pbmc[,clust.full==memory]
+dec.memory <- modelGeneVar(sce.memory)
+sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
+    BSPARAM=BiocSingular::IrlbaParam())
+sce.memory <- runTSNE(sce.memory)
+```
+
+```{r, echo=FALSE}
+by.clust <- split(logcounts(sce.pbmc)["CCR7",], clust)
+by.clust.m <- vapply(by.clust, mean, 0)
+stopifnot(identical(unname(which.max(by.clust.m)), memory))
+```
+
+We apply graph-based clustering within this memory subset to obtain CD4^+^ and CD8^+^ subclusters (Figure \@ref(cd48-memory-expression)).
+Admittedly, the expression of CD4 is so low that the change is rather modest, but the interpretation is clear enough.
+
+```{r cd48-memory-expression, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of _CD4_ and _CD8A_ log-normalized expression values within each cluster in the memory T cell subset of the 10X PBMC dataset."}
+g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA")
+clust.memory <- igraph::cluster_walktrap(g.memory)$membership
+plotExpression(sce.memory, features=c("CD8A", "CD4"),
+    x=I(factor(clust.memory)))
+```
+
+```{r, echo=FALSE}
+by.clust <- split(logcounts(sce.memory)["CD8A",], clust.memory)
+by.clust.cd8 <- vapply(by.clust, mean, 0)
+stopifnot(length(by.clust.cd8)==2L, diff(by.clust.cd8) > 1)
+
+by.clust <- split(logcounts(sce.memory)["CD4",], clust.memory)
+by.clust.cd4 <- vapply(by.clust, mean, 0)
+stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
+```
+
+Nested clustering is a general and conceptually straightforward procedure for increasing resolution. 
+It also simplifies the interpretation of the subclusters, which only need to be considered in the context of the parent cluster's identity.
+On the other hand, it tends to encourage the construction of a "house of cards" of cell type assignments, simply because it is difficult for practitioners to consider the uncertainty of identification for parent clusters when working with deep nesting.
+We tend to avoid nested clustering as a routine procedure, though it has its uses when the parent clusters can be well-defined.
+
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
