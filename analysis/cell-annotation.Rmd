@@ -141,7 +141,7 @@ muraro.markers
 
 We use these newly identified markers in `SingleR()` to assign labels to our test dataset from @segerstolpe2016singlecell.
 As it so happens, we are in the fortunate position where our test dataset also contains independently defined labels.
-We see strong consistency between the two sets of labels (Figure \@ref(singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
+We see strong consistency between the two sets of labels (Figure \@ref(fig:singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/segerstolpe-pancreas", "normalization", "sce.seger")
@@ -219,7 +219,7 @@ head(results)
 
 We assign cell type identity to each cell in the test dataset by taking the marker set with the top AUC as the label for that cell.
 Our new labels mostly agree with the original annotation from @tasic2016adult, which is encouraging.
-The only exception involves miassignment of oligodendrocyte precusors to astrocytes, which may be understandable given that they are derived from a common lineage.
+The only exception involves misassignment of oligodendrocyte precursors to astrocytes, which may be understandable given that they are derived from a common lineage.
 In the absence of prior annotation, a more general diagnostic check is to compare the assigned labels to cluster identities, under the expectation that most cells of a single cluster would have the same label (or, if multiple labels are present, they should at least represent closely related cell states).
 
 ```{r}
@@ -312,7 +312,7 @@ go.useful <- go.out[go.out$Ont=="BP" & go.out$N <= 200,]
 head(go.useful, 20)
 ```
 
-We see an enrichment for genes involved lipid synthesis, cell adhesion and tube formation.
+We see an enrichment for genes involved in lipid synthesis, cell adhesion and tube formation.
 Given that this is a mammary gland experiment, we might guess that cluster `r chosen.text` contains luminal epithelial cells responsible for milk production and secretion.
 Indeed, a closer examination of the marker list indicates that this cluster upregulates milk proteins _Csn2_ and _Csn3_ (Figure \@ref(fig:violin-milk)).
 

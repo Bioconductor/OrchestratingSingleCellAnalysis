@@ -38,7 +38,7 @@ We can define as many clusters as we like, with whatever algorithm we like - eac
 A more relevant question is "how well do the clusters approximate the cell types?"
 Unfortunately, this is difficult to answer given the context-dependent interpretation of biological truth.
 Some analysts will be satisfied with resolution of the major cell types; other analysts may want resolution of subtypes; and others still may require resolution of different states (e.g., metabolic activity, stress) within those subtypes.
-Morevoer, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
+Moreover, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
 Indeed, asking for an unqualified "best" clustering is akin to asking for the best magnification on a microscope without any context.
 
 It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data.
@@ -296,7 +296,7 @@ tab$rms <- sqrt(tab$wcss/tab$ncells)
 tab
 ```
 
-(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:pbmc-kmeans-best).
+(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:tsne-clust-kmeans-best).
 This highlights the risks of attempting to quantitatively interpret the shape of visual clusters in $t$-SNE plots.)
 
 ```{r, echo=FALSE}
@@ -370,7 +370,7 @@ plot(dend)
 
 To obtain explicit clusters, we "cut" the tree by removing internal branches such that every subtree represents a distinct cluster.
 This is most simply done by removing internal branches above a certain height of the tree, as performed by the `cutree()` function.
-We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(dend-cluster)).
+We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(fig:dend-cluster)).
 
 ```{r dend-cluster, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its assigned cluster identity from a dynamic tree cut."}
 library(dynamicTreeCut)
