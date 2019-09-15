@@ -215,7 +215,7 @@ colSums(as.matrix(batch.reasons))
 
 That said, the use of `batch=` involves the stronger assumption that most cells in each batch are of high quality.
 If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
-For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(qc-plot-pancreas)).
+For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(fig:qc-plot-pancreas)).
 This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
 In such cases, it is better to either not use `batch=` or to apply a custom filter to the problematic batches (possibly based on the thresholds for the other batches in `attr(discard.ercc, "thresholds")`).
 
@@ -257,7 +257,7 @@ gridExtra::grid.arrange(
 )
 ```
 
-Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics (Figure \@ref(fig:qc-plots-416b-mito)).
+Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics (Figure \@ref(fig:qc-mito-416b)).
 Here, the aim is to confirm that there are no cells with both large total counts and large mitochondrial counts, to ensure that we are not inadvertently removing high-quality cells that happen to be highly metabolically active (e.g., hepatocytes).
 
 ```{r qc-mito-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size."}
@@ -348,7 +348,7 @@ legend("bottomleft", legend=c("Inflection", "Knee"),
 
 We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool [@lun2018distinguishing].
 Any significant deviation indicates that the barcode corresponds to a cell-containing droplet.
-This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(rankplot).
+This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(fig:rankplot).
 We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
 
 ```{r}

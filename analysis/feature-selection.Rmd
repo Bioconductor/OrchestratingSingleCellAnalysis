@@ -275,14 +275,14 @@ As the title suggests, this involves keeping all genes above the trend.
 The rationale is to only remove the obviously uninteresting genes with variances below the trend.
 By doing so, we avoid the need to make any judgement calls regarding what level of variation is interesting enough to retain.
 This approach represents one extreme of the bias-variance trade-off where bias is minimized at the cost of maximizing noise.
-For `decomposeVar()`, it equates to keeping all positive biological components:
+For `modelGeneVar()`, it equates to keeping all positive biological components:
 
 ```{r}
 hvg.pbmc.var.3 <- rownames(dec.pbmc)[dec.pbmc$bio > 0]
 length(hvg.pbmc.var.3)
 ```
 
-For `improvedCV2()`, this involves keeping all ratios above 1:
+For `modelGeneCV2()`, this involves keeping all ratios above 1:
 
 ```{r}
 # 'which()' automatically removes 'NA' ratios.

@@ -37,9 +37,9 @@ sce.pbmc
 ### Standard application
 
 The Welch $t$-test is an obvious choice of statistical method to test for differences in expression between clusters.
-It is quickly computed and has good statistical properties for large numbers of cells [soneson2018bias].
+It is quickly computed and has good statistical properties for large numbers of cells [@soneson2018bias].
 We use the `findMarkers()` function to perform pairwise comparisons between clusters for each gene.
-This yields a list of `DataFrame`s contained ranked candidate markers for each cluster.
+This yields a list of `DataFrame`s containing ranked candidate markers for each cluster.
 
 ```{r}
 library(scran)
@@ -123,7 +123,7 @@ interesting.up2 <- markers.pbmc.up2[[chosen]]
 interesting.up2[1:10,1:3]
 ```
 
-These two settings yield a more focused set of candidate marker genes that are upregulated in cluster `r chosen` (Figure \@ref(heat-focused-pbmc)).
+These two settings yield a more focused set of candidate marker genes that are upregulated in cluster `r chosen` (Figure \@ref(fig:heat-focused-pbmc)).
 
 ```{r heat-focused-pbmc, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
 best.set <- interesting.up2[interesting.up2$Top <= 5,]
@@ -144,7 +144,7 @@ For example, a gene upregulated in a small proportion of cells of a cluster will
 
 By default, `findMarkers()` will give a high ranking to genes that are differentially expressed in any pairwise comparison.
 This is because a gene only needs a very low $p$-value in a single pairwise comparison to achieve a low `Top` value.
-A more stringent approach would onlly consider genes that are differentially expressed in all pairwise comparisons involving the cluster of interest.
+A more stringent approach would only consider genes that are differentially expressed in all pairwise comparisons involving the cluster of interest.
 To achieve this, we set `pval.type="all"` in `findMarkers()` to use an intersection-union test [@berger1996bioequivalence] where the combined $p$-value for each gene is the maximum of the $p$-values from all pairwise comparisons.
 A gene will only achieve a low combined $p$-value if it is strongly DE in all comparisons to other clusters.
 
@@ -248,7 +248,7 @@ interesting.binom <- markers.pbmc.binom[[chosen]]
 colnames(interesting.binom)
 ```
 
-Figure \ref(fig:viol-de-binom) confirms that the top genes exhibit strong differences in the proportion of expressing cells in cluster `r chosen` compared to the others. 
+Figure \@ref(fig:viol-de-binom) confirms that the top genes exhibit strong differences in the proportion of expressing cells in cluster `r chosen` compared to the others. 
 
 ```{r viol-de-binom, fig.cap=sprintf("Distribution of log-normalized expression values for the top 10 DE genes involving cluster %s with the binomial test, stratified by cluster assignment and coloured by the plate of origin for each cell.", chosen)}
 library(scater)
@@ -408,7 +408,7 @@ Thus, we generally recommend the use of `block=` where possible.
 
 All of our DE strategies for detecting marker genes between clusters are statistically flawed to some extent.
 The DE analysis is performed on the same data used to obtain the clusters, which represents "data dredging" (also known as fishing or data snooping).
-The hypothesis of interest - that are there differences between clusters? - is formulated from the data, so we are more likely to get a positive result when we re-use the data set to test that hypothesis.
+The hypothesis of interest - are there differences between clusters? - is formulated from the data, so we are more likely to get a positive result when we re-use the data set to test that hypothesis.
 
 The practical effect of data dredging is best illustrated with a simple simulation.
 We simulate i.i.d. normal values, perform $k$-means clustering and test for DE between clusters of cells with `findMarkers()`.

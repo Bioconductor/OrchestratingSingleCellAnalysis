@@ -63,7 +63,7 @@ This motivates the use of the earlier PCs in our downstream analyses, which conc
 ### Performing the PCA
 
 We perform the PCA on the log-normalized expression values using the `runPCA()` function from `r Biocpkg("scater")`.
-This is based on a mathematical technique called the singular decomposition decomposition (SVD).
+This is based on a mathematical technique called the singular value decomposition (SVD).
 By default, `runPCA()` will use an exact SVD based on base R's `svd()` function and return the first 50 PCs for downstream analysis.
 These PCs are stored in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
 
@@ -298,7 +298,7 @@ It sees routine use in many analysis pipelines and will likely continue to do so
 
 ### Uniform manifold approximation and projection
 
-The uniform manifold approximation and projection (UMAP) method [@mcinnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
+The uniform manifold approximation and projection (UMAP) method [@mcInnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
 It is roughly similar to $t$-SNE in that it also tries to find a low-dimensional representation that preserves relationships between neighbors in high-dimensional space.
 However, the two methods are based on different theory, represented by differences in the various graph weighting equations^[That we will not discuss here, thank god.].
 This manifests as a different visualization as shown in Figure \@ref(fig:umap-brain).
