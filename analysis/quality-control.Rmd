@@ -91,7 +91,7 @@ We can check for such violations using some diagnostics described in Sections \@
 ### With fixed thresholds
 
 The simplest approach to identifying low-quality cells is to apply thresholds on the QC metrics.
-For example, we might discard all cells that have library sizes below 100,000 reads; express fewer than 5,000 genes; have spike-in proportions above 10%; or have mitochondrial proportions above 10%.
+For example, we might consider cells to be low quality if they have library sizes below 100,000 reads; express fewer than 5,000 genes; have spike-in proportions above 10%; or have mitochondrial proportions above 10%.
 
 ```{r}
 qc.lib <- df$sum < 1e5
@@ -103,10 +103,6 @@ discard <- qc.lib | qc.nexprs | qc.spike | qc.mito
 # Summarize the number of cells removed for each reason.
 DataFrame(LibSize=sum(qc.lib), NExprs=sum(qc.nexprs),
     SpikeProp=sum(qc.spike), MitoProp=sum(qc.mito), Total=sum(discard))
-
-# Retain only high-quality cells in the SingleCellExperiment.
-filtered <- sce.416b[,!discard]
-dim(filtered)
 ```
 
 While simple, this strategy requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system.
@@ -138,7 +134,7 @@ We do the same for the log-transformed number of expressed genes.
 qc.nexprs2 <- isOutlier(df$detected, nmads=3, log=TRUE, type="lower")
 ```
 
-`isOutlier()` will also return the exact filter thresholds for each metric.
+`isOutlier()` will also return the exact filter thresholds for each metric in the attributes of the output vector.
 These is useful for checking whether the automatically selected thresholds are appropriate.
 
 ```{r}
@@ -173,12 +169,6 @@ This is a wrapper that simply calls `isOutlier()` with the settings described ab
 reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
     "altexps_ERCC_percent"), nmads=3)
 colSums(as.matrix(reasons))
-```
-
-The actual filtering is achieved simply by subsetting the `SingleCellExperiment` as previously shown.
-
-```{r}
-filtered2 <- sce.416b[,!discard2]
 ```
 
 With this strategy, the thresholds adapt to both the location and spread of the distribution of values for a given metric.
@@ -220,16 +210,12 @@ This results in the removal of more cells as the MAD is no longer inflated by (i
 batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
 batch.reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
     "altexps_ERCC_percent"), nmads=3, batch=batch)
-
 colSums(as.matrix(batch.reasons))
-
-# Retain only high-quality cells in the SingleCellExperiment.
-filtered3 <- sce.416b[,!batch.reasons$discard]
 ```
 
 That said, the use of `batch=` involves the stronger assumption that most cells in each batch are of high quality.
 If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
-For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(qc-plot-pancreas)).
+For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(fig:qc-plot-pancreas)).
 This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
 In such cases, it is better to either not use `batch=` or to apply a custom filter to the problematic batches (possibly based on the thresholds for the other batches in `attr(discard.ercc, "thresholds")`).
 
@@ -271,7 +257,7 @@ gridExtra::grid.arrange(
 )
 ```
 
-Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics (Figure \@ref(fig:qc-plots-416b-mito)).
+Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics (Figure \@ref(fig:qc-mito-416b)).
 Here, the aim is to confirm that there are no cells with both large total counts and large mitochondrial counts, to ensure that we are not inadvertently removing high-quality cells that happen to be highly metabolically active (e.g., hepatocytes).
 
 ```{r qc-mito-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size."}
@@ -287,6 +273,34 @@ Conversely, cells with high mitochondrial percentages and low ERCC percentages m
 plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
     colour_by="phenotype", shape_by="discard") 
 ```
+
+## Marking or removal?
+
+Once low-quality cells have been identified, we can choose to either remove them or mark them.
+Removal is the most straightforward option and is achieved by subsetting the `SingleCellExperiment` by column.
+In this case, we use the low-quality calls from Section \@ref(qc-batch) to generate a subsetted `SingleCellExperiment` that we would use for downstream analyses.
+
+```{r}
+# Keeping the columns we DON'T want to discard.
+filtered <- sce.416b[,!reasons$discard]
+```
+
+The other option is to simply mark the low-quality cells as such and retain them in the downstream analysis.
+The aim here is to allow clusters of low-quality cells to form, and then to identify and ignore such clusters during interpretation of the results.
+This approach avoids discarding cell types that have poor values for the QC metrics, giving users an opportunity to decide whether a cluster of such cells represents a genuine biological state.
+The downside is that it shifts the burden of QC to the interpretation of the clusters, which is already the bottleneck in scRNA-seq data analysis (Chapters \@ref(clustering), \@ref(marker-detection) and \@ref(cell-annotation)).
+Indeed, if we do not trust the QC metrics, we would have to distinguish between genuine cell types and low-quality cells based only on marker genes, and this is not always easy due to the tendency of the latter to "express" interesting genes (Section \@ref(quality-control-motivation)).
+Retention of low-quality cells also compromises the accuracy of the variance modelling, requiring, e.g., use of more PCs to offset the fact that the early PCs are driven by differences between low-quality and other cells.
+
+```{r}
+marked <- sce.416b
+marked$discard <- batch.reasons$discard
+```
+
+For routine analyses, we suggest performing removal by default to avoid complications from low-quality cells.
+This allows most of the population structure to be characterized with no (or, at least, fewer) concerns about its validity.
+Once the initial analysis is done, and if there are any concerns about discarded cell types (Section \@ref(quality-control-discarded)), a more thorough re-analysis can be performed where the low-quality cells are only marked.
+This recovers cell types with low RNA content, high mitochondrial proportions, etc. that only need to be interpreted insofar as they "fill the gaps" in the initial analysis.
 
 ## Cell calling in droplet data
 
@@ -334,7 +348,7 @@ legend("bottomleft", legend=c("Inflection", "Knee"),
 
 We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool [@lun2018distinguishing].
 Any significant deviation indicates that the barcode corresponds to a cell-containing droplet.
-This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(rankplot).
+This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(fig:rankplot).
 We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
 
 ```{r}

@@ -38,7 +38,7 @@ We can define as many clusters as we like, with whatever algorithm we like - eac
 A more relevant question is "how well do the clusters approximate the cell types?"
 Unfortunately, this is difficult to answer given the context-dependent interpretation of biological truth.
 Some analysts will be satisfied with resolution of the major cell types; other analysts may want resolution of subtypes; and others still may require resolution of different states (e.g., metabolic activity, stress) within those subtypes.
-Morevoer, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
+Moreover, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology.
 Indeed, asking for an unqualified "best" clustering is akin to asking for the best magnification on a microscope without any context.
 
 It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data.
@@ -246,8 +246,8 @@ sce.pbmc$cluster <- factor(clust.kmeans$cluster)
 plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 ```
 
-We obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
-This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributingn cells throughout high-dimensional space using the bounding box of the original data.
+If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
+This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributing cells within the minimum bounding box of the original data.
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
 Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters results in a large choice $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
@@ -263,28 +263,31 @@ plot(gaps$Tab[,"gap"], xlab="Number of clusters", ylab="Gap statistic")
 abline(v=best.k, col="red")
 ```
 
-It is then straightforward to repeat the clustering with the `best.k` (Figure \@ref(fig:tsne-clust-kmeans-best).
-
-```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering. Here, $k$ is chosen based on the gap statistic."}
-set.seed(100)
-clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=best.k)
-table(clust.kmeans2$cluster)
-
-sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
-```
-
 ```{r, echo=FALSE}
 # Check that the results are reasonable, as sometimes
 # the gap statistic gets funny stochastic results.
 stopifnot(identical(best.k, 8L))
 ```
 
+A more practical use of $k$-means is to deliberately set $k$ to a large value to achieve overclustering.
+This will forcibly partition cells inside broad clusters that do not have well-defined internal structure.
+For example, we might be interested in the change in expression from one "side" of a cluster to the other, but the lack of any clear separation within the cluster makes it difficult to separate with graph-based methods, even at the highest resolution.
+$k$-means has no such problems and will readily split these broad clusters for greater resolution, though obviously one must be prepared for the additional work involved in interpreting a greater number of clusters.
+
+```{r tsne-clust-kmeans-best, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from $k$-means clustering with $k=20$."}
+set.seed(100)
+clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=20)
+table(clust.kmeans2$cluster)
+
+sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster", text_by="cluster")
+```
+
 ### Assessing cluster separation
 
-The within-cluster sum of squares (WCSS) for each cluster is the relevant diagnostic for $k$-means, given that the algorithm aims to find a clustering that minimizes the WCSS.
+The within-cluster sum of squares (WCSS) for each cluster is the most relevant diagnostic for $k$-means, given that the algorithm aims to find a clustering that minimizes the WCSS.
 Specifically, we use the WCSS to compute the root-mean-squared deviation (RMSD) that represents the spread of cells within each cluster.
-A cluster is more likely to have a low RMSD if it has no internal structure and is separated from other clusters (such that there are not many cells on the boundaries between clusters, which results in a higher sum of squares from the centroid).
+A cluster is more likely to have a low RMSD if it has no internal structure and is separated from other clusters (such that there are not many cells on the boundaries between clusters, which would result in a higher sum of squares from the centroid).
 
 ```{r}
 ncells <- tabulate(clust.kmeans2$cluster)
@@ -293,12 +296,12 @@ tab$rms <- sqrt(tab$wcss/tab$ncells)
 tab
 ```
 
-(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:pbmc-kmeans-best).
+(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:tsne-clust-kmeans-best).
 This highlights the risks of attempting to quantitatively interpret the shape of visual clusters in $t$-SNE plots.)
 
 ```{r, echo=FALSE}
 # Content checking for the above text statement.
-stopifnot(identical(which.max(tab$rms), which.max(-tab$ncells)))
+stopifnot(identical(which.max(tab$rms), 19L))
 ```
 
 To explore the relationships between $k$-means clusters, a natural approach is to compute distances between their centroids.
@@ -367,7 +370,7 @@ plot(dend)
 
 To obtain explicit clusters, we "cut" the tree by removing internal branches such that every subtree represents a distinct cluster.
 This is most simply done by removing internal branches above a certain height of the tree, as performed by the `cutree()` function.
-We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(dend-cluster)).
+We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(fig:dend-cluster)).
 
 ```{r dend-cluster, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its assigned cluster identity from a dynamic tree cut."}
 library(dynamicTreeCut)
@@ -418,10 +421,61 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation is usually trivial and not biologically informative.
 
+## Nested clustering 
+
+Another simple approach to improving resolution is to repeat the feature selection and clustering _within_ a single cluster.
+This aims to select HVGs and PCs that are more relevant to internal structure, improving resolution by avoiding noise from unnecessary features.
+Subsetting also encourages clustering methods to separate cells according to more modest heterogeneity in the absence of distinct subpopulations.
+We demonstrate with a cluster of putative memory T cells from the PBMC dataset, identified according to several markers (Figure \@ref(ccr7-dist-memory)).
+
+```{r ccr7-dist-memory, fig.cap="Distribution of log-normalized expression values for several T cell markers within each cluster in the 10X PBMC dataset. Each cluster is color-coded for convenience."}
+g.full <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust.full <- igraph::cluster_walktrap(g.full)$membership
+plotExpression(sce.pbmc, features=c("CD3E", "CCR7", "CD69", "CD44"),
+    x=I(factor(clust.full)), colour_by=I(factor(clust.full)))
+
+# Repeating modelling and PCA on the subset.
+memory <- 8L
+sce.memory <- sce.pbmc[,clust.full==memory]
+dec.memory <- modelGeneVar(sce.memory)
+sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
+    BSPARAM=BiocSingular::IrlbaParam())
+sce.memory <- runTSNE(sce.memory)
+```
+
+```{r, echo=FALSE}
+by.clust <- split(logcounts(sce.pbmc)["CCR7",], clust)
+by.clust.m <- vapply(by.clust, mean, 0)
+stopifnot(identical(unname(which.max(by.clust.m)), memory))
+```
+
+We apply graph-based clustering within this memory subset to obtain CD4^+^ and CD8^+^ subclusters (Figure \@ref(cd48-memory-expression)).
+Admittedly, the expression of CD4 is so low that the change is rather modest, but the interpretation is clear enough.
+
+```{r cd48-memory-expression, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of _CD4_ and _CD8A_ log-normalized expression values within each cluster in the memory T cell subset of the 10X PBMC dataset."}
+g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA")
+clust.memory <- igraph::cluster_walktrap(g.memory)$membership
+plotExpression(sce.memory, features=c("CD8A", "CD4"),
+    x=I(factor(clust.memory)))
+```
+
+```{r, echo=FALSE}
+by.clust <- split(logcounts(sce.memory)["CD8A",], clust.memory)
+by.clust.cd8 <- vapply(by.clust, mean, 0)
+stopifnot(length(by.clust.cd8)==2L, diff(by.clust.cd8) > 1)
+
+by.clust <- split(logcounts(sce.memory)["CD4",], clust.memory)
+by.clust.cd4 <- vapply(by.clust, mean, 0)
+stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
+```
+
+Nested clustering is a general and conceptually straightforward procedure for increasing resolution. 
+It also simplifies the interpretation of the subclusters, which only need to be considered in the context of the parent cluster's identity.
+On the other hand, it tends to encourage the construction of a "house of cards" of cell type assignments, simply because it is difficult for practitioners to consider the uncertainty of identification for parent clusters when working with deep nesting.
+We tend to avoid nested clustering as a routine procedure, though it has its uses when the parent clusters can be well-defined.
+
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-

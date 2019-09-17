@@ -134,7 +134,7 @@ Spike-in normalization is based on the assumption that the same amount of spike-
 Systematic differences in the coverage of the spike-in transcripts can only be due to cell-specific biases, e.g., in capture efficiency or sequencing depth.
 To remove these biases, we equalize spike-in coverage across cells by scaling with "spike-in size factors".
 Compared to the previous methods, spike-in normalization requires no assumption about the biology of the system (i.e., the absence of many DE genes).
-Isntead, it assumes that the spike-in transcripts were (i) added at a constant level to each cell, and (ii) respond to biases in the same relative manner as endogenous genes.
+Instead, it assumes that the spike-in transcripts were (i) added at a constant level to each cell, and (ii) respond to biases in the same relative manner as endogenous genes.
 
 Practically, spike-in normalization should be used if differences in the total RNA content of individual cells are of interest and must be preserved in downstream analyses.
 For a given cell, an increase in its overall amount of endogenous RNA will not increase its spike-in size factor.
@@ -197,7 +197,7 @@ This is discussed below for the Zeisel dataset.
 
 ## Normalizing and (log-)transforming {#normalization-transformation}
 
-Once we have computed the size factors, we use the `logNormCouts()` function from `r Biocpkg("scater")` to compute normalized expression values for each cell.
+Once we have computed the size factors, we use the `logNormCounts()` function from `r Biocpkg("scater")` to compute normalized expression values for each cell.
 This is done by dividing the count for each gene/spike-in transcript with the appropriate size factor for that cell.
 The function also log-transforms the normalized values, creating a new assay called `"logcounts"`^[Technically, these are "log-transformed normalized expression values", but that's too much of a mouthful to fit into the assay name.].
 These log-values will be the basis of our downstream analyses in the following chapters.
@@ -220,7 +220,7 @@ When log-transforming, we need to consider the pseudo-count that is added to avo
 Larger pseudo-counts will effectively shrink the log-fold changes between cells towards zero for low-abundance genes, meaning that downstream analyses will be driven more by differences in expression for high-abundance genes.
 Conversely, smaller pseudo-counts will increase the contribution of low-abundance genes.
 Common practice is to use a pseudo-count of 1, for the simple pragmatic reason^[It's also easy to remember.] that it preserves sparsity in the original matrix (i.e., zeroes in the input remain zeroes after transformation).
-This works well in all but the most pathological scenarios [@lun2018pseudocount].
+This works well in all but the most pathological scenarios [@lun2018overcoming].
 
 (Incidentally, the addition of the pseudo-count is the motivation for the centering of the size factors at unity.
 This ensures that both the pseudo-count and the normalized expression values are on the same scale.

@@ -44,7 +44,7 @@ Droplet-based methods also have a trade-off between throughput and doublet rate 
 
 For studies involving multiple samples or conditions, the design considerations are the same as those for bulk RNA-seq experiments.
 There should be multiple biological replicates for each condition and conditions should not be confounded with batch.
-Note that individual cells are not replicates; ratther, we are referring to samples derived from replicate donors or cultures.
+Note that individual cells are not replicates; rather, we are referring to samples derived from replicate donors or cultures.
 
 ## Preprocessing 
 
@@ -62,7 +62,7 @@ This uses the `r Biocpkg("Rsubread")` aligner to align reads and then counts UMI
 
 We import the count matrix into R and create a `SingleCellExperiment` object.
 This can be done with base methods (e.g., `read.table()`) followed by applying the `SingleCellExperiment()` constructor.
-Alternatively, for specific file formats, we can use dedicated methods from the `r Biocpkg("DropletUtils")` (for 10X data) or `r Biocpkg("tximeta")` packages (for pseudo-alignment methods).
+Alternatively, for specific file formats, we can use dedicated methods from the `r Biocpkg("DropletUtils")` (for 10X data) or `r Biocpkg("tximport")`/`r Biocpkg("tximeta")` packages (for pseudo-alignment methods).
 
 ## Data processing and downstream analysis
 
@@ -88,7 +88,7 @@ Additional steps such as data integration and cell annotation will be discussed 
 
 ## Quick start
 
-Here, we use the a droplet-based retina dataset from @macosko2016highly, provided in the `r Biocpkg("scRNAseq")` package.
+Here, we use the a droplet-based retina dataset from @macosko2015highly, provided in the `r Biocpkg("scRNAseq")` package.
 This starts from a count matrix and finishes with clusters (Figure \@ref(fig:quick-start-umap)) in preparation for biological interpretation.
 Similar workflows are available in abbreviated form in the Appendices.
 
