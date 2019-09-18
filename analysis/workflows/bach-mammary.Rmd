@@ -14,25 +14,8 @@ from which we will consider a single sample of epithelial cells from the mouse m
 ### Data loading
 
 ```{r loading}
-library(BiocFileCache)
-bfc <- BiocFileCache()
-base.path <- "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2834nnn/GSM2834500/suppl"
-barcode.fname <- bfcrpath(bfc, file.path(base.path, 
-    "GSM2834500%5FG%5F1%5Fbarcodes%2Etsv%2Egz"))
-gene.fname <- bfcrpath(bfc, file.path(base.path,
-    "GSM2834500%5FG%5F1%5Fgenes%2Etsv%2Egz"))
-counts.fname <- bfcrpath(bfc, file.path(base.path,
-    "GSM2834500%5FG%5F1%5Fmatrix%2Emtx%2Egz"))
-
-library(Matrix)
-library(SingleCellExperiment)
-gene.info <- read.table(gene.fname, stringsAsFactors=FALSE)
-colnames(gene.info) <- c("Ensembl", "Symbol")
-sce.mam <- SingleCellExperiment(
-    list(counts=as(readMM(counts.fname), "dgCMatrix")), 
-    rowData=DataFrame(gene.info),
-    colData=DataFrame(Barcode=readLines(barcode.fname))
-)
+library(scRNAseq)
+sce.mam <- BachMammaryData(samples="G_1")
 ```
 
 ### Gene annotation
