@@ -373,7 +373,7 @@ set.seed(999)
 
 # For contributors who don't believe me, try this out.
 # Good luck trying to get a single cut that gets all three
-# clusteres out with cutree!
+# clusters out with cutree!
 a1 <- matrix(rnorm(5000, 4, sd=2), ncol=10)
 a2 <- matrix(rnorm(5000, 2, sd=1.5), ncol=10)
 a3 <- matrix(rnorm(5000, 0, sd=1), ncol=10)
@@ -401,10 +401,9 @@ table(cluster,
         minClusterSize=10))
 ```
 
-
 To obtain explicit clusters, we "cut" the tree by removing internal branches such that every subtree represents a distinct cluster.
 This is most simply done by removing internal branches above a certain height of the tree, as performed by the `cutree()` function.
-We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the tree to choose a suitable partitioning (Figure \@ref(fig:dend-cluster)).
+We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the branches to obtain a more suitable partitioning for complex dendrograms (Figure \@ref(fig:dend-cluster)).
 
 ```{r dend-cluster, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its assigned cluster identity from a dynamic tree cut."}
 library(dynamicTreeCut)

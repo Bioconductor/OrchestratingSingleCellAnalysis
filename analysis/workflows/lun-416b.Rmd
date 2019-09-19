@@ -157,9 +157,14 @@ colSums(as.matrix(qc))
 summary(sizeFactors(sce.416b))
 ```
 
+We see that the induced cells have size factors that are systematically shifted from the uninduced cells,
+consistent with the presence of a composition bias.
+
 ```{r}
 plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
-    xlab="Library size factors", ylab="Deconvolution factors", log="xy")     
+    xlab="Library size factors", ylab="Deconvolution factors", 
+    col=c("black", "red")[grepl("induced", sce.416b$phenotype)+1],
+    log="xy")
 ```
 
 ### Variance modelling
@@ -186,12 +191,14 @@ ncol(reducedDim(sce.416b, "PCA"))
 ### Clustering
 
 We compare the clusters to the plate of origin.
+Each cluster is comprised of cells from both batches, indicating that the clustering is not driven by a batch effect.
 
 ```{r}
 table(Cluster=sce.416b$cluster, Plate=sce.416b$block)
 ```
 
 We compare the clusters to the oncogene induction status.
+We observe differences in in the composition of each cluster, consistent with a biological effect of oncogene induction.
 
 ```{r}
 table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
