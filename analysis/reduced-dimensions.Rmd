@@ -19,7 +19,7 @@ In these applications, each individual gene represents a dimension of the data.
 More intuitively, if we had a scRNA-seq data set with two genes, we could make a two-dimensional plot where each axis represents the expression of one gene and each point in the plot represents a cell.
 This concept can be extended to data sets with thousands of genes where each cell's expression profile defines its location in the high-dimensional expression space.
 
-Dimensionality reduction aims to reduce the number of separate dimensions^[Duh.] in the data.
+As the name suggests, dimensionality reduction aims to reduce the number of separate dimensions in the data.
 This is possible because different genes are correlated if they are affected by the same biological process.
 Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
 This reduces computational work in downstream analyses, as calculations only need to be performed for a few dimensions rather than thousands of genes;
@@ -55,9 +55,9 @@ It takes advantage of the well-studied theoretical properties of the PCA - namel
 It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.
 
 When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner.
-This means the the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
-By comparison, random (technical) noise is expected to affect each gene independently.
-There is unlikely to be an axis that can capture random variation across many genes, suggesting that noise is mostly concentrated in the later PCs.
+This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
+By comparison, random technical or biological noise is expected to affect each gene independently.
+There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs.
 This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise. 
 
 ### Performing the PCA
@@ -103,7 +103,7 @@ sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs,
 reducedDimNames(sce.zeisel)
 ```
 
-The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results^[Some of us leave coded messages in binary via the seeds. Just so you know.].
+The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results.
 
 ### Choosing the number of PCs
 
@@ -259,6 +259,9 @@ This means that it has much more freedom in how it arranges cells in low-dimensi
 
 ```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(00101001101)
+
+# runTSNE() stores the t-SNE coordinates in the reducedDims
+# for re-use across multiple plotReducedDim() calls.
 sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA")
 plotReducedDim(sce.zeisel, dimred="TSNE", colour_by="level1class")
 ```
@@ -269,7 +272,7 @@ This takes advantage of the PCA to compact the data and remove noise, followed b
 It is possible to run $t$-SNE on the original expression matrix but this is less efficient.
 
 Another issue with $t$-SNE is that it requires the user to be aware of additional parameters (discussed [here](http://distill.pub/2016/misread-tsne/) in some depth).
-It involves a random initialization so we need to set the seed to ensure that the chosen results are reproducible.
+It involves a random initialization so we need to (i) repeat the visualization several times to ensure that the results are representative and (ii) set the seed to ensure that the chosen results are reproducible.
 The "perplexity" is another important parameter that determines the granularity of the visualization (Figure \@ref(fig:tsne-perplexity)).
 Low perplexities will favour resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
 Thus, it is advisable to test different perplexity values to ensure that the choice of perplexity does not drive the interpretation of the plot.
@@ -300,7 +303,7 @@ It sees routine use in many analysis pipelines and will likely continue to do so
 
 The uniform manifold approximation and projection (UMAP) method [@mcInnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
 It is roughly similar to $t$-SNE in that it also tries to find a low-dimensional representation that preserves relationships between neighbors in high-dimensional space.
-However, the two methods are based on different theory, represented by differences in the various graph weighting equations^[That we will not discuss here, thank god.].
+However, the two methods are based on different theory, represented by differences in the various graph weighting equations.
 This manifests as a different visualization as shown in Figure \@ref(fig:umap-brain).
 
 ```{r umap-brain, fig.cap="UMAP plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
