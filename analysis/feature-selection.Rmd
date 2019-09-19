@@ -189,6 +189,12 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
+As an aside, the wave-like shape observed above is typical of the mean-variance trend for log-expression values.
+(The same wave is present but much less pronounced for UMI data.)
+A linear increase in the variance is observed as the mean increases from zero, as larger variances are obviously possible when the counts are not all zero.
+The peak in the variance usually occurs close to the mean at which 50% of observations are zero, attributable to the fact that any fold change between cells corresponds to the largest difference in log-space when one of the observations is zero.
+At very high abundances, the effect of sampling noise decreases due to the law of large numbers, resulting in a decrease in the variance.
+
 #### Using a design matrix
 
 The use of block-specific trends is the recommended approach for experiments with a single blocking factor.

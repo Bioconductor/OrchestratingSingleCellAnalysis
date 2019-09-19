@@ -438,12 +438,15 @@ This is not the most relevant level of replication when cells are derived from t
 DE analyses that treat cells as replicates fail to properly model the sample-to-sample variability [@lun2017overcoming].
 The latter is arguably the more important level of replication as different samples will necessarily be generated if the experiment is to be replicated.
 Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
-This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
+This reinforces the inappropriateness of using the marker gene $p$-values to perform statistical inference.
+
+We strongly recommend selecting some markers for use in validation studies with an independent replicate population of cells.
+A typical strategy is to identify a corresponding subset of cells that express the upregulated markers and do not express the downregulated markers.
+Ideally, a different technique for quantifying expression would also be used during validation, e.g., fluorescent _in situ_ hybridisation or quantitative PCR.
+This confirms that the subpopulation genuinely exists and is not an artifact of the scRNA-seq protocol or the computational analysis.
 
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
