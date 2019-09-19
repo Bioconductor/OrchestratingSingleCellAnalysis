@@ -6,14 +6,18 @@ knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
 
 ## Introduction
 
-This performs an analysis of the @zeisel2015brain C1 dataset,
-consisting of mouse brain cells.
+Here, we examine a heterogeneous dataset from a study of cell types in the mouse brain [@zeisel2015brain].
+This contains approximately 3000 cells of varying types such as oligodendrocytes, microglia and neurons.
+Individual cells were isolated using the Fluidigm C1 microfluidics system [@pollen2014lowcoverage] and library preparation was performed on each cell using a UMI-based protocol.
+After sequencing, expression was quantified by counting the number of unique molecular identifiers (UMIs) mapped to each gene.
 
 ## Analysis
 
 ### Data loading
 
-We remove repeats and merge together redundant rows for the same gene.
+We remove repeats and merge together redundant rows corresponding to alternative genomic locations for the same gene.
+Specifically, we sum the counts for all rows corresponding to a single gene for ease of interpretation,
+and create a new `SingleCellExperiment` with these aggregated counts.
 
 ```{r loading}
 library(scRNAseq)
@@ -40,9 +44,14 @@ rowData(sce.zeisel)$ENSEMBL <- ensembl
 unfiltered <- sce.zeisel
 ```
 
+The original authors of the study have already removed low-quality cells prior to data publication.
+Nonetheless, we compute some quality control metrics to check whether the remaining cells are satisfactory.
+
 ```{r quality-control}
-stats <- perCellQCMetrics(sce.zeisel)
-qc <- quickCellQC(stats, percent_subsets="altexps_ERCC_percent", nmads=3)
+stats <- perCellQCMetrics(sce.zeisel, subsets=list(
+    Mt=rowData(sce.zeisel)$featureType=="mito"))
+qc <- quickCellQC(stats, percent_subsets=c("altexps_ERCC_percent", 
+    "subsets_Mt_percent"), nmads=3)
 sce.zeisel <- sce.zeisel[,!qc$discard]
 ```
 
@@ -52,11 +61,16 @@ sce.zeisel <- sce.zeisel[,!qc$discard]
 library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.zeisel)
-sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clusters, min.mean=0.1)
+sce.zeisel <- computeSumFactors(sce.zeisel, cluster=clusters)
 sce.zeisel <- logNormCounts(sce.zeisel)
 ```
 
 ### Variance modelling
+
+In theory, we should block on the plate of origin for each cell.
+However, only 20-40 cells are available on each plate, and the population is also highly heterogeneous.
+This means that we cannot assume that the distribution of sampled cell types on each plate is the same.
+Thus, to avoid regressing out potential biology, we will not block on any factors in this analysis.
 
 ```{r variance-modelling}
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
@@ -96,8 +110,17 @@ gridExtra::grid.arrange(
         scale_y_log10() + ggtitle("Detected features"),
     plotColData(unfiltered, y="altexps_ERCC_percent",
         colour_by="discard") + ggtitle("ERCC percent"),
+    plotColData(unfiltered, y="subsets_Mt_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
     ncol=2
 )
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mt_percent",
+    colour_by="discard") + scale_x_log10()
+plotColData(unfiltered, x="altexps_ERCC_percent", y="subsets_Mt_percent",
+    colour_by="discard")
 ```
 
 ```{r}
@@ -116,6 +139,11 @@ plot(librarySizeFactors(sce.zeisel), sizeFactors(sce.zeisel), pch=16,
 ```
 
 ### Variance modelling
+
+The technical and total variances are much smaller than those in the read-based datasets.
+This is due to the use of UMIs, which reduces the noise caused by variable PCR amplification.
+Furthermore, the spike-in trend is consistently lower than the variances of the endogenous genes.
+This reflects the heterogeneity in gene expression across cells of different types.
 
 ```{r}
 plot(dec.zeisel$mean, dec.zeisel$total, pch=16, cex=0.5,
@@ -141,4 +169,59 @@ table(sce.zeisel$cluster)
 plotTSNE(sce.zeisel, colour_by="cluster")
 ```
 
+### Interpretation
 
+```{r, echo=FALSE, results="hide"}
+# Hidden variables for use in text or hidden chunks,
+# to avoid the need for manual changes.
+chosen.inter.cluster <- 1
+chosen.inter.other <- 10
+```
+
+We focus on upregulated marker genes as these can quickly provide positive identification of cell type in a heterogeneous population.
+We examine the table for cluster `r chosen.inter.cluster`, in which log-fold changes are reported between cluster `r chosen.inter.cluster` and every other cluster.
+The same output is provided for each cluster in order to identify genes that discriminate between clusters.
+
+```{r}
+markers <- findMarkers(sce.zeisel, sce.zeisel$cluster, direction="up")
+marker.set <- markers[["1"]]
+head(marker.set[,1:8], 10) # only first 8 columns, for brevity
+```
+
+```{r, echo=FALSE, results="hide"}
+# Checking the cluster is what we wanted, along with its related cluster.
+other.inter <- chosen.inter.other - 1
+gad1 <- sapply(marker.set["Gad1",-(1:3)], sign)
+stopifnot(gad1[other.inter]==-1)
+stopifnot(all(gad1[-other.inter]==1))
+
+gad2 <- sapply(marker.set["Gad2",-(1:3)], sign)
+stopifnot(gad2[other.inter]==-1)
+stopifnot(all(gad2[-other.inter]==1))
+
+stopifnot(all(sapply(marker.set["Synpr",-(1:3)], sign)==1))
+```
+
+The heatmap below indicates that most of the top markers are strongly DE in cells of cluster `r chosen.inter.cluster` compared to some or all of the other clusters.
+We can use these markers to identify cells from cluster `r chosen.inter.cluster` in validation studies with an independent population of cells.
+A quick look at the markers suggest that cluster `r chosen.inter.cluster` represents interneurons based on expression of *Gad1* and *Slc6a1* [@zeng2012largescale],
+differing from closely related cells in cluster `r chosen.inter.other` by virtue of high *Synpr* expression.
+
+```{r, fig.wide=TRUE, fig.asp=1.5}
+top.markers <- rownames(marker.set)[marker.set$Top <= 10]
+plotHeatmap(sce.zeisel, features=top.markers, columns=order(sce.zeisel$cluster),
+    colour_columns_by="cluster", cluster_cols=FALSE,
+    center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
+```
+
+An alternative visualization approach is to plot the log-fold changes to all other clusters directly.
+This is more concise and is useful in situations involving many clusters that contain different numbers of cells.
+
+```{r, fig.asp=1.5}
+logFCs <- as.matrix(marker.set[1:50,-(1:3)])
+colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+
+library(pheatmap)
+max.lfc <- max(abs(range(logFCs)))
+pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+```
