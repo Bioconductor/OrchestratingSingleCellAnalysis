@@ -16,8 +16,8 @@
 #' 
 #' @export
 #' @importFrom knitr opts_chunk
-chapterPreamble <- function() {
-    opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, cache = TRUE)
+chapterPreamble <- function(use_cache = FALSE) {
+    opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, cache = use_cache)
     suppressPackageStartupMessages(require(BiocStyle))
     if (suppressWarnings(require(Cairo, quietly=TRUE))) {
         opts_chunk$set(dev="CairoPNG")
