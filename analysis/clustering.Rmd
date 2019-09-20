@@ -109,8 +109,8 @@ sce.pbmc$cluster <- factor(clust)
 plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 ```
 
-The most important parameter is `k`, the number of nearest neighbors used to construct the graph.
-This controls the resolution of the clustering with higher `k` yielding a more inter-connected graph and larger clusters.
+One of the most important parameters is `k`, the number of nearest neighbors used to construct the graph.
+This controls the resolution of the clustering where higher `k` yields a more inter-connected graph and broader clusters.
 Users can exploit this by experimenting with different values of `k` to obtain a satisfactory resolution.
 
 ```{r}
@@ -123,6 +123,15 @@ table(clust.5)
 g.50 <- buildSNNGraph(sce.pbmc, k=50, use.dimred = 'PCA')
 clust.50 <- igraph::cluster_walktrap(g.50)$membership
 table(clust.50)
+```
+
+The graph itself can be visualized using a force-directed layout (Figure \@ref(fig:pbmc-force)).
+This yields a dimensionality reduction result that is closely related to $t$-SNE and UMAP, though which of these is the most aesthetically pleasing is left to the eye of the beholder.
+
+```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbour graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
+set.seed(2000)
+reducedDim(sce.pbmc, "force") <- igraph::layout_with_fr(g)
+plotReducedDim(sce.pbmc, colour_by="cluster", use_dimred="force")
 ```
 
 ### Other parameters
