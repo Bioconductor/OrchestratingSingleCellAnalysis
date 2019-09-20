@@ -117,14 +117,14 @@ We generally prefer the use of the variance of log-counts and will use it in the
 
 ### Quantifying technical noise {#sec:spikeins}
 
-The use of a trend fitted to endogenous genes assumes that the expression profiles of most genes are dominated by random technical noise.
+Strictly speaking, the use of a trend fitted to endogenous genes assumes that the expression profiles of most genes are dominated by random technical noise.
 In practice, all expressed genes will exhibit some non-zero level of biological variability due to events like transcriptional bursting.
 This suggests that our estimates of the technical component are likely to be inflated. 
 It would be more appropriate to consider these estimates as technical noise plus "uninteresting" biological variation, under the assumption that most genes are unaffected by the relevant heterogeneity in the population.
 
-This assumption is generally reasonable but may be problematic in some scenarios where many genes at a particular abundance are affected by a biological process.
+This revised assumption is generally reasonable but may be problematic in some scenarios where many genes at a particular abundance are affected by a biological process.
 For example, strong upregulation of cell type-specific genes may result in an enrichment of HVGs at high abundances.
-This would inflate the fitted trend at high abundances and compromise the detection of the affected genes.
+This would inflate the fitted trend in that abundance interval and compromise the detection of the relevant genes.
 We can avoid this problem by fitting a mean-dependent trend to the variance of the spike-in transcripts, if they are available (Figure \@ref(fig:spike-416b)).
 The premise here is that spike-ins should not be affected by biological variation, so the fitted value of the spike-in trend should represent a better estimate of the technical component for each gene.
 
@@ -140,7 +140,7 @@ curve(fit.spike.416b$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
 In the absence of spike-in data, one can attempt to create a trend by making some distributional assumptions about the noise.
-For example, UMI counts typically exhibit near-Poisson noise when only technical effects are considered.
+For example, UMI counts typically exhibit near-Poisson variation if we only consider technical noise from library preparation and sequencing.
 This can be used to construct a mean-variance trend in the log-counts (Figure \@ref(fig:tech-pbmc)) with the `modelGeneVarByPoisson()` function.
 Note the increased residuals of the high-abundance genes, which can be interpreted as the amount of biological variation that was assumed to be "uninteresting" when fitting the gene-based trend in Figure \@ref(fig:trend-plot-pbmc).
 
@@ -154,6 +154,10 @@ plot(dec.pois.pbmc$mean, dec.pois.pbmc$total, pch=16, xlab="Mean of log-expressi
     ylab="Variance of log-expression")
 curve(metadata(dec.pois.pbmc)$trend(x), col="dodgerblue", add=TRUE)
 ```
+
+Interestingly, trends based purely on technical noise tend to yield large biological components for highly-expressed genes.
+This often includes so-called "house-keeping" genes coding for essential cellular components such as ribosomal proteins, which are considered uninteresting for characterizing cellular heterogeneity.
+These observations suggest that a more accurate noise model does not necessarily yield a better ranking of HVGs, though one should keep an open mind - house-keeping genes are regularly DE in a variety of conditions [@glare2002betaactin;@nazari2015gapdh;@guimaraes2016patterns], and the fact that they have large biological components indicates that there is strong variation across cells that may not be completely irrelevant.
 
 ### Accounting for blocking factors
 
