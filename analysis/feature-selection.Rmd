@@ -214,7 +214,7 @@ dec.design.416b[order(dec.design.416b$bio, decreasing=TRUE),]
 ```
 
 This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level.
-Briefly, the technical component is estimated as the fitted value of the trend at the average abundance for each gene.
+Recall that the technical component is estimated as the fitted value of the trend at the average abundance for each gene.
 However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships.
 The `block=` approach is safer and should be preferred in all situations where it is applicable.
 
@@ -223,10 +223,12 @@ The `block=` approach is safer and should be preferred in all situations where i
 ### Based on the largest metrics
 
 Once we have quantified the per-gene variation, the next step is to select the subset of HVGs to use in downstream analyses.
-The simplest approach is to simply take the top $X$ genes with the largest values for the relevant measure of variation.
+A larger subset will reduce the risk of discarding interesting signal by retaining more potentially relevant genes, at the cost of increasing noise from irrelevant genes that might obscure said signal.
+The simplest approach is to simply take the top $X$ genes with the largest values for the relevant variance metric.
 For `modelGeneVar()` and `modelGeneVarWithSpikes()`,  this would be the genes with the largest biological components:
 
 ```{r}
+# Setting X = 1000 here.
 hvg.pbmc.var <- head(order(dec.pbmc$bio, decreasing=TRUE), 1000)
 hvg.pbmc.var <- rownames(dec.pbmc)[hvg.pbmc.var]
 ```
@@ -240,19 +242,24 @@ hvg.pbmc.cv2 <- rownames(dec.pbmc)[hvg.pbmc.cv2]
 
 The main advantage of this approach is that the user can easily control the number of genes retained.
 This ensures that the computational complexity of downstream calculations is easily predicted.
-It is also fairly easy to translate the choice of $X$ into a biological statement.
+The choice of $X$ also has a fairly straightforward biological interpretation.
 Recall our trend-fitting assumption that most genes are not differentially expressed between cell types or states in our population.
-If we quantify this assumption into a statement that, e.g., no more than 5% of genes are differentially expressed, we can simply take the top 5% of genes with the largest variance.
+If we quantify this assumption into a statement that, e.g., no more than 5% of genes are differentially expressed, we can naturally set $X$ to 5% of the number of genes.
+In practice, we usually do not know the proportion of DE genes beforehand so this interpretation just exchanges one unknown for another.
+Nonetheless, it is still useful as it implies that we should lower $X$ for less heterogeneous datasets, retaining most of the biological signal without unnecessary noise from irrelevant genes.
+Conversely, more heterogeneous datasets should use larger values of $X$ to preserve secondary factors of variation beyond those driving the most obvious HVGs.
 
 The main disadvantage of this approach that it turns HVG selection into a competition between genes, whereby a subset of very highly variable genes can push other informative genes out of the top set.
-This can be problematic if a single subpopulation is very different from the others.
+This can be problematic for analyses of highly heterogeneous populations, especially when a single subpopulation is very different from the others.
 In such cases, the top set will be dominated by differentially expressed genes involving the outlier subpopulation, compromising resolution of heterogeneity between the other populations.
-Similar problems are encountered when the magnitude of the chosen variance measure varies with abundance.
+(This can salvaged with a nested analysis, as discussed in Section \@ref(clustering-nested), but we would prefer to avoid the problem in the first place.)
+Similarly, abundance-dependent changes in the magnitude of the chosen variance metric can influence the gene selection in a competitive manner.
+For example, the wave shape in Figure \@ref(fig:blocked-fit) means that the largest biological components usually occur around the peak and will be preferentially selected, while an upper bound on the CV^2^ discriminates against selection of low-abundance genes.
+This can lead to unexpected biases in the composition of the HVG selection.
 
-The choice of $X$ is also fairly arbitrary, with any value from 500 to 5000 being considered "reasonable". 
+Another possible concern with this approach is the fact that the choice of $X$ is fairly arbitrary, with any value from 500 to 5000 considered "reasonable". 
 We have chosen $X=1000$ in the code above though there is no particular _a priori_ reason for doing so.
-A larger $X$ will reduce the risk of discarding signal at the cost of increasing noise that obscures signal.
-Our recommendation is to simply pick an arbitrary $X$ and proceed with the rest of the analysis, with the intention of testing other choices later, rather than spending much time worrying about obtaining the "optimal" value^[When everything's said and done, the "optimal" value is one that gets you a figure for your manuscript.].
+Our recommendation is to simply pick an arbitrary $X$ and proceed with the rest of the analysis, with the intention of testing other choices later, rather than spending much time worrying about obtaining the "optimal" value.
 
 ### Based on a fixed threshold
 
