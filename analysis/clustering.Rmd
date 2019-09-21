@@ -338,7 +338,7 @@ The dendrogram is also a natural representation of the data in situations where 
 In practice, hierachical clustering is too slow to be used for anything but the smallest scRNA-seq datasets.
 Most variants require a cell-cell distance matrix that is prohibitively expensive to compute for many cells.
 Greedy agglomeration is also likely to result in a quantitatively suboptimal partitioning (as defined by the agglomeration measure) at higher levels of the dendrogram when the number of cells and merge steps is high.
-Nonetheless, we will still demonstrate the application of hierarchical clustering here, as it is useful for squeezing more information out of datasets with very few cells^[And, hey, this book isn't going to add padding to itself. Gotta write something to look productive.].
+Nonetheless, we will still demonstrate the application of hierarchical clustering here, as it can occasionally be useful for squeezing more information out of datasets with very few cells.
 
 ### Implementation
 
@@ -463,7 +463,7 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
-## Nested clustering 
+## Nested clustering {#clustering-nested}
 
 Another simple approach to improving resolution is to repeat the feature selection and clustering _within_ a single cluster.
 This aims to select HVGs and PCs that are more relevant to internal structure, improving resolution by avoiding noise from unnecessary features.
