@@ -174,8 +174,8 @@ plotTSNE(sce.zeisel, colour_by="cluster")
 ```{r, echo=FALSE, results="hide"}
 # Hidden variables for use in text or hidden chunks,
 # to avoid the need for manual changes.
-chosen.inter.cluster <- 1
-chosen.inter.other <- 10
+chosen.inter.cluster <- 4
+chosen.inter.other <- 11
 ```
 
 We focus on upregulated marker genes as these can quickly provide positive identification of cell type in a heterogeneous population.
@@ -184,7 +184,7 @@ The same output is provided for each cluster in order to identify genes that dis
 
 ```{r}
 markers <- findMarkers(sce.zeisel, sce.zeisel$cluster, direction="up")
-marker.set <- markers[["1"]]
+marker.set <- markers[["4"]]
 head(marker.set[,1:8], 10) # only first 8 columns, for brevity
 ```
 
