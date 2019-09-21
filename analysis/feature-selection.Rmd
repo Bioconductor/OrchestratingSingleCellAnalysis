@@ -220,12 +220,19 @@ The `block=` approach is safer and should be preferred in all situations where i
 
 ## Selecting highly variable genes {#hvg-selection}
 
-### Based on the largest metrics
+### Overview
 
 Once we have quantified the per-gene variation, the next step is to select the subset of HVGs to use in downstream analyses.
-A larger subset will reduce the risk of discarding interesting signal by retaining more potentially relevant genes, at the cost of increasing noise from irrelevant genes that might obscure said signal.
-The simplest approach is to simply take the top $X$ genes with the largest values for the relevant variance metric.
-For `modelGeneVar()` and `modelGeneVarWithSpikes()`,  this would be the genes with the largest biological components:
+A larger subset will reduce the risk of discarding interesting biological signal by retaining more potentially relevant genes, at the cost of increasing noise from irrelevant genes that might obscure said signal.
+It is difficult to determine the optimal trade-off for any given application as noise in one context may be useful signal in another.
+For example, heterogeneity in T cell activation responses is an interesting phenomena [@richard2018tcell] but may be irrelevant noise in studies that only care about distinguishing the major immunophenotypes.
+That said, there are several common strategies that are routinely used to guide HVG selection, which we shall discuss here.
+
+### Based on the largest metrics
+
+The simplest HVG selection strategy is to take the top $X$ genes with the largest values for the relevant variance metric.
+The main advantage of this approach is that the user can directly control the number of genes retained, which ensures that the computational complexity of downstream calculations is easily predicted.
+For `modelGeneVar()` and `modelGeneVarWithSpikes()`, we would select the genes with the largest biological components:
 
 ```{r}
 # Setting X = 1000 here.
@@ -240,8 +247,6 @@ hvg.pbmc.cv2 <- head(order(dec.cv2.pbmc$ratio, decreasing=TRUE), 1000)
 hvg.pbmc.cv2 <- rownames(dec.pbmc)[hvg.pbmc.cv2]
 ```
 
-The main advantage of this approach is that the user can easily control the number of genes retained.
-This ensures that the computational complexity of downstream calculations is easily predicted.
 The choice of $X$ also has a fairly straightforward biological interpretation.
 Recall our trend-fitting assumption that most genes are not differentially expressed between cell types or states in our population.
 If we quantify this assumption into a statement that, e.g., no more than 5% of genes are differentially expressed, we can naturally set $X$ to 5% of the number of genes.
@@ -253,9 +258,8 @@ The main disadvantage of this approach that it turns HVG selection into a compet
 This can be problematic for analyses of highly heterogeneous populations, especially when a single subpopulation is very different from the others.
 In such cases, the top set will be dominated by differentially expressed genes involving the outlier subpopulation, compromising resolution of heterogeneity between the other populations.
 (This can salvaged with a nested analysis, as discussed in Section \@ref(clustering-nested), but we would prefer to avoid the problem in the first place.)
-Similarly, abundance-dependent changes in the magnitude of the chosen variance metric can influence the gene selection in a competitive manner.
+Similarly, abundance-dependent changes in the magnitude of the chosen variance metric can introduce unexpected biases in competitive gene selection. 
 For example, the wave shape in Figure \@ref(fig:blocked-fit) means that the largest biological components usually occur around the peak and will be preferentially selected, while an upper bound on the CV^2^ discriminates against selection of low-abundance genes.
-This can lead to unexpected biases in the composition of the HVG selection.
 
 Another possible concern with this approach is the fact that the choice of $X$ is fairly arbitrary, with any value from 500 to 5000 considered "reasonable". 
 We have chosen $X=1000$ in the code above though there is no particular _a priori_ reason for doing so.
@@ -277,7 +281,7 @@ length(hvg.pbmc.var.2)
 This approach is simple to implement and - if the test holds its size - it controls the false discovery rate (FDR).
 That is, it returns a subset of genes where the proportion of false positives is expected to be below the specified threshold.
 This can occasionally be useful in applications where the HVGs themselves are of interest.
-For example, if a collaborator were to take a list of HVGs back to the bench to verify the existence of heterogeneous expression for some of the genes, we would want to control the FDR in that list.
+For example, if we were to use the list of HVGs in further experiments to verify the existence of heterogeneous expression for some of the genes, we would want to control the FDR in that list.
 
 The downside of this approach is that it is less predictable than the top $X$ strategy.
 The number of genes returned depends on the type II error rate of the test and the severity of the multiple testing correction.
@@ -285,6 +289,12 @@ One might obtain no genes or every gene at a given FDR threshold, depending on t
 Moreover, control of the FDR is usually not helpful at this stage of the analysis.
 We are not interpreting the individual HVGs themselves but are only using them for feature selection prior to downstream steps.
 There is no reason to think that a 5% threshold on the FDR yields a more suitable compromise between bias and noise.
+
+Alternatively, we might consider ranking genes by the $p$-value instead of the biological component for use in a top $X$ approach.
+This results in some counterintuitive behavior due to the nature of the underlying hypothesis test, which is based on the ratio of the total variance to the expected technical variance.
+Ranking based on $p$-value tends to prioritize HVGs that are more likely to be true positives but, at the same time, less likely to be biologically interesting.
+Many of the largest ratios are observed in high-abundance genes and are driven by very low technical variance; the total variance is typically modest for such genes, and they do not contribute much to population heterogeneity in absolute terms.
+(Note that the same can be said of the ratio of CV^2^ values, as briefly discussed above.)
 
 ### Keeping all genes above the trend
 
@@ -309,9 +319,25 @@ length(hvg.pbmc.cv2.3)
 
 This strategy is the most conservative as it does not discard any potential biological signal.
 Weak or secondary population structure is given the chance to manifest as the affected genes are retained.
-This makes it useful for reliable automated processing of diverse data sets where the primary factor of variation in one data set is a secondary factor in another data set (and thus overlooked by the top $X$ approach).
+This makes it useful for reliable automated processing of diverse data sets where the primary factor of variation in one data set might be a secondary factor in another data set (and thus overlooked by the top $X$ approach with a fixed value for $X$).
 The obvious cost is that more noise is also captured, which can reduce the resolution of otherwise well-separated populations.
 From a practical perspective, the use of more genes involves more computational work in each downstream step.
+
+### Based on _a priori_ genes of interest
+
+A blunt yet effective feature selection strategy is to use pre-defined sets of interesting genes.
+The aim is to focus on specific aspects of biological heterogeneity that may be masked by other factors when using unsupervised methods for HVG selection.
+One example application lies in the dissection of transcriptional changes during the earliest stages of cell fate commitment [@messmer2019transcriptional], which may be modest relative to activity in other pathways (e.g., cell cycle, metabolism).
+Indeed, if our aim is to show that there is no meaningful heterogeneity in a given pathway, we would - at the very least - be obliged to repeat our analysis using only the genes in that pathway to maximize power for detecting such heterogeneity.
+
+This approach is conceptually equivalent to that of a fluorescence activated cell sorting (FACS) experiment, with the convenience of being able to (re)define the features of interest at any time.
+For example, in the PBMC dataset, we might use some of the C7 immunologic signatures from MSigDB [@godec2016compendium] to improve resolution of the various T cell subtypes.
+We stress that there is no shame in leveraging prior biological knowledge to address specific hypotheses in this manner.
+We say this because a common refrain in genomics is that the data analysis should be "unbiased", i.e., free from any biological preconceptions.
+Attempting to derive biological insight _ab initio_ is admirable but such "biases" are already present at every stage, starting from experimental design (why are we interested in this cell population in the first place?) and continuing through to interpretation of marker genes (Section \@ref(marker-detection)).
+
+The downside of focusing on pre-defined genes is that it will limit our capacity to detect novel or unexpected aspects of variation.
+Thus, this kind of focused analysis should be complementary to (rather than a replacement for) the unsupervised feature selection strategies discussed previously.
 
 ## Putting it all together
 
