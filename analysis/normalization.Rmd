@@ -132,51 +132,79 @@ For a given cell, an increase in its overall amount of endogenous RNA will not i
 This ensures that the effects of total RNA content on expression across the population will not be removed upon scaling.
 By comparison, the other normalization methods described above will simply interpret any change in total RNA content as part of the bias and remove it.
 
-We demonstrate the use of spike-in normalization on a different dataset involving mouse embryonic stem cells (mESCs) and mouse embryonic fibroblasts (MEFs) [@islam2011characterization].
+We demonstrate the use of spike-in normalization on a different dataset involving T cell activation after stimulation with T cell recepter ligands of varying affinity [@richard2018tcell].
 
 ```{r}
-library(BiocFileCache)
-bfc <- BiocFileCache("raw_data", ask=FALSE)
-islam.fname <- bfcrpath(bfc, file.path("ftp://ftp.ncbi.nlm.nih.gov/geo/series",
-    "GSE29nnn/GSE29087/suppl/GSE29087_L139_expression_tab.txt.gz"))
-
-counts <- read.table(islam.fname,
-    colClasses=c(list("character", NULL, NULL, NULL, NULL, NULL, NULL),
-    rep("integer", 96)), skip=6, sep='\t', row.names=1)
-
-is.spike <- grep("SPIKE", rownames(counts))
-sce.islam <- SingleCellExperiment(list(counts=as.matrix(counts)))
-isSpike(sce.islam, "spike") <- is.spike
-sce.islam$grouping <- rep(c("mESC", "MEF", "Neg"), c(48, 44, 4))
-
-sce.islam
+library(scRNAseq)
+sce.richard <- RichardTCellData()
+sce.richard <- sce.richard[,sce.richard$`single cell quality`=="OK"]
+sce.richard
 ```
 
-We apply the `computeSpikeFactors()` method to estimate size factors for all cells.
-This method computes the total count over all spike-in transcripts in each cell, and calculates size factors to equalize the total spike-in count across cells.
-It assumes that the relevant rows of the `SingleCellExperiment` have been marked as spike-ins with the `isSpike()<-` function.
-Again, we set `sf.out=TRUE` to return the spike-in size factors directly for simplicity.
+We apply the `computeSpikeFactors()` method to estimate spike-in size factors for all cells.
+This is defined by converting the total spike-in count per cell into a size factor, using the same reasoning as in `librarySizeFactors()`.
+Scaling will subsequently remove any differences in spike-in coverage across cells.
 
 ```{r}
-spike.sf.islam <- computeSpikeFactors(sce.islam, sf.out=TRUE)
+sce.richard <- computeSpikeFactors(sce.richard, "ERCC")
+summary(sizeFactors(sce.richard))
 ```
 
-We observe a negative correlation between the two sets of size factors (Figure \@ref(fig:normplotspikemef)).
-This is because MEFs contain more endogenous RNA, which reduces the relative spike-in coverage in each library (thereby decreasing the spike-in size factors) but increases the coverage of endogenous genes (thus increasing the library size factors).
-If the spike-in size factors were applied to the counts, the expression values in MEFs would be scaled up while expression in mESCs would be scaled down.
-However, the opposite would occur if library size factors were used. 
+We observe a positive correlation between the spike-in size factors and deconvolution size factors within each treatment condition (Figure \@ref(fig:norm-spike-t)), indicating that they are capturing similar technical biases in sequencing depth and capture efficiency.
+However, we also observe that increasing stimulation of the T cell receptor - in terms of increasing affinity or time - results in a decrease in the spike-in factors relative to the library size factors.
+This is consistent with an increase in biosynthetic activity and total RNA content during stimulation, which reduces the relative spike-in coverage in each library (thereby decreasing the spike-in size factors) but increases the coverage of endogenous genes (thus increasing the library size factors).
 
-```{r normplotspikemef, fig.cap="Size factors from spike-in normalization, plotted against the library size factors for all cells in the mESC/MEF dataset. Each point is a cells, coloured according to its type."}
-lib.sf.islam <- librarySizeFactors(sce.islam)
-colours <- c(mESC="red", MEF="grey")
-plot(lib.sf.islam, spike.sf.islam, col=colours[sce.islam$grouping], pch=16, 
-    log="xy", xlab="Library size factor", ylab="Spike-in size factor")
-legend("bottomleft", col=colours, legend=names(colours), pch=16)
+```{r norm-spike-t, fig.wide=TRUE, fig.asp=0.5, fig.width=8, fig.cap="Size factors from spike-in normalization, plotted against the library size factors for all cells in the T cell dataset. Each plot represents a different ligand treatment and each point is a cell coloured according by time from stimulation."}
+to.plot <- data.frame(
+    DeconvFactor=calculateSumFactors(sce.richard),
+    SpikeFactor=sizeFactors(sce.richard),
+    Stimulus=sce.richard$stimulus, 
+    Time=sce.richard$time
+)
+
+ggplot(to.plot, aes(x=DeconvFactor, y=SpikeFactor, color=Time)) +
+    geom_point() + facet_wrap(~Stimulus) + scale_x_log10() + 
+    scale_y_log10() + geom_abline(intercept=0, slope=1, color="red")
+```
+
+The differences between these two sets of size factors have real consequences for downstream interpretation.
+If the spike-in size factors were applied to the counts, the expression values in unstimulated cells would be scaled up while expression in stimulated cells would be scaled down.
+However, the opposite would occur if the deconvolution size factors were used. 
+This can manifest as shifts in the magnitude and direction of DE between conditions when we switch between normalization strategies, as shown below for _Malat1_ (Figure \@ref(fig:norm-effect-malat)).
+
+```{r norm-effect-malat, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of log-normalized expression values for _Malat1_ after normalization with the deconvolution size factors (left) or spike-in size factors (right). Cells are stratified by the ligand affinity and colored by the time after stimulation."}
+# See below for explanation of logNormCounts().
+sce.richard.deconv <- logNormCounts(sce.richard, size_factors=to.plot$DeconvFactor)
+sce.richard.spike <- logNormCounts(sce.richard, size_factors=to.plot$SpikeFactor)
+
+gridExtra::grid.arrange(
+    plotExpression(sce.richard.deconv, x="stimulus", 
+        colour_by="time", features="ENSMUSG00000092341") + 
+        theme(axis.text.x = element_text(angle = 90)) + 
+        ggtitle("After deconvolution"),
+    plotExpression(sce.richard.spike, x="stimulus", 
+        colour_by="time", features="ENSMUSG00000092341") + 
+        theme(axis.text.x = element_text(angle = 90)) +
+        ggtitle("After spike-in normalization"),
+    ncol=2
+)
+```
+
+```{r, echo=FALSE, results="hide"}
+# Checking that Malat1 does indeed change in its DE status
+markers1 <- findMarkers(sce.richard.deconv, clusters=sce.richard$stimulus, direction="up", sorted=FALSE)
+markers2 <- findMarkers(sce.richard.spike, clusters=sce.richard$stimulus, direction="up", sorted=FALSE)
+stopifnot(
+    markers1$unstimulated["ENSMUSG00000092341","FDR"] <= 0.001,
+    markers2$unstimulated["ENSMUSG00000092341","FDR"] > 0.5,
+    all(unlist(markers1$unstimulated["ENSMUSG00000092341",-(1:3)]) -
+        unlist(markers2$unstimulated["ENSMUSG00000092341",-(1:3)]) > 0.1)
+)
 ```
 
 Whether or not total RNA content is relevant -- and thus, the choice of normalization strategy -- depends on the biological hypothesis. 
 In most cases, changes in total RNA content are not interesting and can be normalized out by applying the library size or deconvolution factors. 
-However, this may not always be appropriate if differences in total RNA are associated with a biological process of interest, e.g., cell cycle activity or T cell activation [@richard2018tcell].
+However, this may not always be appropriate if differences in total RNA are associated with a biological process of interest, e.g., cell cycle activity or T cell activation.
 Spike-in normalization will preserve these differences such that any changes in expression between biological groups have the correct sign.
 
 **However!** 
