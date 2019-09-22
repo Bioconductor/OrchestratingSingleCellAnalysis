@@ -1,0 +1,189 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Cell cycle assignment
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble()
+```
+
+## Motivation
+
+On occasion, it can be desirable to determine cell cycle activity from scRNA-seq data.
+In and of itself, the distribution of cells across phases of the cell cycle is not usually informative, but we can use this to determine if there are differences in cell cycle progression between subpopulations or across treatment conditions.
+Many of the key events in the cell cycle (e.g., passage through checkpoints) are post-translational and thus not directly visible in transcriptomic data; nonetheless, there are enough changes in expression that can be exploited to determine cell cycle phase.
+We demonstrate using the 416B dataset, which is known to contain actively cycling cells after oncogene induction.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/lun-416b", "clustering", "sce.416b")
+```
+
+```{r}
+sce.416b
+```
+
+## Using the cyclins
+
+The cyclins control progression through the cell cycle and have well-characterized patterns of expression across cell cycle phases.
+Cyclin D is expressed throughout but peaks at G1; cyclin E is expressed highest in the G1/S transition; cyclin A is expressed across S and G2; and cyclin B is expressed highest in late G2 and mitosis.
+Inspection of the relative expression of cyclins across the population can often be sufficient to determine the relative cell cycle activity in each cluster (Figure \@ref(fig:heat-cyclin)).
+For example, cluster 1 is likely to be in G1 while the other clusters are scattered across the later phases.
+
+```{r heat-cyclin, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the 416B dataset."}
+cyclin.genes <- grep("^Ccn[abde][0-9]$", rowData(sce.416b)$SYMBOL)
+cyclin.genes <- rownames(sce.416b)[cyclin.genes]
+cyclin.genes
+
+library(scater)
+plotHeatmap(sce.416b, colour_columns_by="cluster", cluster_cols=FALSE, 
+    columns=order(sce.416b$cluster), cluster_rows=FALSE, 
+    features=sort(cyclin.genes), show_colnames=FALSE)
+```
+
+```{r, echo=FALSE, results="hide"}
+library(scran)
+markers <- findMarkers(sce.416b, subset.row=cyclin.genes, clusters=sce.416b$cluster)
+stopifnot(all(as.matrix(markers[[1]][c("Ccnd1", "Ccnd2"),-(1:3)]) > 0))
+stopifnot(all(as.matrix(markers[[1]][c("Ccna2", "Ccnb1", "Ccne1"),-(1:3)]) < 0))
+```
+
+The 416B dataset is somewhat unusual as each cluster maps clealy onto a distinct phase of the cell cycle.
+Such separation is not typical in more heterogeneous datasets where the cell cycle is only a secondary factor of variation.
+However, it is not strictly necessary to know the exact phase of each cell or cluster to answer most cycle-related questions.
+For example, we can use standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin, allowing us to determine if there are more cells in the corresponding phase of the cell cycle between subpopulations.
+The same logic applies to comparisons between treatment conditions, as described in Chapter \@ref(sample-comparisons).
+
+```{r}
+library(scran)
+markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
+    clusters=sce.416b$cluster, test.type="wilcox", direction="up")
+markers[[2]]
+```
+
+Direct examination of cyclin expression is easily understood, interpreted and validated with other technologies.
+However, it is best suited for statements about relative cell cycle activity; for example, we would find it difficult to assign cell cycle phase in Figure \@ref(fig:heat-cyclin) without the presence of clusters spanning all phases to provide benchmarks for "high" and "low" expression of each cyclin.
+We also assume that cyclin expression is not affected by biological processes other than the cell cycle, which may be a strong assumption in some cases, e.g., malignant cells.
+On a practical note, we rely on having good coverage of the cyclins (if they are present), which is not a problem for the whole-of-transcriptome methods described below.
+
+## Using reference profiles
+
+Cell cycle assignment can be considered a specialized case of cell annotation, which suggests that the strategies described in Chapter \@ref(cell-type-annotation) can be applied here.
+For example, given a reference dataset containing mouse ESCs with known cell cycle phases [@buettner2015computational], we could use `r Biocpkg("SingleR")` to determine the phase of each cell in a test dataset.
+
+```{r}
+# TODO: move to scRNAseq.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+zip.path <- bfcrpath(bfc, file.path("https://www.ebi.ac.uk/arrayexpress",
+    "files/E-MTAB-2805/E-MTAB-2805.processed.1.zip"))
+
+exdir <- tempdir()
+unzip(zip.path, exdir=exdir)
+g1 <- read.delim(file.path(exdir, "G1_singlecells_counts.txt"), row.names=1)
+g1 <- as.matrix(g1[,-(1:3)])
+s <- read.delim(file.path(exdir, "S_singlecells_counts.txt"), row.names=1)
+s <- as.matrix(s[,-(1:3)])
+g2m <- read.delim(file.path(exdir, "G2M_singlecells_counts.txt"), row.names=1)
+g2m <- as.matrix(g2m[,-(1:3)])
+
+sce.ref <- SingleCellExperiment(list(counts=cbind(g1, s, g2m)))
+sce.ref$phases <- rep(c("G1", "S", "G2M"), c(ncol(g1), ncol(s), ncol(g2m)))
+```
+
+We identify phase-specific markers from the reference and use them to assign labels to the 416B data.
+Cluster 1 mostly consists of G1 cells while the other clusters are assigned to G2M, which is broadly consistent with our conclusions from the cyclin-based analysis.
+Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
+This is often appealing to users but may not make much practical difference to the conclusions, as the phase assignment frequencies still need to be compared across clusters or conditions to be put into context.
+
+```{r}
+# Identifying markers between cell cycle phases.
+common <- intersect(rownames(sce.ref), rowData(sce.416b)$ENSEMBL)
+sce.ref <- logNormCounts(sce.ref)
+phase.stats <- pairwiseWilcox(logcounts(sce.ref), sce.ref$phases, 
+    direction="up", subset.row=common)
+cycle.markers <- getTopMarkers(phase.stats[[1]], phase.stats[[2]], n=20)
+
+# Switching row names back to Ensembl.
+library(SingleR)
+test.data <- logcounts(sce.416b)
+rownames(test.data) <- rowData(sce.416b)$ENSEMBL
+assignments <- SingleR(test.data, ref=sce.ref,
+    label=sce.ref$phases, genes=cycle.markers)
+table(assignments$labels, sce.416b$cluster)
+```
+
+```{r, echo=FALSE, results="hide"}
+tab <- table(assignments$labels, sce.416b$cluster)
+stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
+stopifnot(all(tab["G1",-1] < 0.5 * colSums(tab[,-1])))
+```
+
+The key assumption here is that the cell cycle is orthogonal to cell type and other aspects of cell behavior.
+This justifies the use of a reference involving cell types that are quite different from the cells in the test dataset, provided that the cell cycle transcriptional program is conserved across datasets [@bertoli2013control;@conboy2007cell].
+However, it is not difficult to find routine violations of this assumption - for example, _Dppa3_ is detected as one of the top markers to distinguish between G1 from G2/M in the reference but has no detectable expression in the 416B dataset (Figure \@ref(fig:dist-dppa3)).
+
+```{r dist-dppa3, fig.cap="Distribution of log-normalized expression values for _Dppa3_ in the reference dataset (left) and in the 416B dataset (right)."}
+gridExtra::grid.arrange(
+    plotExpression(sce.ref, features="ENSMUSG00000080241", x="phases"),
+    plotExpression(sce.416b, features="Dppa3", x="cluster"),
+    ncol=2)
+```
+
+Thus, a healthy dose of skepticism is required when interpreting these assignments.
+Our hope is that any systematic assignment error is consistent across clusters and conditions such that they cancel out in comparisons of phase frequencies, which is the more interesting analysis anyway. 
+
+## Using the `cyclone()` classifier
+
+The prediction method described by @scialdone2015computational is another approach for classifying cells into cell cycle phases.
+Using a training dataset, the sign of the difference in expression between two genes was computed for each pair of genes.
+Pairs with changes in the sign across cell cycle phases were chosen as markers.
+Cells in a test dataset can then be classified into the appropriate phase, based on whether the observed sign for each marker pair is consistent with one phase or another.
+This approach is implemented in the `cyclone()` function from the `r Biocpkg("scran")` package, which also contains pre-trained set of marker pairs for mouse and human data.
+
+```{r}
+set.seed(100)
+library(scran)
+mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", 
+    package="scran"))
+
+# Using Ensembl IDs to match up with the annotation in 'mm.pairs'.
+assignments <- cyclone(sce.416b, mm.pairs, gene.names=rowData(sce.416b)$ENSEMBL)
+```
+
+The phase assignment result for each cell in the 416B dataset is shown in Figure \@ref(fig:phaseplot416b).
+For each cell, a higher score for a phase corresponds to a higher probability that the cell is in that phase.
+We focus on the G1 and G2/M scores as these are the most informative for classification.
+
+```{r phaseplot416b, message=FALSE, fig.cap="Cell cycle phase scores from applying the pair-based classifier on the 416B dataset. Each point represents a cell, plotted according to its scores for G1 and G2/M phases."}
+plot(assignments$score$G1, assignments$score$G2M,
+    xlab="G1 score", ylab="G2/M score", pch=16)
+```
+
+Cells are classified as being in G1 phase if the G1 score is above 0.5 and greater than the G2/M score;
+    in G2/M phase if the G2/M score is above 0.5 and greater than the G1 score;
+    and in S phase if neither score is above 0.5.
+Here, the majority of cells in cluster 1 are again classified as being in G1 phase. 
+The main difference from the `r Biocpkg("SingleR")` assignments is the distinction between G2/M and S phases, which is slightly more consistent with our cyclin-based results.
+
+```{r}
+table(assignments$phases, sce.416b$cluster)
+```
+
+```{r, echo=FALSE, results="hide"}
+tab <- table(assignments$phases, sce.416b$cluster)
+stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
+stopifnot(all(tab["S",3] >= tab[,3]))
+```
+
+The same considerations and caveats described for the previous `r Biocpkg("SingleR")`-based cell approach are also applicable here.
+From a practical perspective, `cyclone()` takes longer but does not require an explicit reference as the marker pairs are already computed.
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
