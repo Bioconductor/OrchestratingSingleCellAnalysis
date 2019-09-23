@@ -64,7 +64,7 @@ approx <- findKNN(Y, k=20, BNPARAM=AnnoyParam())
 mean(exact$index!=approx$index)
 ```
 
-### Singular value decomposition
+### Singular value decomposition {#big-data-svd}
 
 The singular value decomposition (SVD) underlies the PCA used throughout our analyses, e.g., in `denoisePCA()`, `fastMNN()`, `doubletCells()`.
 (Briefly, the right singular vectors are the eigenvectors of the gene-gene covariance matrix, where each eigenvector represents the axis of maximum remaining variation in the PCA.)

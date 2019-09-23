@@ -68,6 +68,7 @@ By default, `runPCA()` will use an exact SVD based on base R's `svd()` function 
 These PCs are stored in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
 
 ```{r}
+# Using the top 2000 HVGs.
 chosen.hvgs <- head(order(dec.zeisel$bio, decreasing=TRUE), 2000)
 
 library(scater)
@@ -77,12 +78,13 @@ dim(reducedDim(sce.zeisel, "PCA"))
 ```
 
 In the example above, the PCA is performed on the top 2000 genes with the largest biological components to reduce computational work and noise.
-Specifically, PCA is generally robust to noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
+Specifically, PCA is generally robust to random noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
 This effect can be avoided - or at least mitigated - by restricting the PCA to HVGs with large biological components. 
-Any of the selection strategies described in Chapter \@ref(feature-selection) could be used for feature selection here.
+Any of the strategies described in Chapter \@ref(feature-selection) could be used for feature selection here.
 
 For large data sets, greater efficiency is obtained by using approximate SVD algorithms that only compute the top PCs.
-For example, we can use methods from the `r CRANpkg("irlba")` package:
+Here, we can use methods from the `r CRANpkg("irlba")` package to perform the SVD by passing an `IrlbaParam` object (from the `r Biocpkg("BiocSingular")` package) to the `BSPARAM=` argument (see Section \@ref(big-data-svd) for more details).
+Many of these approximate algorithms are based on randomization and thus require `set.seed()` to obtain reproducible results.
 
 ```{r}
 library(BiocSingular)
@@ -91,19 +93,6 @@ sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs,
     BSPARAM=IrlbaParam(), name="IRLBA")
 reducedDimNames(sce.zeisel)
 ```
-
-The `BSPARAM=` argument from `r Biocpkg("BiocSingular")` provides a flexible interface for specifying different SVD algorithms. 
-Any function that accepts a `BSPARAM=` argument can often be sped up by using an alternative SVD algorithm.
-Another strategy is to perform the SVD using methods from the `r CRANpkg("rsvd")` package:
-
-```{r}
-set.seed(1001) # Slightly different seed to add some variety!
-sce.zeisel <- runPCA(sce.zeisel, subset_row=chosen.hvgs,
-    BSPARAM=RandomParam(), name="RSVD")
-reducedDimNames(sce.zeisel)
-```
-
-The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results.
 
 ### Choosing the number of PCs
 
@@ -142,17 +131,25 @@ Strong biological variation in the early PCs will shift the elbow to the left, p
 #### Using the technical noise
 
 Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
-For example, one might retain the top set of PCs that explains 80% of the total variation in the data.
+For example, we might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
-Instead, we obtain a suitable value for $T$ by calculating the proportion of variance in the data that is attributed to the biological component.
-This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVar()` or related functions.
+Instead, we derive a suitable value for $T$ by calculating the proportion of variance in the data that is attributed to the biological component.
+This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVar()` or related functions, where $T$ is defined as the ratio of the sum of the biological components to the sum of total variances.
+
+To illustrate, we use this strategy to pick the number of PCs in the 10X PBMC dataset.
+Note that explicit feature selection is not strictly necessary, as `denoisePCA()` will automatically restrict the PCA to genes with positive biological components (Section \@ref(feature-selection-positive)) to ensure that $T$ is always a positive value.
+We also use `IrlbaParam()` to speed up the SVD as previously described.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/tenx-unfiltered-pbmc4k", "variance-modelling", 
+    c("sce.pbmc", "dec.pbmc"))
+```
 
 ```{r}
 library(scran)
-set.seed(001001001)
-denoised <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
-    subset.row=chosen.hvgs, BSPARAM=IrlbaParam())
-ncol(reducedDim(denoised))
+set.seed(111001001)
+denoised.pbmc <- denoisePCA(sce.pbmc, technical=dec.pbmc, BSPARAM=IrlbaParam())
+ncol(reducedDim(denoised.pbmc))
 ```
 
 The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation.
@@ -164,6 +161,17 @@ From a practical perspective, the `denoisePCA()` approach retains more PCs than 
 This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
 The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
 Thus, whether this is a "better" approach depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+
+Incidentally, `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
+By default, the number is bounded within the "reasonable" limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low).
+For example, applying this function to the Zeisel brain data hits the upper limit:
+
+```{r}
+set.seed(001001001)
+denoised.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
+    subset.row=chosen.hvgs, BSPARAM=IrlbaParam())
+ncol(reducedDim(denoised.zeisel))
+```
 
 #### Based on population structure
 
@@ -198,7 +206,7 @@ However, it involves strong assumptions about the nature of the biological diffe
 
 ### Putting it together
 
-Once we have chosen $d$, enforcing it is as simple as subsetting the PC matrix by column.
+Once we have chosen $d$, applying it is as simple as subsetting the PC matrix by column.
 We then use the `reducedDim()<-` command to reassign the subsetted matrix back into the `SingleCellExperiment` object.
 For example, if we were to take the top 20 PCs, we would do:
 
@@ -214,6 +222,9 @@ Alternatively, some users may prefer to keep the full set of PCs, in which case 
 reducedDim(sce.zeisel, "PCA_20") <- reducedDim(sce.zeisel, "PCA")[,1:20]
 reducedDimNames(sce.zeisel)
 ```
+
+Note that this is not necessary if the desired number of PCs is directly specified in the initial call to `runPCA()`.
+Similarly, `denoisePCA()` will return its chosen number of PCs without requiring further user intervention.
 
 ## Dimensionality reduction for visualization
 

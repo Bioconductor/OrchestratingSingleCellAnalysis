@@ -296,7 +296,7 @@ Ranking based on $p$-value tends to prioritize HVGs that are more likely to be t
 Many of the largest ratios are observed in high-abundance genes and are driven by very low technical variance; the total variance is typically modest for such genes, and they do not contribute much to population heterogeneity in absolute terms.
 (Note that the same can be said of the ratio of CV^2^ values, as briefly discussed above.)
 
-### Keeping all genes above the trend
+### Keeping all genes above the trend {#feature-selection-positive}
 
 As the title suggests, this involves keeping all genes above the trend.
 The rationale is to only remove the obviously uninteresting genes with variances below the trend.
