@@ -2,6 +2,8 @@
 #'
 #' Execute code to set up knitr compilation flags, HTML content, load required packages, etc. at the start of every chapter.
 #'
+#' @param use_cache knitr setting for whether to cache code chunks
+#'
 #' @details
 #' Compilation is performed with no tolerance for errors, no printing of package start-up messages, 
 #' and no printing of warnings.
