@@ -139,8 +139,8 @@ Our hope is that any systematic assignment error is consistent across clusters a
 ## Using the `cyclone()` classifier
 
 The prediction method described by @scialdone2015computational is another approach for classifying cells into cell cycle phases.
-Using a training dataset, the sign of the difference in expression between two genes was computed for each pair of genes.
-Pairs with changes in the sign across cell cycle phases were chosen as markers.
+Using a reference dataset, we first compute the sign of the difference in expression between each pair of genes.
+Pairs with changes in the sign across cell cycle phases are chosen as markers.
 Cells in a test dataset can then be classified into the appropriate phase, based on whether the observed sign for each marker pair is consistent with one phase or another.
 This approach is implemented in the `cyclone()` function from the `r Biocpkg("scran")` package, which also contains pre-trained set of marker pairs for mouse and human data.
 
@@ -168,6 +168,7 @@ Cells are classified as being in G1 phase if the G1 score is above 0.5 and great
     and in S phase if neither score is above 0.5.
 Here, the majority of cells in cluster 1 are again classified as being in G1 phase. 
 The main difference from the `r Biocpkg("SingleR")` assignments is the distinction between G2/M and S phases, which is slightly more consistent with our cyclin-based results.
+(This is attributable to some additional manual curation, performed during the definition of marker pairs to focus on genes with known roles in cell cycle progression.)
 
 ```{r}
 table(assignments$phases, sce.416b$cluster)
@@ -181,6 +182,23 @@ stopifnot(all(tab["S",3] >= tab[,3]))
 
 The same considerations and caveats described for the previous `r Biocpkg("SingleR")`-based cell approach are also applicable here.
 From a practical perspective, `cyclone()` takes longer but does not require an explicit reference as the marker pairs are already computed.
+
+## Regressing out cell cycle phase
+
+For some time, it was popular to regress out the cell cycle phase prior to downstream analyses.
+The aim was to remove uninteresting variation due to cell cycle, thus improving resolution of other biological processes of interest.
+We could implement this by performing cell cycle phase assignment as described above, treating each phase as a separate batch and applying any of the batch correction strategies described in Chapter \@ref(data-integration).
+The most common approach is to use a linear model to simply regress out the phase effect, e.g., via `removeBatchEffect()`.
+
+That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.
+In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
+Any attempt at removal would also need to assume that the cell cycle effect is orthogonal to other biological processes.
+For example, regression would potentially remove interesting signal if cell cycle activity varied across clusters or conditions, with a prime example being the increased proliferation of activated T cells [@richard2018tcell]. 
+We suggest only performing cell cycle adjustment on an as-needed basis in populations with clear cell cycle effects.
+
+Alternatively, users may consider excluding cell cycle-related genes (e.g., as defined in `GO:0007049`) from downstream analysis.
+This should remove most of the cell cycle effect without making strong assumptions about orthogonality.
+Of course, this will not remove the effect of the cell cycle in genes with no annotated role in the cell cycle, but in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle.
 
 ## Session Info {-}
 
