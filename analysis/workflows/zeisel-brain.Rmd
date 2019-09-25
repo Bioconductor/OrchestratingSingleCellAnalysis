@@ -1,7 +1,8 @@
 # Mouse brain dataset 
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
@@ -217,4 +218,11 @@ colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
 library(pheatmap)
 max.lfc <- max(abs(range(logFCs)))
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+```
+
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
 ```

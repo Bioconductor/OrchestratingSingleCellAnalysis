@@ -1,7 +1,8 @@
 # PBMC 10X dataset (unfiltered)
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
@@ -197,4 +198,10 @@ stopifnot(marker.set["FCGR3A",paste0("logFC.", chosen.macro)] < -2)
 ```{r, fig.wide=TRUE, fig.asp=0.8}
 plotExpression(sce.pbmc, features=c("CD14", "CD68",
     "MNDA", "FCGR3A"), x="cluster", colour_by="cluster")
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
 ```

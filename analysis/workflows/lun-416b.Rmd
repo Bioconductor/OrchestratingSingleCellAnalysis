@@ -1,7 +1,8 @@
 # 416B Smart-seq2 dataset
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
@@ -247,4 +248,10 @@ top.markers <- rownames(marker.set)[marker.set$Top <= 10]
 plotHeatmap(sce.416b, features=top.markers, columns=order(sce.416b$cluster), 
     colour_columns_by=c("cluster", "block", "phenotype"),
     cluster_cols=FALSE, center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
 ```

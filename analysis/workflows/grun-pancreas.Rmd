@@ -2,8 +2,9 @@
 
 # Human pancreas dataset (Grun)
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
@@ -157,3 +158,8 @@ plotTSNE(merged.grun, colour_by="batch")
 ```
 
 
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
