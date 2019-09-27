@@ -214,11 +214,13 @@ Attempting to normalize the spike-in counts with the gene-based size factors wil
 Thus, whenever spike-in data is present, we must compute a separate set of size factors for the spike-in set.
 This is discussed below for the Zeisel dataset.
 
-## Normalizing and (log-)transforming {#normalization-transformation}
+## Applying the size factors
+
+### Scaling and log-transforming {#normalization-transformation}
 
 Once we have computed the size factors, we use the `logNormCounts()` function from `r Biocpkg("scater")` to compute normalized expression values for each cell.
 This is done by dividing the count for each gene/spike-in transcript with the appropriate size factor for that cell.
-The function also log-transforms the normalized values, creating a new assay called `"logcounts".
+The function also log-transforms the normalized values, creating a new assay called `"logcounts"`.
 (Technically, these are "log-transformed normalized expression values", but that's too much of a mouthful to fit into the assay name.)
 These log-values will be the basis of our downstream analyses in the following chapters.
 
@@ -249,14 +251,77 @@ In practical terms, this means that the shrinkage effect of the pseudo-count dim
 This is the correct behavior as it allows log-fold change estimates to become increasingly accurate with deeper coverage.
 In contrast, if we had simply divided each cell's counts by its library size before log-transformation, accuracy of the log-fold changes would never improve regardless of how much additional sequencing we performed.)
 
+### Downsampling and log-transforming
+
+In rare cases, direct scaling of the counts is not appropriate due to the effect described by @lun2018overcoming.
+Briefly, this is caused by the fact that the mean of the log-normalized counts is not the same as the log-transformed mean of the normalized counts.
+The difference between them depends on the mean and variance of the original counts, such that there is a systematic trend in the mean of the log-counts with respect to the count size.
+This typically manifests as trajectories correlated strongly with library size even after library size normalization, as shown in Figure \@ref(fig:cellbench-lognorm-fail) for synthetic scRNA-seq data generated with a pool-and-split approach [@tian2019benchmarking].
+
+```{r cellbench-lognorm-fail, fig.wide=TRUE, fig.asp=0.5, fig.cap="PCA plot of all pool-and-split libraries in the SORT-seq CellBench data, computed from the log-normalized expression values with library size-derived size factors. Each point represents a library and is colored by the mixing ratio used to construct it (left) or by the size factor (right)."}
+# TODO: move to scRNAseq.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+qcdata <- bfcrpath(bfc, "https://github.com/LuyiTian/CellBench_data/blob/master/data/mRNAmix_qc.RData?raw=true")
+
+env <- new.env()
+load(qcdata, envir=env)
+sce.8qc <- env$sce8_qc
+
+# Library size normalization and log-transformation.
+sce.8qc <- logNormCounts(sce.8qc)
+sce.8qc <- runPCA(sce.8qc)
+gridExtra::grid.arrange(
+    plotPCA(sce.8qc, colour_by=I(factor(sce.8qc$mix))),
+    plotPCA(sce.8qc, colour_by=I(librarySizeFactors(sce.8qc))),
+    ncol=2
+)
+```
+
+As the problem arises from differences in the sizes of the counts, the most straightforward solution is to downsample the counts of the high-coverage cells to match those of low-coverage cells.
+This uses the size factors to determine the amount of downsampling for each cell required to reach the 1st percentile of size factors.
+(The small minority of cells with smaller size factors are simply scaled up.
+We do not attempt to downsample to the smallest size factor, as this would result in excessive loss of information for one aberrant cell with very low size factors.)
+We can see that this eliminates the library size factor-associated trajectories from the first two PCs, improving resolution of the known differences based on mixing ratios (Figure \@ref(fig:cellbench-lognorm-downsample)).
+The log-transformation is still necessary but no longer introduces a shift in the means when the sizes of the counts are similar across cells.
+
+```{r cellbench-lognorm-downsample, fig.wide=TRUE, fig.asp=0.5, fig.cap="PCA plot of pool-and-split libraries in the SORT-seq CellBench data, computed from the log-transformed counts after downsampling in proportion to the library size factors. Each point represents a library and is colored by the mixing ratio used to construct it (left) or by the size factor (right)."}
+sce.8qc2 <- logNormCounts(sce.8qc, downsample=TRUE)
+sce.8qc2 <- runPCA(sce.8qc2)
+gridExtra::grid.arrange(
+    plotPCA(sce.8qc2, colour_by=I(factor(sce.8qc2$mix))),
+    plotPCA(sce.8qc2, colour_by=I(librarySizeFactors(sce.8qc2))),
+    ncol=2
+)
+```
+
+```{r, echo=FALSE, results="hide"}
+# Error checks for text above.
+sce.8qc$mix <- factor(sce.8qc$mix)
+sce.8qc$lsf <- log(librarySizeFactors(sce.8qc))
+original <- getExplanatoryPCs(sce.8qc, n_dimred=2, variables=c("lsf", "mix"))
+stopifnot(any(original[,"lsf"] > 80))
+
+sce.8qc2$mix <- factor(sce.8qc2$mix)
+sce.8qc2$lsf <- log(librarySizeFactors(sce.8qc2))
+downsampled <- getExplanatoryPCs(sce.8qc2, n_dimred=2, variables=c("lsf", "mix"))
+stopifnot(all(downsampled[,"lsf"] < 5))
+stopifnot(all(downsampled[,"mix"] > 90))
+```
+
+While downsampling is an expedient solution, it is statistically inefficient as it needs to increase the noise of high-coverage cells in order to avoid differences with low-coverage cells.
+It is also slower than simple scaling.
+Thus, we would only recommend using this approach after an initial analysis with scaled counts reveals suspicious trajectories that are strongly correlated with the size factors.
+In such cases, it is a simple matter to re-normalize by downsampling to determine whether the trajectory is an artifact of the log-transformation.
+
+### Other options
+
 Of course, log-transformation is not the only possible transformation. 
 More sophisticated approaches can be used such as dedicated variance stabilizing transformations (e.g., from the `r Biocpkg("DESeq2")` or `r CRANpkg("sctransform")` packages), which out-perform the log-transformation for removal of the mean-variance trend.
-In practice, though, the log-transformation is a good default choice due its simplicity (a.k.a., reliability, predictability and computational efficiency) and interpretability.
+In practice, though, the log-transformation is a good default choice due to its simplicity (a.k.a., reliability, predictability and computational efficiency) and interpretability.
 
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
