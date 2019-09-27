@@ -11,8 +11,11 @@ library(OSCAUtils)
 chapterPreamble()
 ```
 
-*WIP*
-
+```{r dio-fail, fig.cap="Waiting for Stephanie to finish her PR.", echo=FALSE}
+path <- fetchImage(path="images/Dio.png",
+    url="https://dl.dropboxusercontent.com/s/tvkcg5h4081yk3y/dio.jpg")
+knitr::include_graphics(path)
+```
 
 ## Session Info {-}
 

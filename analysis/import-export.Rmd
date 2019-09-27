@@ -13,7 +13,21 @@ chapterPreamble()
 
 *WIP*
 
+## Interchanging with _Seurat_
 
+```{r elsie-fail, fig.cap="Need to add this at some point.", echo=FALSE}
+path <- fetchImage(path="images/missing.png",
+    url="https://dl.dropboxusercontent.com/s/vr5me3dx9c7kkxt/missing.jpg")
+knitr::include_graphics(path)
+```
+
+## Interchanging with _scanpy_
+
+```{r vegeta-fail, fig.cap="Need to add this at some point.", echo=FALSE}
+path <- fetchImage(path="images/missing.png",
+    url="https://dl.dropboxusercontent.com/s/b2zt9oyjoukthwr/missing2.jpg")
+knitr::include_graphics(path)
+```
 
 ## Session Info {-}
 
