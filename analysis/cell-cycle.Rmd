@@ -55,13 +55,21 @@ The 416B dataset is somewhat unusual as each cluster maps clealy onto a distinct
 Such separation is not typical in more heterogeneous datasets where the cell cycle is only a secondary factor of variation.
 However, it is not strictly necessary to know the exact phase of each cell or cluster to answer most cycle-related questions.
 For example, we can use standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin, allowing us to determine if there are more cells in the corresponding phase of the cell cycle between subpopulations.
-The same logic applies to comparisons between treatment conditions, as described in Chapter \@ref(sample-comparisons).
+The same logic applies to comparisons between treatment conditions, as described in Chapter \@ref(multi-sample-comparisons).
 
 ```{r}
 library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
     clusters=sce.416b$cluster, test.type="wilcox", direction="up")
+
+# We can infer that cluster 2 has more cells in G2/M than the other clusters,
+# based on higher expression of the cyclin B's.
 markers[[2]]
+```
+
+```{r, echo=FALSE, results="hide"}
+library(scran)
+stopifnot(all(as.matrix(markers[[2]][c("Ccnb1"),-(1:3)]) > 0.5))
 ```
 
 Direct examination of cyclin expression is easily understood, interpreted and validated with other technologies.
@@ -97,7 +105,6 @@ sce.ref$phases <- rep(c("G1", "S", "G2M"), c(ncol(g1), ncol(s), ncol(g2m)))
 We identify phase-specific markers from the reference and use them to assign labels to the 416B data.
 Cluster 1 mostly consists of G1 cells while the other clusters are assigned to G2M, which is broadly consistent with our conclusions from the cyclin-based analysis.
 Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
-This is often appealing to users but may not make much practical difference to the conclusions, as the phase assignment frequencies still need to be compared across clusters or conditions to be put into context.
 
 ```{r}
 # Identifying markers between cell cycle phases.
@@ -113,11 +120,11 @@ test.data <- logcounts(sce.416b)
 rownames(test.data) <- rowData(sce.416b)$ENSEMBL
 assignments <- SingleR(test.data, ref=sce.ref,
     label=sce.ref$phases, genes=cycle.markers)
-table(assignments$labels, sce.416b$cluster)
+tab <- table(assignments$labels, sce.416b$cluster)
+tab
 ```
 
 ```{r, echo=FALSE, results="hide"}
-tab <- table(assignments$labels, sce.416b$cluster)
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
 stopifnot(all(tab["G1",-1] < 0.5 * colSums(tab[,-1])))
 ```
@@ -135,6 +142,12 @@ gridExtra::grid.arrange(
 
 Thus, a healthy dose of skepticism is required when interpreting these assignments.
 Our hope is that any systematic assignment error is consistent across clusters and conditions such that they cancel out in comparisons of phase frequencies, which is the more interesting analysis anyway. 
+Indeed, while the availability of absolute phase calls may be more appealing, it may not make much practical difference to the conclusions if the frequencies are ultimately interpreted in a relative sense (e.g., using a chi-squared test). 
+
+```{r}
+# Test for differences in phase distributions between clusters 1 and 2.
+chisq.test(tab[,1:2])
+```
 
 ## Using the `cyclone()` classifier
 
@@ -196,9 +209,20 @@ Any attempt at removal would also need to assume that the cell cycle effect is o
 For example, regression would potentially remove interesting signal if cell cycle activity varied across clusters or conditions, with a prime example being the increased proliferation of activated T cells [@richard2018tcell]. 
 We suggest only performing cell cycle adjustment on an as-needed basis in populations with clear cell cycle effects.
 
-Alternatively, users may consider excluding cell cycle-related genes (e.g., as defined in `GO:0007049`) from downstream analysis.
+Alternatively, users may consider just excluding cell cycle-related genes from downstream analysis.
 This should remove most of the cell cycle effect without making strong assumptions about orthogonality.
 Of course, this will not remove the effect of the cell cycle in genes with no annotated role in the cell cycle, but in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle.
+
+```{r}
+library(org.Mm.eg.db)
+cc.genes <- select(org.Mm.eg.db, keys="GO:0007049", keytype="GOALL", column="ENSEMBL")
+sce.416b.uncycle <- sce.416b[!rowData(sce.416b)$ENSEMBL %in% cc.genes$ENSEMBL,]
+
+# Proceed with the rest of the analysis. Note that in this case, oncogene
+# induction is quite strongly associated with the cell cycle but is considered
+# to be a separate effect, so removal of the cell cycle-related genes does not
+# change the clustering much.
+```
 
 ## Session Info {-}
 
