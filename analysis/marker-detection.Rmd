@@ -454,13 +454,13 @@ For most applications, it is actually desirable to avoid detecting such genes as
 Continuing from the example above, the failure to detect T cell markers is of little consequence if we already know we are working with T cells.
 Nonetheless, if "absolute" identification of cell types is necessary, we discuss some strategies for doing so in Chapter \@ref(cell-type-annotation).
 
-Marker detectionc an also be performed by treating gene expression as a predictor variable for cluster assignment.
+Alternatively, marker detection can be performed by treating gene expression as a predictor variable for cluster assignment.
 For a pair of clusters, we can find genes that discriminate between them by performing inference with a logistic model where the outcome for each cell is whether it was assigned to the first cluster and the lone predictor is the expression of each gene.
 Treating the cluster assignment as the dependent variable is more philosophically pleasing in some sense, as the clusters are indeed defined from the expression data rather than being known in advance.
 (Note that this does not solve the data snooping problem.)
 In practice, this approach effectively does the same task as a Wilcoxon rank sum test in terms of quantifying separation between clusters.
-Logistic models can more easily include additive terms for blocking factors, but this is not a typical application for marker gene detection.
-Even more complex strategies use machine learning methods to determine which features contribute most to successful cluster classification, but this is probably unnecessary.
+Logistic models have the advantage in that they can easily be extended to block on multiple nuisance variables, though this is not typically necessary in most use cases.
+Even more complex strategies use machine learning methods to determine which features contribute most to successful cluster classification, but this is probably unnecessary for routine analyses.
 
 ## Session Info {-}
 
