@@ -188,7 +188,7 @@ The WMW test statistic is proportional to the area-under-the-curve (AUC), i.e., 
 In a pairwise comparison, AUCs of 1 or 0 indicate that the two clusters have perfectly separated expression distributions.
 Thus, the WMW test directly addresses the most desirable property of a candidate marker gene, while the $t$ test only does so indirectly via the difference in the means and the intra-group variance.
 
-We perform WMW tests using the `overlapExprs()` function.
+We perform WMW tests using the `findMarkers()` function, with `test="wilcox"`.
 This returns a list of `DataFrame`s containing ranked candidate markers for each cluster.
 The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have the same interpretation as described for $t$ tests.
 We demonstrate below by detecting upregulated genes in each cluster with `direction="up"`.
@@ -224,7 +224,7 @@ pheatmap(AUCs, breaks=seq(0, 1, length.out=21),
 
 The main disadvantage of the WMW test is that the AUCs are much slower to compute compared to $t$-statistics.
 This may be inconvenient for interactive analyses involving multiple iterations of marker detection.
-We can mitigate this to some extent by parallelizing these calculations using the `BPPARAM=` argument in `overlapExprs()`.
+We can mitigate this to some extent by parallelizing these calculations using the `BPPARAM=` argument in `findMarkers()`.
 
 ### Using a binomial test
 
@@ -234,7 +234,7 @@ This represents a much more stringent definition of marker genes compared to the
 The premise is that genes are more likely to contribute to important biological decisions if they were active in one cluster and silent in another, compared to more subtle "tuning" effects from changing the expression of an active gene.
 From a practical perspective, a binary measure of presence/absence is easier to validate.
 
-We perform pairwise binomial tests between clusters using the `pairwiseBinom()` function.
+We perform pairwise binomial tests between clusters using the `findMarkers()` function, with `test="binom`.
 This returns a list of `DataFrame`s containing marker statistics for each cluster, such as the `Top` rank and its $p$-value.
 Here, the effect size is reported as the log-fold change in this proportion between each pair of clusters.
 Large positive log-fold changes indicate that the gene is more frequently expressed in one cluster compared to the other.
