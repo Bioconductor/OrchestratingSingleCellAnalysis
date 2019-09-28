@@ -16,10 +16,10 @@ chapterPreamble()
 To interpret our clustering results from Chapter \@ref(clustering), we identify the genes that drive separation between clusters.
 These marker genes allow us to assign biological meaning to each cluster based on their functional annotation.
 In the most obvious case, the marker genes for each cluster are _a priori_ associated with particular cell types, allowing us to treat the clustering as a proxy for cell type identity.
-The same principle can be applied to more subtle differences in activation status or differentiation state.
+The same principle can be applied to discover more subtle differences between clusters (e.g., changes in activation or differentiation state) based on the behavior of genes in the affected pathways.
 
 Identification of marker genes is usually based around the retrospective detection of differential expression between clusters.
-Genes that are more strongly DE are more likely to have driven cluster separation in the first place.
+Genes that are more strongly DE are more likely to have caused separate clustering of cells in the first place.
 Several different statistical tests are available to quantify the differences in expression profiles, and different approaches can be used to consolidate test results into a single ranking of genes for each cluster.
 These choices parametrize the theroetical differences between the various marker detection strategies presented in this chapter.
 We will demonstrate using the 10X PBMC dataset:
@@ -438,12 +438,32 @@ This is not the most relevant level of replication when cells are derived from t
 DE analyses that treat cells as replicates fail to properly model the sample-to-sample variability [@lun2017overcoming].
 The latter is arguably the more important level of replication as different samples will necessarily be generated if the experiment is to be replicated.
 Indeed, the use of cells as replicates only masks the fact that the sample size is actually one in an experiment involving a single biological sample.
-This reinforces the inappropriateness of using the marker gene $p$-values to make statements about statistical inference.
+This reinforces the inappropriateness of using the marker gene $p$-values to perform statistical inference.
+
+We strongly recommend selecting some markers for use in validation studies with an independent replicate population of cells.
+A typical strategy is to identify a corresponding subset of cells that express the upregulated markers and do not express the downregulated markers.
+Ideally, a different technique for quantifying expression would also be used during validation, e.g., fluorescent _in situ_ hybridisation or quantitative PCR.
+This confirms that the subpopulation genuinely exists and is not an artifact of the scRNA-seq protocol or the computational analysis.
+
+## Further comments
+
+One consequence of the DE analysis strategy is that markers are defined relative to subpopulations in the same dataset.
+Biologically meaningful genes will not be detected if they are expressed uniformly throughout the population, e.g., T cell markers will not be detected if only T cells are present in the dataset.
+In practice, this is usually only a problem when the experimental data are provided without any biological context - certainly, we would hope to have some _a priori_ idea about what cells have been captured.
+For most applications, it is actually desirable to avoid detecting such genes as we are interested in characterizing heterogeneity  within the context of a known cell population.
+Continuing from the example above, the failure to detect T cell markers is of little consequence if we already know we are working with T cells.
+Nonetheless, if "absolute" identification of cell types is necessary, we discuss some strategies for doing so in Chapter \@ref(cell-type-annotation).
+
+Alternatively, marker detection can be performed by treating gene expression as a predictor variable for cluster assignment.
+For a pair of clusters, we can find genes that discriminate between them by performing inference with a logistic model where the outcome for each cell is whether it was assigned to the first cluster and the lone predictor is the expression of each gene.
+Treating the cluster assignment as the dependent variable is more philosophically pleasing in some sense, as the clusters are indeed defined from the expression data rather than being known in advance.
+(Note that this does not solve the data snooping problem.)
+In practice, this approach effectively does the same task as a Wilcoxon rank sum test in terms of quantifying separation between clusters.
+Logistic models have the advantage in that they can easily be extended to block on multiple nuisance variables, though this is not typically necessary in most use cases.
+Even more complex strategies use machine learning methods to determine which features contribute most to successful cluster classification, but this is probably unnecessary for routine analyses.
 
 ## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-

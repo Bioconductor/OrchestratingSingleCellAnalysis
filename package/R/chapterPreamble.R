@@ -2,6 +2,8 @@
 #'
 #' Execute code to set up knitr compilation flags, HTML content, load required packages, etc. at the start of every chapter.
 #'
+#' @param use_cache knitr setting for whether to cache code chunks
+#'
 #' @details
 #' Compilation is performed with no tolerance for errors, no printing of package start-up messages, 
 #' and no printing of warnings.
@@ -16,8 +18,8 @@
 #' 
 #' @export
 #' @importFrom knitr opts_chunk
-chapterPreamble <- function() {
-    opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, cache = TRUE)
+chapterPreamble <- function(use_cache = FALSE) {
+    opts_chunk$set(message = FALSE, warning = FALSE, error = FALSE, cache = use_cache)
     suppressPackageStartupMessages(require(BiocStyle))
     if (suppressWarnings(require(Cairo, quietly=TRUE))) {
         opts_chunk$set(dev="CairoPNG")

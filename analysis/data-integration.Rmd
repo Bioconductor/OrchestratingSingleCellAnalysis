@@ -52,11 +52,19 @@ pbmc4k
 To prepare for the batch correction:
 
 1. We subset all batches to the common "universe" of features.
-In this case, it is straightforward as both batches use Ensembl gene annotation^[This step can be much, much, much more painful. As is often said, biologists would rather share a toothbrush than nomenclature.].
+In this case, it is straightforward as both batches use Ensembl gene annotation.
 
     ```{r}
     universe <- intersect(rownames(pbmc3k), rownames(pbmc4k))
     length(universe)
+
+    # Subsetting the SingleCellExperiment object.
+    pbmc3k <- pbmc3k[universe,]
+    pbmc4k <- pbmc4k[universe,]
+
+    # Also subsetting the variance modelling results, for convenience.
+    dec3k <- dec3k[universe,]
+    dec4k <- dec4k[universe,]
     ```
 
 2. We rescale each batch to adjust for differences in sequencing depth between batches.
@@ -66,7 +74,7 @@ This improves the quality of the correction by removing one aspect of the techni
 
     ```{r}
     library(batchelor)
-    rescaled <- multiBatchNorm(pbmc3k[universe,], pbmc4k[universe,])
+    rescaled <- multiBatchNorm(pbmc3k, pbmc4k)
     pbmc3k <- rescaled[[1]]
     pbmc4k <- rescaled[[2]]
     ```
@@ -74,14 +82,13 @@ This improves the quality of the correction by removing one aspect of the techni
 3. We perform feature selection by averaging the variance components across all batches with the `combineVar()` function.
 We use the average as it is responsive to batch-specific HVGs while still preserving the within-batch ranking of genes.
 This allows us to use the same strategies described in Section \@ref(hvg-selection) to select genes of interest.
-For example, if we were to retain all genes with positive biological components, convergence of the average towards zero for non-HVGs ensures that the expected number of retained genes is stable with more batches.
 In contrast, approaches based on taking the intersection or union of HVGs across batches become increasingly conservative or liberal, respectively, with an increasing number of batches.
 
     ```{r}
     library(scran)
-    combined.dec <- combineVar(dec3k[universe,], dec4k[universe,])
+    combined.dec <- combineVar(dec3k, dec4k)
     chosen.hvgs <- combined.dec$bio > 0
-    combined.dec[,1:6]
+    sum(chosen.hvgs)
     ```
 
 ## Diagnosing batch effects {#batch-diagnosis}

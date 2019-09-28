@@ -58,8 +58,8 @@ Any cell with very few expressed genes is likely to be of poor quality as the di
 As the same amount of spike-in RNA should have been added to each cell, any enrichment in spike-in counts is symptomatic of loss of endogenous RNA.
 Thus, high proportions are indicative of poor-quality cells where endogenous RNA has been lost due to, e.g., partial cell lysis or RNA degradation during dissociation.
 - In the absence of spike-in transcripts, the proportion of reads mapped to genes in the mitochondrial genome can be used.
-High proportions are indicative of poor-quality cells [@islam2014quantitative;@ilicic2016classification], possibly because of loss of cytoplasmic RNA from perforated cells.
-The reasoning is that mitochondria are larger than individual transcript molecules and less likely to escape through holes in the cell membrane.
+High proportions are indicative of poor-quality cells [@islam2014quantitative;@ilicic2016classification], presumably because of loss of cytoplasmic RNA from perforated cells.
+The reasoning is that, in the presence of modest damage, the holes in the cell membrane permit efflux of individual transcript molecules but are too small to allow mitochondria to escape, leading to a relative enrichment of mitochondrial transcripts.
 
 For each cell, we calculate these QC metrics using the `perCellQCMetrics()` function from the `r BiocStyle::Biocpkg("scater")` package [@mccarthy2017scater].
 The `sum` column contains the total count for each cell,
@@ -266,7 +266,7 @@ plotColData(sce.416b, x="sum", y="subsets_Mito_percent",
 ```
 
 Comparison of the ERCC and mitochondrial percentages can also be informative (Figure \@ref(fig:qc-mito2-416b)).
-Low-quality cells with large ERCC percentages and small mitochondrial percentages are likely to be stripped nuclei, i.e., they are so damaged that they have lost all cytoplasmic content.
+Low-quality cells with small mitochondrial percentages, large spike-in percentages and small library sizes are likely to be stripped nuclei, i.e., they have been so extensively damaged that they have lost all cytoplasmic content.
 Conversely, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
 
 ```{r qc-mito2-416b, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the percentage of reads assigned to ERCC transcripts."}
@@ -298,7 +298,7 @@ marked$discard <- batch.reasons$discard
 ```
 
 For routine analyses, we suggest performing removal by default to avoid complications from low-quality cells.
-This allows most of the population structure to be characterized with no (or, at least, fewer) concerns about its validity.
+This allows most of the population structure to be characterized with no - or, at least, fewer - concerns about its validity.
 Once the initial analysis is done, and if there are any concerns about discarded cell types (Section \@ref(quality-control-discarded)), a more thorough re-analysis can be performed where the low-quality cells are only marked.
 This recovers cell types with low RNA content, high mitochondrial proportions, etc. that only need to be interpreted insofar as they "fill the gaps" in the initial analysis.
 

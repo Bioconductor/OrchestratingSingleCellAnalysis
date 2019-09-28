@@ -348,4 +348,8 @@ As the top marker genes are simply DEGs, we can directly apply well-established 
 This contrasts with the `r Biocpkg("AUCell")` approach where scores are not easily comparable across cells.
 The downside is that all conclusions are made relative to the other clusters, making it more difficult to determine cell identity if an "outgroup" is not present in the same study.
 
+## Session Info {-}
 
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
