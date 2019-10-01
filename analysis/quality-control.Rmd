@@ -229,6 +229,27 @@ plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc))
 ```
 
+### Other approaches
+
+Another strategy is to identify outliers in high-dimensional space based on the QC metrics for each cell.
+We use methods from `r CRANpkg("robustbase")` to quantify the "outlyingness" of each cells based on their QC metrics, and then use `isOutlier()` to identify low-quality cells that exhibit unusually high levels of outlyingness.
+
+```{r}
+stats <- cbind(log10(df$sum), log10(df$detected),
+    df$subsets_Mito_percent, df$altexps_ERCC_percent)
+
+library(robustbase)
+outlying <- adjOutlyingness(stats, only.outlyingness = TRUE)
+multi.outlier <- isOutlier(outlying, type = "higher")
+summary(multi.outlier)
+```
+
+This and related approaches like PCA-based outlier detection and support vector machines can provide more power to distinguish low-quality cells from high-quality counterparts [@ilicic2016classification] as they can exploit patterns across many QC metrics. 
+However, this comes at some cost to interpretability, as the reason for removing a given cell may not always be obvious.
+
+For completeness, we note that outliers can also be identified from the gene expression profiles, rather than QC metrics.
+We consider this to be a risky strategy as it can remove high-quality cells in rare populations.
+
 ## Checking diagnostic plots {#quality-control-plots}
 
 It is good practice to inspect the distributions of QC metrics (Figure \@ref(fig:qc-dist-416b)) to identify possible problems.
