@@ -76,7 +76,7 @@ stopifnot(all(unlist(platelets["PF4",-(1:3)]) > 0))
 ```
 
 We use the `Top` value to identify a set of genes that is guaranteed to distinguish cluster `r chosen` from any other cluster.
-Here, we examine the top 5 genes from each pairwise comparison (Figure \@ref(fig:heat-basic-pbmc)).
+Here, we examine the top 6 genes from each pairwise comparison (Figure \@ref(fig:heat-basic-pbmc)).
 Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (_PF4_) and pro-platelet basic protein (_PPBP_).
 
 ```{r heat-basic-pbmc, fig.asp=2, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
