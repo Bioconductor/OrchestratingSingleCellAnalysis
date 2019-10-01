@@ -10,8 +10,8 @@ He likes long walks on the beach (as long as there's Wifi) and travelling (but o
 His friends say that he is "absolutely insane" and "needs to get a life", or they would if they weren't mostly imaginary.
 His GitHub account is his Facebook and his Slack is his Twitter.
 He maintains more Bioconductor packages than he has phone numbers on his cell.
-He has a recurring event on his Google Calender to fold his laundry.
-He is - the most boring man in the world.
+He has a recurring event on his Google Calendar to fold his laundry.
+He is... the most boring man in the world.
 ("I don't often cry when I watch anime, but when I do, my tears taste like Dos Equis.")
 He currently works as a Scientist at Genentech after a stint as a research associate in John Marioni's group at the CRUK Cambridge Institute, which was preceded by a PhD with Gordon Smyth at the Walter and Eliza Hall Institute for Medical Research.
 

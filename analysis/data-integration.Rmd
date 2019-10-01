@@ -206,7 +206,7 @@ Thus, the difference between cells in MNN pairs can be used as an estimate of th
 
 The `r Biocpkg("batchelor")` package provides an implementation of the MNN approach via the `fastMNN()` function.
 (Unlike the MNN method described by @haghverdi2018batch, the `fastMNN()` function performs PCA to reduce the dimensions beforehand and speed up the downstream neighbor detection steps.)
-We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen`.
+We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen.hvgs`.
 To reduce computational work and technical noise, all cells in all batches are projected into the low-dimensional space defined by the top `d` principal components.
 Identification of MNNs and calculation of correction vectors are then performed in this low-dimensional space.
 
@@ -214,13 +214,13 @@ Identification of MNNs and calculation of correction vectors are then performed 
 # Using randomized SVD here, as this is faster than 
 # irlba for file-backed matrices.
 set.seed(1000101001)
-mnn.out <- fastMNN(pbmc3k, pbmc4k, d=50, k=20,
+mnn.out <- fastMNN(pbmc3k, pbmc4k, d=50, k=20, subset.row=chosen.hvgs,
     BSPARAM=BiocSingular::RandomParam(deferred=TRUE))
 mnn.out
 ```
 
 The function returns a `SingleCellExperiment` object containing corrected values for downstream analyses like clustering or visualization.
-Each column of `mnn.out` corresponds to a cell in one of the batches, while each row corresponds to an input gene in `chosen`.
+Each column of `mnn.out` corresponds to a cell in one of the batches, while each row corresponds to an input gene in `chosen.hvgs`.
 The `batch` field in the column metadata contains a vector specifying the batch of origin of each cell. 
 
 ```{r}

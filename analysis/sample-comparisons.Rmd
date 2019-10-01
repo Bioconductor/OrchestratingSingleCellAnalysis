@@ -94,14 +94,17 @@ summed
 
 At this point, it is worth reflecting on the motivations behind the use of pseudo-bulking:
 
-- Larger counts are more amenable to downstream analysis with standard methods for bulk RNA-seq analysis.
-Normalization is more straightforward and certain approximations are more accurate for large counts.
+- Larger counts are more amenable to standard DE analysis pipelines designed for bulk RNA-seq data.
+Normalization is more straightforward and certain statistical approximations are more accurate for large counts.
 - Collapsing cells into samples reflects the fact that our biological replication occurs at the sample level [@lun2017overcoming].
 Each sample is represented no more than once for each condition, avoiding problems from unmodelled correlations between samples. 
-Supplying the per-cell counts directly would indicate that each cell is a biological replicate, which is not true from an experimental perspective.
+Supplying the per-cell counts directly to a DE analysis pipeline would imply that each cell is an independent biological replicate, which is not true from an experimental perspective.
+(Yes, use of a mixed effects model can overcome this, but it adds an extra layer of [statistical and computational complexity](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html) to little benefit.)
 - Variance between cells within each sample is masked, provided it does not affect variance across (replicate) samples.
 This avoids penalizing DEGs that are not uniformly up- or down-regulated for all cells in all samples of one condition.
-Masking is generally desirable as DEGs (unlike marker genes) do not need to have low within-sample variance to be interesting, e.g., if the treatment effect is consistent across populations but heterogeneous on a per-cell basis.
+Masking is generally desirable as DEGs - unlike marker genes - do not need to have low within-sample variance to be interesting, e.g., if the treatment effect is consistent across replicate populations but heterogeneous on a per-cell basis.
+(Of course, high per-cell variability will still result in weaker DE if it affects the variability across populations, while homogeneous per-cell responses will result in stronger DE due to a larger population-level log-fold change.
+These effects are also largely desirable.)
 
 ### Performing the DE analysis
 

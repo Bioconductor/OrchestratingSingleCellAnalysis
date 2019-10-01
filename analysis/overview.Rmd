@@ -23,15 +23,15 @@ knitr::include_graphics(path)
 Before starting the analysis itself, some comments on experimental design may be helpful.
 The most obvious question is the choice of technology, which can be roughly divided into:
 
-- Droplet-based (10X Genomics, inDrop, Drop-seq)
-- Plate-based with UMIs (CEL-seq, MARS-seq)
-- Plate-based with reads (Smart-seq2)
-- Other (sci-RNA-seq, seqWell)
+- Droplet-based: 10X Genomics, inDrop, Drop-seq
+- Plate-based with unique molecular identifiers (UMIs): CEL-seq, MARS-seq
+- Plate-based with reads: Smart-seq2
+- Other: sci-RNA-seq, Seq-Well
 
 Each of these methods have their own advantages and weaknesses that are discussed extensively elsewhere [@mereu2019benchmarking;@ziegenhain2017comparative].
 In practical terms, droplet-based technologies are the current _de facto_ standard due to their throughput and low cost per cell.
 Plate-based methods can capture other phenotypic information (e.g., morphology) and are more amenable to customization.
-Read-based methods provide whole-transcript coverage, which is useful in some applications (e.g., splicing, exome mutations).
+Read-based methods provide whole-transcript coverage, which is useful in some applications (e.g., splicing, exome mutations); otherwise, UMI-based methods are more popular as they mitigate the effects of PCR amplification noise.
 The choice of method is left to the reader's circumstances - we will simply note that most aspects of our analysis pipeline are technology-agnostic.
 
 The next question is how many cells should be captured, and to what depth they should be sequenced.
@@ -46,22 +46,23 @@ For studies involving multiple samples or conditions, the design considerations 
 There should be multiple biological replicates for each condition and conditions should not be confounded with batch.
 Note that individual cells are not replicates; rather, we are referring to samples derived from replicate donors or cultures.
 
-## Preprocessing 
+## Obtaining a count matrix 
 
-Sequencing data from scRNA-seq experiments must be converted into per-cell and per-gene expression values.
-The exact procedure for doing so is usually run outside of R and tends to be technology-dependent:
+Sequencing data from scRNA-seq experiments must be converted into a matrix of expression values that can be used for statistical analysis.
+Given the discrete nature of sequencing data, this is usually a count matrix containing the number of UMIs or reads mapped to each gene in each cell.
+The exact procedure for quantifying expression tends to be technology-dependent:
 
 * For 10X Genomics data, the `CellRanger` software suite provides a custom pipeline to obtain a count matrix.
-This uses STAR to align reads to the reference genome, and then counts the number of unique UMIs mapped to each gene.
+This uses _STAR_ to align reads to the reference genome and then counts the number of unique UMIs mapped to each gene.
 * Pseudo-alignment methods such as `alevin` can be used to obtain a count matrix from the same data with greater efficiency.
 This avoids the need for explicit alignment, which reduces the compute time and memory usage.
-* For other highly multiplexed protocols, we can use the `r Biocpkg("scPipe")` package, which provides a more general pipeline for processing scRNA-seq data.
+* For other highly multiplexed protocols, the `r Biocpkg("scPipe")` package provides a more general pipeline for processing scRNA-seq data.
 This uses the `r Biocpkg("Rsubread")` aligner to align reads and then counts UMIs per gene.
 * For CEL-seq or CEL-seq2 data, the `r Biocpkg("scruff")` package provides a dedicated pipeline for quantification.
-* For read-based protocols, we can use the same pipelines for processing bulk RNA-seq data.
+* For read-based protocols, we can generally re-use the same pipelines for processing bulk RNA-seq data.
 * For any data involving spike-in transcripts, the spike-in sequences should be included as part of the reference genome during alignment and quantification.
 
-We import the count matrix into R and create a `SingleCellExperiment` object.
+After quantification, we import the count matrix into R and create a `SingleCellExperiment` object.
 This can be done with base methods (e.g., `read.table()`) followed by applying the `SingleCellExperiment()` constructor.
 Alternatively, for specific file formats, we can use dedicated methods from the `r Biocpkg("DropletUtils")` (for 10X data) or `r Biocpkg("tximport")`/`r Biocpkg("tximeta")` packages (for pseudo-alignment methods).
 Depending on the origin of the data, this requires some vigilance:
@@ -69,9 +70,9 @@ Depending on the origin of the data, this requires some vigilance:
 - Some feature-counting tools will report mapping statistics in the count matrix (e.g., the number of unaligned or unassigned reads).
 While these values can be useful for quality control, they would be misleading if treated as gene expression values.
 Thus, they should be removed (or at least moved to the `colData`) prior to further analyses.
-- Be careful of using the `^ERCC` regular expression for human data where the row names of the count matrix are gene symbols.
+- Be careful of using the `^ERCC` regular expression to detect spike-in rows in human data where the row names of the count matrix are gene symbols.
 An ERCC gene family actually exists in human annotation, so this would result in incorrect identification of genes as spike-in transcripts.
-This problem can be avoided by publishing count matrices with standard identifiers (e.g., Ensembl, Entrez).
+This problem can be avoided by using count matrices with standard identifiers (e.g., Ensembl, Entrez).
 
 ## Data processing and downstream analysis
 
