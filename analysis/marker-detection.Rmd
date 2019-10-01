@@ -21,7 +21,7 @@ The same principle can be applied to discover more subtle differences between cl
 Identification of marker genes is usually based around the retrospective detection of differential expression between clusters.
 Genes that are more strongly DE are more likely to have caused separate clustering of cells in the first place.
 Several different statistical tests are available to quantify the differences in expression profiles, and different approaches can be used to consolidate test results into a single ranking of genes for each cluster.
-These choices parametrize the theroetical differences between the various marker detection strategies presented in this chapter.
+These choices parametrize the theoretical differences between the various marker detection strategies presented in this chapter.
 We will demonstrate using the 10X PBMC dataset:
 
 ```{r, results='asis', echo=FALSE}
