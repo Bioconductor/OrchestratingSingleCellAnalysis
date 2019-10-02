@@ -241,7 +241,7 @@ sizeFactors(sce)
 
 So far, we have covered the `assays` (primary data), `colData` (sample metadata), `rowData`/`rowRanges` (feature metadata), and `sizeFactors` slots of *SingleCellExperiment*. 
 
-What is important to note is that the *SingleCellExperiment* class _derives_ from the `SummarizedExperiment` (`se`) class, its predecessor, and in particular inherits the aforementioned slots. As such, much of the `SummarizedExperiment` functionality is retained in *SingleCellExperiment*. This allows existing methods that work with `SummarizedExperiment` to work similarly on *SingleCellExperiment* objects.
+What is important to note is that the *SingleCellExperiment* class _derives_ from the `SummarizedExperiment` (`se`) class, its predecessor, and in particular inherits the `assays`, `colData` and `rowData`/`rowRanges` slots. As such, much of the `SummarizedExperiment` functionality is retained in *SingleCellExperiment*. This allows existing methods that work with `SummarizedExperiment` to work similarly on *SingleCellExperiment* objects.
 
 So what's new about the *SingleCellExperiment* class then? For our discussion, the most important change is the addition of a new slot called `reducedDims`.
 
@@ -273,7 +273,7 @@ We can view the names of all our entries in the `reducedDims` slot via the acces
 reducedDims(sce)
 ```
 
-Now, say we have a different dimensionality reduction approach which has not yet been implemented with *SingleCellExperiment* objects in mind. For example, let's say we want to try the `umap()` function as implemented in the `uwot` package (which is a much faster version of the default `umap` implementation currently in `scater`). 
+Now, say we have a different dimensionality reduction approach which has not yet been implemented with *SingleCellExperiment* objects in mind. For example, let's say we want to explicitly use the `umap()` function as implemented in the `uwot` package. 
 
 Similar to how we extended the `assays` slot with our own custom entry of `counts_100`, we can do similarly for the `reducedDims` slot:
 
@@ -322,7 +322,7 @@ In subsequent sections, we will show an example workflow that uses the *SingleCe
 
 ## The Centrality of SingleCellExperiment
 
-![Graph network of package dependencies linking to the *SingleCellExperiment* package (class). Packages are filtered by biocView "singleCell".](images/SingleCellExperiment.png)
+![Graph network of package dependencies linking to the *SingleCellExperiment* package (class). Packages are filtered by biocView "singleCell".](images/SCE-dependency-graph.png)
 
 ```{r, include=FALSE, eval=FALSE}
 ## Script used to generate above image
