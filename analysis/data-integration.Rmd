@@ -322,8 +322,6 @@ rand.index(as.integer(clusters.resc[rescaled$batch==1]),
 
 ## Application to a pancreas dataset
 
-### Setting up the data
-
 We perform another demonstration with several human pancreas datasets [@muraro2016singlecell;@grun2016denovo].
 This is a more challenging application than the PBMC dataset as it involves different patients and protocols.
 
