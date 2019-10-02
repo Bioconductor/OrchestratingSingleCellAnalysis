@@ -196,7 +196,7 @@ plotTSNE(rescaled, colour_by="batch")
 
 ## Performing MNN correction
 
-### Application to the PBMC data
+### Algorithm overview
 
 Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
 Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
@@ -204,8 +204,16 @@ Mutual nearest neighbours are pairs of cells from different batches that belong 
 The reasoning is that MNN pairs represent cells from the same biological state prior to the application of a batch effect - see @haghverdi2018batch for full theoretical details.
 Thus, the difference between cells in MNN pairs can be used as an estimate of the batch effect, the subtraction of which yields batch-corrected values.
 
+Compared to linear regression, MNN correction does not assume that the population composition is the same or known beforehand.
+This is because it learns the shared population structure via identification of MNN pairs and uses this information to obtain an appropriate estimate of the batch effect.
+Instead, the key assumption of MNN-based approaches is that the batch effect is orthogonal to the biology in high-dimensional expression space.
+Violations reduce the effectiveness and accuracy of the correction, with the most common case arising from variations in the direction of the batch effect between clusters.
+Nonetheless, the assumption is usually reasonable as a random vector is very likely to be orthogonal in high-dimensional space.
+
+### Application to the PBMC data
+
 The `r Biocpkg("batchelor")` package provides an implementation of the MNN approach via the `fastMNN()` function.
-(Unlike the MNN method described by @haghverdi2018batch, the `fastMNN()` function performs PCA to reduce the dimensions beforehand and speed up the downstream neighbor detection steps.)
+(Unlike the MNN method originally described by @haghverdi2018batch, the `fastMNN()` function performs PCA to reduce the dimensions beforehand and speed up the downstream neighbor detection steps.)
 We apply it to our two PBMC batches to remove the batch effect across the highly variable genes in `chosen.hvgs`.
 To reduce computational work and technical noise, all cells in all batches are projected into the low-dimensional space defined by the top `d` principal components.
 Identification of MNNs and calculation of correction vectors are then performed in this low-dimensional space.
@@ -314,7 +322,9 @@ rand.index(as.integer(clusters.resc[rescaled$batch==1]),
 
 ## Application to a pancreas dataset
 
-We perform another demonstration with two human pancreas CEL-seq(2) datasets [@muraro2016singlecell;@grun2016denovo].
+### Setting up the data
+
+We perform another demonstration with several human pancreas datasets [@muraro2016singlecell;@grun2016denovo].
 This is a more challenging application than the PBMC dataset as it involves different patients and protocols.
 
 ```{r, results='asis', echo=FALSE}
