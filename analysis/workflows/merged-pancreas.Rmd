@@ -63,12 +63,12 @@ chosen.genes <- rownames(combined.pan)[combined.pan$bio > 0]
 We observe that `rescaleBatches()` is unable to align cells from different batches in Figure \@ref(fig:tsne-pancreas-rescaled).
 This is attributable to differences in population composition between batches, with additional complications from non-linearities in the batch effect, e.g., when the magnitude or direction of the batch effect differs between cell types.
 
-```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+```{r tsne-pancreas-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the two pancreas datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+library(scater)
 rescaled.pancreas <- rescaleBatches(sce.grun2, sce.muraro2)
 rescaled.pancreas <- runPCA(rescaled.pancreas, subset_row=chosen.genes,
     exprs_values="corrected")
 
-plot(scater)
 rescaled.pancreas <- runTSNE(rescaled.pancreas, dimred="PCA")
 plotTSNE(rescaled.pancreas, colour_by="batch")
 ```
@@ -77,7 +77,7 @@ Here, we use `fastMNN()` to merge together the two human pancreas datasets descr
 Clustering on the merged datasets yields fewer batch-specific clusters, which is recapitulated as greater intermingling between batches in Figure \@ref(fig:tsne-pancreas-mnn).
 This improvement over Figure \@ref(fig:tsne-pancreas-rescaled) represents the ability of `fastMNN()` to adapt to more complex situations involving differences in population composition between batches.
 
-```{r tsne-pancreas-mnn, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin."}
+```{r tsne-pancreas-mnn, fig.asp=0.5, fig.cap="$t$-SNE plot of the two pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin."}
 mnn.pancreas <- fastMNN(sce.grun2, sce.muraro2, subset.row=chosen.genes)
 
 snn.gr <- buildSNNGraph(mnn.pancreas, use.dimred="corrected")
@@ -96,7 +96,7 @@ stopifnot(mean(rowSums(tab==0)==1) < 0.2) # Most clusters have non-zero contribu
 ## The bad
 
 Flushed with our previous success, we now attempt to merge the other datasets from @lawlor2017singlecell and @segerstolpe2016singlcell.
-This is a more difficult merge as it involves different technologies, mixtures of UMI and read count data and a more diverse set of authors with greater differences in the patient population.
+This is a more challenging task as it involves different technologies, mixtures of UMI and read count data and a more diverse set of authors (presumably with greater differences in the patient population).
 
 ```{r, results='asis', echo=FALSE}
 extractCached(WFUN("lawlor-pancreas"), "variance-modelling",
@@ -142,7 +142,10 @@ combined.pan <- combineVar(dec.grun2, dec.muraro2, dec.lawlor2, dec.seger2)
 chosen.genes <- rownames(combined.pan)[combined.pan$bio > 0]
 ```
 
-```{r tsne-pancreas-mnn, fig.asp=0.5, fig.cap="$t$-SNE plot of the pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin."}
+We observe that the merge is generally successful, with many clusters containing contributions from each batch (Figure \@ref(fig:tsne-pancreas-mnn-many)).
+There are few clusters that are specific to the Segerstolpe dataset, and if we were naive, we might consider them to represent interesting subpopulations that are not present in the other datasets.
+
+```{r tsne-pancreas-mnn-many, fig.asp=0.5, fig.cap="$t$-SNE plots of the four pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin (left) or the cluster (right). The cluster label is shown at the median location across all cells in the cluster."}
 mnn.pancreas <- fastMNN(Grun=sce.grun2, Muraro=sce.muraro2, 
     Lawlor=sce.lawlor2, Seger=sce.seger2, subset.row=chosen.genes)
 
@@ -152,14 +155,23 @@ tab <- table(Cluster=clusters, Batch=mnn.pancreas$batch)
 tab
 
 mnn.pancreas <- runTSNE(mnn.pancreas, dimred="corrected")
-plotTSNE(mnn.pancreas, colour_by="batch")
+gridExtra::grid.arrange(
+    plotTSNE(mnn.pancreas, colour_by="batch", text_by=I(clusters)),
+    plotTSNE(mnn.pancreas, colour_by=I(factor(clusters)), text_by=I(clusters)),
+    ncol=2
+)
 ```
 
 ```{r}
 stopifnot(any(tab[,"Seger"]==rowSums(tab)))
 ```
 
-```{r}
+Fortunately, we are battle-hardened and cynical, and we are sure to check for other sources of variation in this dataset.
+The most obvious candidate is the donor of origin for each cell (Figure \@ref(fig:tsne-pancreas-mnn-donor)), which correlates perfectly to these Segerstolpe-only clusters.
+Needless to say, donor-level variation is less interesting for the purposes of this analysis.
+(That said, it is worth noting that preservation of the within-dataset donor effects is the correct course of action here, as a batch correction method aim to avoid removing heterogeneity within each specified batch.)
+
+```{r tsne-pancreas-mnn-donor, fig.cap="$t$-SNE plots of the four pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the donor of origin for the Segerstolpe dataset."}
 donors <- c(sce.grun2$donor, sce.muraro2$donor,
     sce.lawlor2$`islet unos id`, sce.seger2$Donor)
 seger.donors <- donors
