@@ -241,7 +241,7 @@ sizeFactors(sce)
 
 So far, we have covered the `assays` (primary data), `colData` (sample metadata), `rowData`/`rowRanges` (feature metadata), and `sizeFactors` slots of *SingleCellExperiment*. 
 
-What is important to note is that the *SingleCellExperiment* class _derives_ from the `SummarizedExperiment` (`se`) class, its predecessor, and in particular inherits the aforementioned slots. As such, much of the `SummarizedExperiment` functionality is retained in *SingleCellExperiment*. This allows existing methods that work with `SummarizedExperiment` to work similarly on *SingleCellExperiment* objects.
+What is important to note is that the *SingleCellExperiment* class _derives_ from the `SummarizedExperiment` (`se`) class, its predecessor, and in particular inherits the `assays`, `colData` and `rowData`/`rowRanges` slots. As such, much of the `SummarizedExperiment` functionality is retained in *SingleCellExperiment*. This allows existing methods that work with `SummarizedExperiment` to work similarly on *SingleCellExperiment* objects.
 
 So what's new about the *SingleCellExperiment* class then? For our discussion, the most important change is the addition of a new slot called `reducedDims`.
 
@@ -273,9 +273,9 @@ We can view the names of all our entries in the `reducedDims` slot via the acces
 reducedDims(sce)
 ```
 
-Now, say we have a different dimensionality reduction approach which has not yet been implemented with *SingleCellExperiment* objects in mind. For example, let's say we want to try the `umap()` function as implemented in the `uwot` package (which is a much faster version of the default `umap` implementation currently in `scater`). 
+Now, say we have a different dimensionality reduction algorithm we'd like to try that is not yet implemented with direct compatibility for *SingleCellExperiment*, e.g. with an associated wrapper in packages such as `scater`. To accommodate this case (or alternately, when we want to directly run the dimensionality reduction method on the data ourselves rather than through a wrapper), we can directly add to the `reducedDims` slot. This is similar to how we previously extended the `assays` slot with our own custom entry of `counts_100`.
 
-Similar to how we extended the `assays` slot with our own custom entry of `counts_100`, we can do similarly for the `reducedDims` slot:
+Below, we show how to run `umap()` as implemented in the `uwot` package directly, rather than through the associated wrapper function implemented in `scater` via `runUMAP()`, saving the intermediate results, and then adding them into the `sce` object we had previously.
 
 ```{r}
 u <- uwot::umap(t(logcounts(sce)), n_neighbors = 2)
@@ -284,13 +284,13 @@ reducedDim(sce, "UMAP_uwot") <- u
 reducedDim(sce, "UMAP_uwot")
 ```
 
-And we can also see its entry when we look at the `reducedDims()` accessor output:
+And now we can also see its entry when we look at the `reducedDims()` accessor output:
 
 ```{r}
 reducedDims(sce)
 ```
 
-## One More Thing: `metadata` Slot
+## The `metadata` Slot
 
 Some analyses produce results that do not fit into the aforementioned slots. Thankfully, there is a slot just for this type of messy data, and in fact, can accommodate any type of data, so long as it is in a named list:
 
@@ -316,56 +316,60 @@ metadata(sce)
 
 You might have noticed that the `sce` default view produces an entry with `spikeNames`. The *SingleCellExperiment* object contains some special considerations for experiments with spike-in (ERCC) controls. We leave this to the interested reader to learn more about in the [*SingleCellExperiment* introductory vignette](https://bioconductor.org/packages/release/bioc/vignettes/SingleCellExperiment/inst/doc/intro.html).
 
-## Working with _SingleCellExperiment_
+## Recording Analyses in _SingleCellExperiment_
 
-In subsequent sections, we will show an example workflow that uses the *SingleCellExperiment* object as its base, and similar to our walkthrough of the *SingleCellExperiment* class above, continually appends new entries to save the results of the analysis. The *SingleCellExperiment* thus can serve as a record of analysis in this manner. This makes it especially useful for collaboration, as the object can be transferred and then visualized via graphical user interfaces such as *iSEE*.
+In subsequent sections, we will show an example workflow that uses the *SingleCellExperiment* object as its base, and similar to our walkthrough of the *SingleCellExperiment* class above, continually appends new entries to save the results of the analysis. The *SingleCellExperiment* thus can serve as a record of analysis in this manner. This makes it especially useful for collaboration, as the object can be transferred, analyzed, and even visualized via graphical user interfaces such as *iSEE*.
 
-## The Centrality of SingleCellExperiment
+## Conclusion 
 
-![Graph network of package dependencies linking to the *SingleCellExperiment* package (class). Packages are filtered by biocView "singleCell".](images/SingleCellExperiment.png)
-
-```{r, include=FALSE, eval=FALSE}
-## Script used to generate above image
-library(tidyverse)
-library(BiocPkgTools)
-library(igraph)
-library(tidygraph)
-library(ggraph)
-
-tt <- read_tsv('table-package-types.txt', col_names = FALSE) %>%
-    dplyr::rename(Category = X1, Package = X2) %>%
-    unique() %>%
-    filter(!duplicated(Package))
-
-bpl = biocPkgList()
-bpl_sc = bpl[grepl('SingleCell', bpl$biocViews),]
-
-dep_df = buildPkgDependencyDataFrame() %>% 
-    filter(Package %in% bpl_sc$Package & dependency %in% bpl_sc$Package) %>%
-    filter(dependency %in% bpl$Package)
-
-tbl_graph <- as_tbl_graph(dep_df[, 1:3], directed = TRUE) %>%
-    left_join(tt, by = c("name" = "Package")) %>%
-    mutate(Category = as.factor(ifelse(is.na(Category), 'Other', Category)),
-           degree = degree(.))
-
-ggraph(tbl_graph) + #, layout = 'kk', kkconst = sqrt(vcount(tbl_graph))) +
-    geom_edge_fan2(edge_width = 0.05, alpha = 0.5) +
-    geom_node_point(aes(colour = Category, size = degree^2)) +
-##    geom_node_point(aes(color = Category), size = 10) +
-    geom_node_text(aes(label = name), size = 4, repel=TRUE) + #1.6 is good
-    theme_graph(base_family = 'Helvetica') +
-#    theme(legend.position = 'none') +
-    scale_colour_brewer(type = 'qual', palette = 2)
-```
-
-To emphasize its importance, here we show the centrality of the *SingleCellExperiment* class to the Bioc-verse single-cell related packages. It is this connection to *SingleCellExperiment* that makes many of these packages easily interoperable and modular over the span of an scRNA-seq analysis.
+The *SingleCellExperiment* class to the Bioc-verse single-cell related packages. It is this connection to *SingleCellExperiment* that makes many of these packages easily interoperable and modular over the span of an scRNA-seq analysis. Furthermore, it allows anybody to implement their own analytical tools for scRNA-seq that build on the *SingleCellExperiment*, enabling decentralized scientific developments.
 
 
-## Multimodal Data: _MultiAssayExperiment_
 
-Recent advances in technology and protocols allow the simultaneous collection of DNA and RNA from the same cells, enabling single-cell multi-modal analysis. These data present new challenges in the complexity of statistical analyses, which are addressed in Bioconductor through the *MultiAssayExperiment* container. The *MultiAssayExperiment* class integrates all major Bioconductor experimental data containers, and any containers derived from those, including *SingleCellExperiment*. It provides harmonized data management for heterogeneous assays, including subsetting by genomic identifiers, genomic coordinates, or sample/cell attributes such as cell type. The user interface mimics that of *SingleCellExperiment*, with comparable actions working across all assays.
 
-Multi-modal profiling is an emergent area of single-cell biology with many exciting technologies coming online, such as gene expression profiling in tandem with protein via CITE-seq/REAP-seq and adaptive repertoire sequencing. While we won't cover multimodal data analysis further in this online book as of this writing, we anticipate infrastructure and statistical methodology advances in this area in the near future.
+<!-- ## Multimodal Data: _MultiAssayExperiment_ -->
+
+<!-- Recent advances in technology and protocols allow the simultaneous collection of DNA and RNA from the same cells, enabling single-cell multi-modal analysis. These data present new challenges in the complexity of statistical analyses, which are addressed in Bioconductor through the *MultiAssayExperiment* container. The *MultiAssayExperiment* class integrates all major Bioconductor experimental data containers, and any containers derived from those, including *SingleCellExperiment*. It provides harmonized data management for heterogeneous assays, including subsetting by genomic identifiers, genomic coordinates, or sample/cell attributes such as cell type. The user interface mimics that of *SingleCellExperiment*, with comparable actions working across all assays. -->
+
+<!-- Multi-modal profiling is an emergent area of single-cell biology with many exciting technologies coming online, such as gene expression profiling in tandem with protein via CITE-seq/REAP-seq and adaptive repertoire sequencing. While we won't cover multimodal data analysis further in this online book as of this writing, we anticipate infrastructure and statistical methodology advances in this area in the near future. -->
 
 <!-- \cite{Macaulay2016gtseq, Dey2015-eh, Stoeckius2017-se} -->
+
+
+
+<!-- ![Graph network of package dependencies linking to the *SingleCellExperiment* package (class). Packages are filtered by biocView "singleCell".](images/SCE-dependency-graph.png) -->
+
+<!-- ```{r, include=FALSE, eval=FALSE} -->
+<!-- ## Script used to generate above image -->
+<!-- library(tidyverse) -->
+<!-- library(BiocPkgTools) -->
+<!-- library(igraph) -->
+<!-- library(tidygraph) -->
+<!-- library(ggraph) -->
+
+<!-- tt <- read_tsv('table-package-types.txt', col_names = FALSE) %>% -->
+<!--     dplyr::rename(Category = X1, Package = X2) %>% -->
+<!--     unique() %>% -->
+<!--     filter(!duplicated(Package)) -->
+
+<!-- bpl = biocPkgList() -->
+<!-- bpl_sc = bpl[grepl('SingleCell', bpl$biocViews),] -->
+
+<!-- dep_df = buildPkgDependencyDataFrame() %>%  -->
+<!--     filter(Package %in% bpl_sc$Package & dependency %in% bpl_sc$Package) %>% -->
+<!--     filter(dependency %in% bpl$Package) -->
+
+<!-- tbl_graph <- as_tbl_graph(dep_df[, 1:3], directed = TRUE) %>% -->
+<!--     left_join(tt, by = c("name" = "Package")) %>% -->
+<!--     mutate(Category = as.factor(ifelse(is.na(Category), 'Other', Category)), -->
+<!--            degree = degree(.)) -->
+
+<!-- ggraph(tbl_graph) + #, layout = 'kk', kkconst = sqrt(vcount(tbl_graph))) + -->
+<!--     geom_edge_fan2(edge_width = 0.05, alpha = 0.5) + -->
+<!--     geom_node_point(aes(colour = Category, size = degree^2)) + -->
+<!-- ##    geom_node_point(aes(color = Category), size = 10) + -->
+<!--     geom_node_text(aes(label = name), size = 4, repel=TRUE) + #1.6 is good -->
+<!--     theme_graph(base_family = 'Helvetica') + -->
+<!-- #    theme(legend.position = 'none') + -->
+<!--     scale_colour_brewer(type = 'qual', palette = 2) -->
+<!-- ``` -->
