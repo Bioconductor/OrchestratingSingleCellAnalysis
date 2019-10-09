@@ -51,7 +51,7 @@ Nonetheless, we compute some quality control metrics to check whether the remain
 ```{r quality-control}
 stats <- perCellQCMetrics(sce.zeisel, subsets=list(
     Mt=rowData(sce.zeisel)$featureType=="mito"))
-qc <- quickCellQC(stats, percent_subsets=c("altexps_ERCC_percent", 
+qc <- quickPerCellQC(stats, percent_subsets=c("altexps_ERCC_percent", 
     "subsets_Mt_percent"), nmads=3)
 sce.zeisel <- sce.zeisel[,!qc$discard]
 ```

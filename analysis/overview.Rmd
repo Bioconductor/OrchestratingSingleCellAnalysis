@@ -110,7 +110,7 @@ sce <- MacoskoRetinaData()
 library(scater)
 is.mito <- grepl("^MT-", rownames(sce))
 qcstats <- perCellQCMetrics(sce, subsets=list(Mito=is.mito))
-filtered <- quickCellQC(qcstats, percent_subsets="subsets_Mito_percent")
+filtered <- quickPerCellQC(qcstats, percent_subsets="subsets_Mito_percent")
 sce <- sce[, !filtered$discard]
 
 # Normalization.

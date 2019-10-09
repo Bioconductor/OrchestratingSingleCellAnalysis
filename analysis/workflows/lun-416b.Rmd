@@ -58,7 +58,7 @@ However, it probably doesn't do any harm to include it anyway.
 ```{r quality-control}
 mito <- which(rowData(sce.416b)$SEQNAME=="MT")
 stats <- perCellQCMetrics(sce.416b, subsets=list(Mt=mito))
-qc <- quickCellQC(stats, percent_subsets=c("subsets_Mt_percent",
+qc <- quickPerCellQC(stats, percent_subsets=c("subsets_Mt_percent",
     "altexps_ERCC_percent"), nmads=3, batch=sce.416b$block)
 sce.416b <- sce.416b[,!qc$discard]
 ```

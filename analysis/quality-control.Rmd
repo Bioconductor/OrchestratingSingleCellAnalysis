@@ -162,11 +162,11 @@ DataFrame(LibSize=sum(qc.lib2), NExprs=sum(qc.nexprs2),
     SpikeProp=sum(qc.spike2), MitoProp=sum(qc.mito2), Total=sum(discard2))
 ```
 
-Alternatively, this entire process can be done in a single step using the `quickCellQC()` function.
+Alternatively, this entire process can be done in a single step using the `quickPerCellQC()` function.
 This is a wrapper that simply calls `isOutlier()` with the settings described above.
 
 ```{r}
-reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
+reasons <- quickPerCellQC(df, percent_subsets=c("subsets_Mito_percent",
     "altexps_ERCC_percent"), nmads=3)
 colSums(as.matrix(reasons))
 ```
@@ -203,12 +203,12 @@ However, if cells from all batches have been merged into a single `SingleCellExp
 This allows `isOutlier()` to accommodate systematic differences in the QC metrics across batches.
 
 We will again illustrate using the 416B dataset, which contains two experimental factors - plate of origin and oncogene induction status.
-We combine these factors together and use this in the `batch=` argument to `isOutlier()` via `quickCellQC()`.
+We combine these factors together and use this in the `batch=` argument to `isOutlier()` via `quickPerCellQC()`.
 This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
 
 ```{r}
 batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
-batch.reasons <- quickCellQC(df, percent_subsets=c("subsets_Mito_percent",
+batch.reasons <- quickPerCellQC(df, percent_subsets=c("subsets_Mito_percent",
     "altexps_ERCC_percent"), nmads=3, batch=batch)
 colSums(as.matrix(batch.reasons))
 ```

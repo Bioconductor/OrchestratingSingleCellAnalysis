@@ -47,7 +47,7 @@ unfiltered <- sce.muraro
 ```{r quality-control}
 library(scater)
 stats <- perCellQCMetrics(sce.muraro)
-qc <- quickCellQC(stats, nmads=3, percent_subsets="altexps_ERCC_percent")
+qc <- quickPerCellQC(stats, nmads=3, percent_subsets="altexps_ERCC_percent")
 sce.muraro <- sce.muraro[,!qc$discard]
 ```
 
