@@ -105,7 +105,7 @@ extractCached <- function(prefix, chunk, objects) {
         } else {
             first <- FALSE
         }
-        cat(sprintf("### %s ###\n", x))
+        cat(sprintf("#--- %s ---#\n", x))
         cat(chunks[[x]], sep="\n")
     }
     cat("```
