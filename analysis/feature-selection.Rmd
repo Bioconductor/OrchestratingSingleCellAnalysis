@@ -17,13 +17,12 @@ We often use scRNA-seq data in exploratory analyses to characterize heterogeneit
 Procedures like clustering and dimensionality reduction compare cells based on their gene expression profiles, which involves aggregating per-gene differences into a single (dis)similarity metric between a pair of cells.
 The choice of genes to use in this calculation has a major impact on the behavior of the metric and the performance of downstream methods.
 We want to select genes that contain useful information about the biology of the system while removing genes that contain random noise.
-This aims to preserve interesting biological structure without the variance that obscures that structure.
-It also reduces the size of the dataset to improve computational efficiency of later steps.
+This aims to preserve interesting biological structure without the variance that obscures that structure, and to reduce the size of the data to improve computational efficiency of later steps.
 
 The simplest approach to feature selection is to select the most variable genes based on their expression across the population.
 This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise or a baseline level of "uninteresting" biological variation (e.g., from transcriptional bursting).
-Several methods are available to quantify the variation per gene and to select the highly variable genes (HVGs), which we will discuss below.
-For demonstration, we will use the 10X PBMC dataset:
+Several methods are available to quantify the variation per gene and to select an appropriate set of highly variable genes (HVGs).
+We will discuss these below using the 10X PBMC dataset for demonstration:
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/tenx-unfiltered-pbmc4k", "normalization", "sce.pbmc")
@@ -49,12 +48,11 @@ sce.416b
 
 The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as "log-counts" for simplicity) for each gene across all cells in the population [@lun2016step].
 This has an advantage in that the feature selection is based on the same log-values that are used for later downstream steps.
-Genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells.
+In particular, genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells.
 By using log-values here, we ensure that our quantitative definition of heterogeneity is consistent throughout the entire analysis.
 
 Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. 
-As discussed briefly in the last chapter, the log-transformation does not achieve perfect variance stabilization.
-This means that the variance of a gene is more affected by its abundance than the underlying biological heterogeneity. 
+As discussed briefly in Section \@ref(normalization-transformation), the log-transformation does not achieve perfect variance stabilization, which means that the variance of a gene is driven more by its abundance than its underlying biological heterogeneity. 
 To account for this effect, we use the `modelGeneVar()` function to fit a trend to the variance with respect to abundance across all genes (Figure \@ref(fig:trend-plot-pbmc)).
 
 ```{r trend-plot-pbmc, fig.cap="Variance in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the trend fitted to all genes."}
@@ -68,7 +66,7 @@ plot(fit.pbmc$mean, fit.pbmc$var, xlab="Mean of log-expression",
 curve(fit.pbmc$trend(x), col="dodgerblue", add=TRUE, lwd=2)
 ```
 
-At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see \@ref(sec:spikeins) for details).
+At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see Section \@ref(sec:spikeins) for details).
 Under this assumption, our trend represents an estimate of the technical noise as a function of abundance.
 We then break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene's abundance;
 and the biological component, defined as the difference between the total variance and the technical component.
@@ -79,9 +77,8 @@ This biological component represents the "interesting" variation for each gene a
 dec.pbmc[order(dec.pbmc$bio, decreasing=TRUE),] 
 ```
 
-(Careful readers will notice that some genes have negative biological components.
-Negative components of variation have no obvious interpretation and can be ignored for most applications.
-They are inevitable when fitting a trend to the per-gene variances, as approximately half of the genes will lie below the trend.)
+(Careful readers will notice that some genes have negative biological components, which have no obvious interpretation and can be ignored in most applications.
+They are inevitable when fitting a trend to the per-gene variances as approximately half of the genes will lie below the trend.)
 
 ### Coefficient of variation
 
@@ -95,7 +92,7 @@ dec.cv2.pbmc <- modelGeneCV2(sce.pbmc)
 
 This allows us to model the mean-variance relationship when considering the relevance of each gene (Figure \@ref(fig:cv2-pbmc)).
 Again, our assumption is that most genes contain random noise and that the trend captures mostly technical variation.
-Large CV$^2$ values that deviate strongly from the trend are likely to represent genes affected by biological structure.
+Large CV^2^ values that deviate strongly from the trend are likely to represent genes affected by biological structure.
 
 ```{r cv2-pbmc, fig.cap="CV^2^ in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the fitted trend."}
 fit.cv2.pbmc <- metadata(dec.cv2.pbmc)
@@ -125,7 +122,7 @@ It would be more appropriate to consider these estimates as technical noise plus
 This revised assumption is generally reasonable but may be problematic in some scenarios where many genes at a particular abundance are affected by a biological process.
 For example, strong upregulation of cell type-specific genes may result in an enrichment of HVGs at high abundances.
 This would inflate the fitted trend in that abundance interval and compromise the detection of the relevant genes.
-We can avoid this problem by fitting a mean-dependent trend to the variance of the spike-in transcripts, if they are available (Figure \@ref(fig:spike-416b)).
+We can avoid this problem by fitting a mean-dependent trend to the variance of the spike-in transcripts (Figure \@ref(fig:spike-416b)), if they are available.
 The premise here is that spike-ins should not be affected by biological variation, so the fitted value of the spike-in trend should represent a better estimate of the technical component for each gene.
 
 ```{r spike-416b, fig.cap="Variance in the 416B data set as a function of the mean. Each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
@@ -164,7 +161,7 @@ These observations suggest that a more accurate noise model does not necessarily
 #### Fitting block-specific trends {#variance-batch}
 
 Data containing multiple batches will often exhibit batch effects (see Chapter \@ref(data-integration) for more details).
-We are (usually) not interested in HVGs that are driven by batch effects.
+We are usually not interested in HVGs that are driven by batch effects.
 Rather, we want to focus on genes that are highly variable within each batch.
 This is naturally achieved by performing trend fitting and variance decomposition separately for each batch.
 We demonstrate this approach by treating each plate (`block`) in the 416B dataset as a different batch, using the `modelGeneVarWithSpikes()` function.
@@ -180,7 +177,7 @@ This is especially important if batches exhibit systematic technical differences
 In this case, there are only minor differences between the trends in Figure \@ref(fig:blocked-fit), which indicates that the experiment was tightly replicated across plates.
 The analysis of each plate yields estimates of the biological and technical components for each gene, which are averaged across plates to take advantage of information from multiple batches. 
 
-```{r blocked-fit, fig.asp=0.5, fig.wide=TRUE, fig.cap="Variance in the 416B data set as a function of the mean after blocking on the plate of origin. Each plot represents the results for a single plate, each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
+```{r blocked-fit, fig.asp=0.5, fig.width=10, fig.cap="Variance in the 416B data set as a function of the mean after blocking on the plate of origin. Each plot represents the results for a single plate, each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
 par(mfrow=c(1,2))
 blocked.stats <- dec.block.416b$per.block
 for (i in colnames(blocked.stats)) {
@@ -195,9 +192,9 @@ for (i in colnames(blocked.stats)) {
 
 As an aside, the wave-like shape observed above is typical of the mean-variance trend for log-expression values.
 (The same wave is present but much less pronounced for UMI data.)
-A linear increase in the variance is observed as the mean increases from zero, as larger variances are obviously possible when the counts are not all zero.
-The peak in the variance usually occurs close to the mean at which 50% of observations are zero, attributable to the fact that any fold change between cells corresponds to the largest difference in log-space when one of the observations is zero.
-At very high abundances, the effect of sampling noise decreases due to the law of large numbers, resulting in a decrease in the variance.
+A linear increase in the variance is observed as the mean increases from zero, as larger variances are obviously possible when the counts are not all equal to zero.
+In contrast, the relative contribution of sampling noise decreases at high abundances, resulting in a downward trend.
+The peak represents the point at which these two competing effects cancel each other out.
 
 #### Using a design matrix
 
