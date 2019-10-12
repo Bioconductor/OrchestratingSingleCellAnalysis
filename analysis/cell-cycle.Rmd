@@ -39,9 +39,8 @@ cyclin.genes <- rownames(sce.416b)[cyclin.genes]
 cyclin.genes
 
 library(scater)
-plotHeatmap(sce.416b, colour_columns_by="cluster", cluster_cols=FALSE, 
-    columns=order(sce.416b$cluster), cluster_rows=FALSE, 
-    features=sort(cyclin.genes), show_colnames=FALSE)
+plotHeatmap(sce.416b, order_columns_by="cluster", 
+    cluster_rows=FALSE, features=sort(cyclin.genes))
 ```
 
 ```{r, echo=FALSE, results="hide"}
@@ -62,14 +61,14 @@ library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
     clusters=sce.416b$cluster, test.type="wilcox", direction="up")
 
-# We can infer that cluster 2 has more cells in G2/M than the other clusters,
+# We can infer that cluster 4 has more cells in G2/M than the other clusters,
 # based on higher expression of the cyclin B's.
-markers[[2]]
+markers[[4]]
 ```
 
 ```{r, echo=FALSE, results="hide"}
 library(scran)
-stopifnot(all(as.matrix(markers[[2]][c("Ccnb1"),-(1:3)]) > 0.5))
+stopifnot(all(as.matrix(markers[[4]][c("Ccnb1"),-(1:3)]) > 0.5))
 ```
 
 Direct examination of cyclin expression is easily understood, interpreted and validated with other technologies.
@@ -135,7 +134,7 @@ However, it is not difficult to find routine violations of this assumption - for
 
 ```{r dist-dppa3, fig.cap="Distribution of log-normalized expression values for _Dppa3_ in the reference dataset (left) and in the 416B dataset (right)."}
 gridExtra::grid.arrange(
-    plotExpression(sce.ref, features="ENSMUSG00000080241", x="phases"),
+    plotExpression(sce.ref, features="ENSMUSG00000046323", x="phases"),
     plotExpression(sce.416b, features="Dppa3", x="cluster"),
     ncol=2)
 ```
@@ -180,8 +179,6 @@ Cells are classified as being in G1 phase if the G1 score is above 0.5 and great
     in G2/M phase if the G2/M score is above 0.5 and greater than the G1 score;
     and in S phase if neither score is above 0.5.
 Here, the majority of cells in cluster 1 are again classified as being in G1 phase. 
-The main difference from the `r Biocpkg("SingleR")` assignments is the distinction between G2/M and S phases, which is slightly more consistent with our cyclin-based results.
-(This is attributable to some additional manual curation, performed during the definition of marker pairs to focus on genes with known roles in cell cycle progression.)
 
 ```{r}
 table(assignments$phases, sce.416b$cluster)
@@ -190,9 +187,11 @@ table(assignments$phases, sce.416b$cluster)
 ```{r, echo=FALSE, results="hide"}
 tab <- table(assignments$phases, sce.416b$cluster)
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
-stopifnot(all(tab["S",3] >= tab[,3]))
+stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
 ```
 
+The main difference from the `r Biocpkg("SingleR")`-based assignment is that additional manual curation was performed on the marker pairs in `cyclone()` to focus on genes with known roles in cell cycle progression.
+This can be expected to yield somewhat more accurate results, though there is no reason that the same filtering could not be applied prior to calling `SingleR()`.
 The same considerations and caveats described for the previous `r Biocpkg("SingleR")`-based cell approach are also applicable here.
 From a practical perspective, `cyclone()` takes longer but does not require an explicit reference as the marker pairs are already computed.
 
@@ -201,7 +200,7 @@ From a practical perspective, `cyclone()` takes longer but does not require an e
 For some time, it was popular to regress out the cell cycle phase prior to downstream analyses.
 The aim was to remove uninteresting variation due to cell cycle, thus improving resolution of other biological processes of interest.
 We could implement this by performing cell cycle phase assignment as described above, treating each phase as a separate batch and applying any of the batch correction strategies described in Chapter \@ref(data-integration).
-The most common approach is to use a linear model to simply regress out the phase effect, e.g., via `removeBatchEffect()`.
+The most common approach is to use a linear model to simply regress out the phase effect, e.g., via `regressBatches()`.
 
 That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.
 In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
