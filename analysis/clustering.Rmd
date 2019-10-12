@@ -428,10 +428,20 @@ plot(dend)
 ```
 
 This generally corresponds well to the grouping of cells on a $t$-SNE plot (Figure \@ref(fig:tsne-416b)).
+The exception is cluster 2, which is split across two visual clusters in the plot.
+We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behaviour of the clustering algorithm, based on the examination of some later diagnostics.
 
 ```{r tsne-416b, fig.cap="$t$-SNE plot of the 416B dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from hierarchical clustering."}
 sce.416b$cluster <- factor(clust.416b)
 plotReducedDim(sce.416b, "TSNE", colour_by="cluster")
+```
+
+```{r, echo=FALSE}
+fault <- 2L
+visual <- kmeans(reducedDim(sce.416b, "TSNE"), 4)
+xtab <- table(sce.416b$cluster, visual$cluster)
+stopifnot(sum(xtab[fault,] > 0) == 2)
+stopifnot(sum(xtab[fault,]==0) == 2)
 ```
 
 ### Assessing cluster separation
@@ -443,12 +453,16 @@ The silhouette width for each cell is defined as the difference between these tw
 Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters.
 
 Each cluster would ideally contain large positive silhouette widths, indicating that it is well-separated from other clusters.
-In Figure \@ref(fig:silhouette416b), some clusters are well-separated while others have a substantial proportion of negative widths.
-These can arise from the presence of internal subclusters, which inflates the within-cluster distance; or overclustering, where cells at the boundary of a partition are closer to the neighboring cluster than their own cluster.
+This is indeed the case in Figure \@ref(fig:silhouette416b) - and in fact, cluster 2 has the largest width of all, indicating that it is a more coherent cluster than portrayed in Figure \@ref(fig:tsne-416b).
+Smaller widths can arise from the presence of internal subclusters, which inflates the within-cluster distance; or overclustering, where cells at the boundary of a partition are closer to the neighboring cluster than their own cluster.
 
 ```{r silhouette416b, fig.cap="Silhouette widths for cells in each cluster in the 416B dataset. Each bar represents a cell, grouped by the cluster to which it is assigned."}
 sil <- silhouette(clust.416b, dist = dist.416b)
 plot(sil)
+```
+
+```{r, echo=FALSE}
+stopifnot(which.max(vapply(split(sil[,3], sil[,1]), mean, 0))==fault)
 ```
 
 For a more detailed examination, we identify the closest neighboring cluster for cells with negative widths.
