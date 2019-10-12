@@ -258,7 +258,7 @@ plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
 This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributing cells within the minimum bounding box of the original data.
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
-Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters results in a large choice $k$ to capture different cluster shapes.
+Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters drives a large $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
 
 ```{r kmeans-gap, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
@@ -275,7 +275,7 @@ abline(v=best.k, col="red")
 ```{r, echo=FALSE}
 # Check that the results are reasonable, as sometimes
 # the gap statistic gets funny stochastic results.
-stopifnot(identical(best.k, 8L))
+stopifnot(identical(best.k, 9L))
 ```
 
 A more practical use of $k$-means is to deliberately set $k$ to a large value to achieve overclustering.
@@ -289,7 +289,7 @@ clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=20)
 table(clust.kmeans2$cluster)
 
 sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster", text_by="cluster")
+plotTSNE(sce.pbmc, colour_by="cluster", text_by="cluster")
 ```
 
 ### Assessing cluster separation
@@ -305,13 +305,8 @@ tab$rms <- sqrt(tab$wcss/tab$ncells)
 tab
 ```
 
-(As an aside, the cluster with the largest RMSD also appears to be the least dispersed in Figure \@ref(fig:tsne-clust-kmeans-best).
-This highlights the risks of attempting to quantitatively interpret the shape of visual clusters in $t$-SNE plots.)
-
-```{r, echo=FALSE}
-# Content checking for the above text statement.
-stopifnot(identical(which.max(tab$rms), 19L))
-```
+(As an aside, the RMSDs of the clusters are poorly correlated with their sizes in Figure \@ref(fig:tsne-clust-kmeans-best).
+This highlights the risks of attempting to quantitatively interpret the sizes of visual clusters in $t$-SNE plots.)
 
 To explore the relationships between $k$-means clusters, a natural approach is to compute distances between their centroids.
 This directly lends itself to visualization as a tree after hierarchical clustering (Figure \@ref(fig:kmeans-tree)). 
@@ -485,22 +480,22 @@ Subsetting also encourages clustering methods to separate cells according to mor
 We demonstrate with a cluster of putative memory T cells from the PBMC dataset, identified according to several markers (Figure \@ref(fig:ccr7-dist-memory)).
 
 ```{r ccr7-dist-memory, fig.cap="Distribution of log-normalized expression values for several T cell markers within each cluster in the 10X PBMC dataset. Each cluster is color-coded for convenience."}
-g.full <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+# Using a higher 'k' just for demonstration purposes here.
+g.full <- buildSNNGraph(sce.pbmc, k=20, use.dimred = 'PCA')
 clust.full <- igraph::cluster_walktrap(g.full)$membership
 plotExpression(sce.pbmc, features=c("CD3E", "CCR7", "CD69", "CD44"),
     x=I(factor(clust.full)), colour_by=I(factor(clust.full)))
 
 # Repeating modelling and PCA on the subset.
-memory <- 8L
+memory <- 5L
 sce.memory <- sce.pbmc[,clust.full==memory]
 dec.memory <- modelGeneVar(sce.memory)
 sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
-    subset.row=getTopHVGs(dec.memory, prop=0.1),
-    BSPARAM=BiocSingular::IrlbaParam())
+    subset.row=getTopHVGs(dec.memory, prop=0.1))
 ```
 
 ```{r, echo=FALSE}
-by.clust <- split(logcounts(sce.pbmc)["CCR7",], clust)
+by.clust <- split(logcounts(sce.pbmc)["CCR7",], clust.full)
 by.clust.m <- vapply(by.clust, mean, 0)
 stopifnot(identical(unname(which.max(by.clust.m)), memory))
 ```
