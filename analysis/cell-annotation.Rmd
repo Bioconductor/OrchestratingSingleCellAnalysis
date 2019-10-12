@@ -85,22 +85,23 @@ plotScoreDistribution(pred)
 
 We compare the assignments with the clustering results to determine the identity of each cluster.
 Ideally, clusters and labels would have a 1:1 relationship, though some nesting is likely depending on the resolution of the clustering algorithm.
-For example, several clusters are nested within the monocyte and B cell labels, suggesting the the former represent finer subdivisions within the latter.
+For example, several clusters are nested within the monocyte and B cell labels (Figure \@ref(fig:singler-cluster)), suggesting the the former represent finer subdivisions within the latter.
 Interestingly, our clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
-We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation (specifically, naive versus stimulated) that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
+We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
 
-```{r}
-table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+```{r singler-cluster, fig.cap="Heatmap of the distribution of cells across labels and clusters in the 10X PBMC dataset. Color scale is reported in the log~10~-number of cells for each cluster-label combination."}
+tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+
+# Adding a pseudo-count of 10 to avoid strong color jumps with just 1 cell.
+library(pheatmap)
+pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
 ```
 
 ```{r, echo=FALSE}
-tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
-tab <- t(t(tab)/colSums(tab))*100
-
-# Checking that no cluster is enriched for CD4 T cells, supporting
-# the text 
-stopifnot(all(tab["CD4+ T-cells",] < 90, na.rm=TRUE))
-stopifnot(any(tab["CD8+ T-cells",] > 90, na.rm=TRUE))
+xtab <- t(t(tab)/colSums(tab))*100
+# Checking that no cluster is enriched for CD4 T cells, supporting the text. 
+stopifnot(all(xtab["CD4+ T-cells",] < 80, na.rm=TRUE))
+stopifnot(any(xtab["CD8+ T-cells",] > 80, na.rm=TRUE))
 ```
 
 This episode highlights some of the differences between reference-based annotation and unsupervised clustering.
@@ -153,7 +154,7 @@ pred.seger <- SingleR(test=sce.seger, ref=sce.muraro,
 table(pred.seger$labels)
 tab <- table(pred.seger$pruned.labels, sce.seger$CellType)
 library(pheatmap)
-pheatmap(log2(tab+1), color=colorRampPalette(c("white", "blue"))(101))
+pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
 ```
 
 ```{r, echo=FALSE}
