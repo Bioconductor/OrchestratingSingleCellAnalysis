@@ -267,8 +267,10 @@ Examples of advanced tours showcasing a selection of published data sets can be 
 ## Reproducibility
 
 Although this chapter focuses on interactive exploration of data, we note that it is important to retain reproducibility, and to have a record of how each figure was generated.
-With `iSEE`, this information is readily available via the "Export R code" button under the "Diagnostics" tab in the top-right corner of the GUI.
+With `iSEE`, this information is readily available via the "Extract the R code" button under the "Diagnostics" dropdown menu in the top-right corner of the GUI.
 At any time, copying the code displayed in the modal window and executing it in the R session from which the `iSEE` app was launched exactly reproduces all plots currently displayed in the GUI.
+Similarly, the information on the panel setup is available by clicking on "Display panel settings" in the same dropdown menu.
+Another modal window will show the R code the user would need to use to reproduce the exact panel settings; copying and pasting this into an R script or a RMarkdown report will store this information in a permanent way.
 
 ## Additional resources
 
