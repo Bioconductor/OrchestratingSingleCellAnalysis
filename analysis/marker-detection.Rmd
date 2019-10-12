@@ -360,7 +360,7 @@ extractCached("workflows/lun-416b", "clustering", "sce.416b")
 
 ```{r}
 m.out <- findMarkers(sce.416b, sce.416b$cluster, 
-                     block=sce.416b$block, direction="up") 
+    block=sce.416b$block, direction="up") 
 ```
 
 For each gene, each pairwise comparion between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.

@@ -253,7 +253,7 @@ Conversely, more heterogeneous datasets should use larger values of $X$ to prese
 The main disadvantage of this approach that it turns HVG selection into a competition between genes, whereby a subset of very highly variable genes can push other informative genes out of the top set.
 This can be problematic for analyses of highly heterogeneous populations, especially when a single subpopulation is very different from the others.
 In such cases, the top set will be dominated by differentially expressed genes involving the outlier subpopulation, compromising resolution of heterogeneity between the other populations.
-(This can salvaged with a nested analysis, as discussed in Section \@ref(clustering-nested), but we would prefer to avoid the problem in the first place.)
+(This can salvaged with a nested analysis, as discussed in Section \@ref(subclustering), but we would prefer to avoid the problem in the first place.)
 Similarly, abundance-dependent changes in the magnitude of the chosen variance metric can introduce unexpected biases in competitive gene selection. 
 For example, the wave shape in Figure \@ref(fig:blocked-fit) means that the largest biological components usually occur around the peak and will be preferentially selected, while an upper bound on the CV^2^ discriminates against selection of low-abundance genes.
 

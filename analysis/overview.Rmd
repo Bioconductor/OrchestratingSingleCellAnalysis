@@ -1,11 +1,11 @@
 # (PART) Focus Topics {-}
 
+# Overview
+
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble()
 ```
-
-# Overview
 
 ## Introduction
 
@@ -100,7 +100,7 @@ Additional steps such as data integration and cell annotation will be discussed 
 
 Here, we use the a droplet-based retina dataset from @macosko2015highly, provided in the `r Biocpkg("scRNAseq")` package.
 This starts from a count matrix and finishes with clusters (Figure \@ref(fig:quick-start-umap)) in preparation for biological interpretation.
-Similar workflows are available in abbreviated form in the Appendices.
+Similar workflows are available in abbreviated form in the Workflows.,
 
 ```{r quick-start-umap, fig.cap="UMAP plot of the retina dataset, where each point is a cell and is colored by the cluster identity."}
 library(scRNAseq)
@@ -119,12 +119,11 @@ sce <- logNormCounts(sce)
 # Feature selection.
 library(scran)
 dec <- modelGeneVar(sce)
-hvg <- rownames(dec)[dec$bio > 0] 
+hvg <- getTopHVGs(dec, prop=0.1)
 
 # Dimensionality reduction.
 set.seed(1234)
-library(BiocSingular)
-sce <- runPCA(sce, subset_row=hvg, BSPARAM=IrlbaParam())
+sce <- runPCA(sce, ncomponents=25, subset_row=hvg)
 sce <- runUMAP(sce, dimred = 'PCA', external_neighbors=TRUE)
 
 # Clustering.

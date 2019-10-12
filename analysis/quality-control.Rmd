@@ -309,7 +309,7 @@ filtered <- sce.416b[,!reasons$discard]
 The other option is to simply mark the low-quality cells as such and retain them in the downstream analysis.
 The aim here is to allow clusters of low-quality cells to form, and then to identify and ignore such clusters during interpretation of the results.
 This approach avoids discarding cell types that have poor values for the QC metrics, giving users an opportunity to decide whether a cluster of such cells represents a genuine biological state.
-The downside is that it shifts the burden of QC to the interpretation of the clusters, which is already the bottleneck in scRNA-seq data analysis (Chapters \@ref(clustering), \@ref(marker-detection) and \@ref(cell-annotation)).
+The downside is that it shifts the burden of QC to the interpretation of the clusters, which is already the bottleneck in scRNA-seq data analysis (Chapters \@ref(clustering), \@ref(marker-detection) and \@ref(cell-type-annotation)).
 Indeed, if we do not trust the QC metrics, we would have to distinguish between genuine cell types and low-quality cells based only on marker genes, and this is not always easy due to the tendency of the latter to "express" interesting genes (Section \@ref(quality-control-motivation)).
 Retention of low-quality cells also compromises the accuracy of the variance modelling, requiring, e.g., use of more PCs to offset the fact that the early PCs are driven by differences between low-quality and other cells.
 
@@ -409,7 +409,7 @@ table(Sig=e.out$FDR <= 0.001, Limited=e.out$Limited)
 As mentioned above, `emptyDrops()` assumes that barcodes with low total UMI counts are empty droplets.
 Thus, the null hypothesis should be true for all of these barcodes. 
 We can check whether the hypothesis testing procedure holds its size by examining the distribution of $p$-values for low-total barcodes with `test.ambient=TRUE`.
-Ideally, the distribution should be close to uniform.
+Ideally, the distribution should be close to uniform (Figure \@ref(fig:ambientpvalhist)).
 
 ```{r ambientpvalhist, fig.cap="Distribution of $p$-values for the assumed empty droplets."}
 full.data <- read10xCounts(fname, col.names=TRUE)
@@ -428,16 +428,17 @@ This can be resolved by decreasing `lower` further to ensure that barcodes corre
 
 While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells.
 It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
-This can be done using the same outlier-based strategy described in Section \@ref(quality-control-outlier).
+This is achieved using the same outlier-based strategy described in Section \@ref(quality-control-outlier).
 Filtering on the mitochondrial proportion provides the most additional benefit in this situation, provided that we check that we are not removing a subpopulation of metabolically active cells (Figure \@ref(fig:qc-mito-pbmc)). 
 
-```{r qc-mito-pbmc, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size."}
+```{r qc-mito-pbmc, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size. The red line represents the upper threshold used for QC filtering."}
 is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
 pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets=list(MT=is.mito))
 discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher", nmads=3)
 summary(discard.mito)
 plot(pbmc.qc$sum, pbmc.qc$subsets_MT_percent, log="x",
     xlab="Total count", ylab='Mitochondrial %')
+abline(h=attr(discard.mito, "thresholds")["higher"], col="red")
 ```
 
 `emptyDrops()` already removes cells with very low library sizes or (by association) low numbers of expressed genes.
@@ -500,10 +501,10 @@ ids <- mapIds(org.Hs.eg.db, keys=platelet, column="ENSEMBL", keytype="SYMBOL")
 points(abundance[ids], logFC[ids], col="orange", pch=16)
 ```
 
-If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters.
+If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters for metrics that are associated with genuine biological differences.
 For example, outlier detection can be relaxed by increasing `nmads=` in the `isOutlier()` calls.
-We can also avoid filtering altogether on metrics that are associated with genuine biological differences between cell types.
 Of course, this increases the risk of retaining more low-quality cells and encountering the problems discussed in Section \@ref(quality-control-motivation).
+The logical endpoint of this line of reasoning is to avoid filtering altogether, instead marking putative low-quality cells for later consideration.
 
 As an aside, it is worth mentioning that the true technical quality of a cell may also be correlated with its type.
 (This differs from a correlation between the cell type and the QC metrics, as the latter are our imperfect proxies for quality.)

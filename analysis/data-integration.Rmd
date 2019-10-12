@@ -153,7 +153,8 @@ To use this approach in a scRNA-seq context, we assume that the composition of c
 We also assume that the batch effect is additive, i.e., any batch-induced fold-change in expression is the same across different cell subpopulations for any given gene.
 These are strong assumptions as batches derived from different individuals will naturally exhibit variation in cell type abundances and expression.
 Nonetheless, they may be acceptable when dealing with batches that are technical replicates generated from the same population of cells.
-Linear modelling can also accommodate situations where the composition is known _a priori_ by including the cell type as a factor in the linear model, but this situation is even less common^[If I already knew the type and state of each cell, why would I waste money sequencing them?].
+(In fact, when its assumptions hold, linear regression is the most statistically efficient as it uses information from all cells to compute the common batch vector.)
+Linear modelling can also accommodate situations where the composition is known _a priori_ by including the cell type as a factor in the linear model, but this situation is even less common.
 
 We use the `rescaleBatches()` function from the `r Biocpkg("batchelor")` package to remove the batch effect.
 This is roughly equivalent to applying a linear regression to the log-expression values per gene, with some adjustments to improve performance and efficiency.
