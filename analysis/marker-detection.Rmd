@@ -60,7 +60,7 @@ interesting <- markers.pbmc[[chosen]]
 colnames(interesting)
 ```
 
-Of particular interest is the `Top` field, which contains the highest^[That is, the lowest rank value. So 1st is 1, and 2nd is 2, so 1 is higher than 2. Geez.] rank for each gene across all pairwise comparisons involving cluster `r chosen`.
+Of particular interest is the `Top` field, which contains the highest rank for each gene across all pairwise comparisons involving cluster `r chosen`.
 The set of genes with `Top` values of 1 contains the gene with the lowest $p$-value from each comparison.
 Similarly, the set of genes with `Top` values less than or equal to 10 contains the top 10 genes from each comparison.
 Each `DataFrame` produced by `findMarkers()` will order genes based on the `Top` value.
@@ -188,9 +188,9 @@ The WMW test statistic is proportional to the area-under-the-curve (AUC), i.e., 
 In a pairwise comparison, AUCs of 1 or 0 indicate that the two clusters have perfectly separated expression distributions.
 Thus, the WMW test directly addresses the most desirable property of a candidate marker gene, while the $t$ test only does so indirectly via the difference in the means and the intra-group variance.
 
-We perform WMW tests using the `findMarkers()` function, with `test="wilcox"`.
+We perform WMW tests by again using the `findMarkers()` function, this time with `test="wilcox"`.
 This returns a list of `DataFrame`s containing ranked candidate markers for each cluster.
-The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have the same interpretation as described for $t$ tests.
+The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have the same interpretation as described for $t$-tests.
 We demonstrate below by detecting upregulated genes in each cluster with `direction="up"`.
 
 ```{r}
@@ -200,7 +200,8 @@ names(markers.pbmc.wmw)
 ```
 
 To explore the results in more detail, we focus on the `DataFrame` for cluster `r chosen`.
-The interpretation of `Top` is the same as described for $t$ tests, and Simes' method is again used to combine $p$-values across pairwise comparisons.
+The interpretation of `Top` is the same as described for $t$-tests, and Simes' method is again used to combine $p$-values across pairwise comparisons.
+If we want more focused sets, we can also change `pval.type=` as previously described.
 
 ```{r}
 interesting.wmw <- markers.pbmc.wmw[[chosen]]
@@ -234,11 +235,11 @@ This represents a much more stringent definition of marker genes compared to the
 The premise is that genes are more likely to contribute to important biological decisions if they were active in one cluster and silent in another, compared to more subtle "tuning" effects from changing the expression of an active gene.
 From a practical perspective, a binary measure of presence/absence is easier to validate.
 
-We perform pairwise binomial tests between clusters using the `findMarkers()` function, with `test="binom`.
-This returns a list of `DataFrame`s containing marker statistics for each cluster, such as the `Top` rank and its $p$-value.
+We perform pairwise binomial tests between clusters using the `findMarkers()` function with `test="binom"`.
+This returns a list of `DataFrame`s containing marker statistics for each cluster such as the `Top` rank and its $p$-value.
 Here, the effect size is reported as the log-fold change in this proportion between each pair of clusters.
 Large positive log-fold changes indicate that the gene is more frequently expressed in one cluster compared to the other.
-Here, we focus on genes that are upregulated in each cluster compared to the others by setting `direction="up"`.
+We focus on genes that are upregulated in each cluster compared to the others by setting `direction="up"`.
 
 ```{r}
 markers.pbmc.binom <- findMarkers(sce.pbmc, test="binom",
@@ -270,12 +271,11 @@ plotExpression(sce.lawlor, x="cell type", features="ENSG00000115263")
 Another property of the binomial test is that it will not respond to scaling normalization.
 Systematic differences in library size between clusters will not be considered when computing $p$-values or effect sizes.
 This is not necessarily problematic for marker gene detection -
-users can treat this as retaining information about the total RNA content, analogous to spike-in normalization.
+users can treat this as retaining information about the total RNA content, analogous to spike-in normalization in Section \@ref(spike-norm).
 
 ### Using custom DE methods
 
-It is possible to perform marker gene detection based on precomputed DE statistics.
-This allows us to take advantage of more sophisticated tests in dedicated DE analysis packages.
+It is also possible to perform marker gene detection based on precomputed DE statistics, which allows us to take advantage of more sophisticated tests in dedicated DE analysis packages in the Bioconductor ecosystem.
 To demonstrate, consider the `voom()` approach from the `r Biocpkg("limma")` package [@law2014voom].
 We first process our `SingleCellExperiment` to obtain a `fit` object as shown below.
 
@@ -348,7 +348,7 @@ Nonetheless, some custom methods (e.g., `r Biocpkg("MAST")`) may provide a usefu
 
 ## Handling blocking factors {#marker-batch}
 
-## Using the `block=` argument
+### Using the `block=` argument
 
 Large studies may contain factors of variation that are known and not interesting (e.g., batch effects, sex differences).
 If these are not modelled, they can interfere with marker gene detection - most obviously by inflating the variance within each cluster, but also by distorting the log-fold changes if the cluster composition varies across levels of the blocking factor.
@@ -377,7 +377,7 @@ The `block=` argument works with all tests shown above and is robust to differen
 However, it assumes that each pair of clusters is present in at least one batch.
 In scenarios where cells from two clusters never co-occur in the same batch, the comparison will be impossible and `NA`s will be reported in the output.
 
-## Using the `design=` argument
+### Using the `design=` argument
 
 Another approach is to define a design matrix containing the batch of origin as the sole factor.
 `findMarkers()` will then fit a linear model to the log-expression values, similar to the use of `r Biocpkg("limma")` for bulk RNA sequencing data [@ritchie2015limma].
