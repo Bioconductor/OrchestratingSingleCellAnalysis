@@ -75,18 +75,19 @@ sce.416b <- logNormCounts(sce.416b)
 
 ### Variance modelling
 
-We block on the plate of origin to minimize plate effects.
+We block on the plate of origin to minimize plate effects, 
+and then we take the top 10% of genes with the largest biological components.
 
 ```{r variance-modelling}
 dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=sce.416b$block)
+chosen.hvgs <- getTopHVGs(dec.416b, prop=0.1)
 ```
 
 ### Batch correction
 
 The composition of cells is expected to be the same across the two plates, 
 hence the use of `removeBatchEffect()` rather than more complex methods.
-In fact, in situations where it is applicable, linear regression is the most statistically efficient 
-as it uses information from all cells to compute the common batch vector.
+For larger datasets, consider using `regressBatches()` from the `r Biocpkg("batchelor")` package.
 
 ```{r batch-correction}
 library(limma)
@@ -96,13 +97,12 @@ assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b),
 
 ### Dimensionality reduction
 
-`denoisePCA()` automatically does its own feature selection, 
-so further subsetting is not strictly required unless we wanted to be more stringent.
+We do not expect a great deal of heterogeneity in this dataset, so we only request 10 PCs.
 We use an exact SVD to avoid warnings from `r BiocStyle::CRANpkg("irlba")` about handling small datasets.
 
 ```{r dimensionality-reduction}
-sce.416b <- denoisePCA(sce.416b, technical=dec.416b, 
-    assay.type="corrected", BSPARAM=BiocSingular::ExactParam())
+sce.416b <- runPCA(sce.416b, ncomponents=10, subset_row=chosen.hvgs,
+    exprs_values="corrected", BSPARAM=BiocSingular::ExactParam())
 
 set.seed(1010)
 sce.416b <- runTSNE(sce.416b, dimred="PCA", perplexity=10)
