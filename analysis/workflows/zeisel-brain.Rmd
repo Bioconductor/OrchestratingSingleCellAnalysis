@@ -75,17 +75,15 @@ Thus, to avoid regressing out potential biology, we will not block on any factor
 
 ```{r variance-modelling}
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, "ERCC")
+top.hvgs <- getTopHVGs(dec.zeisel, prop=0.1)
 ```
 
 ### Dimensionality reduction
 
-Note that `denoisePCA()` automatically selects for genes with positive components, 
-so explicit specification of `subset.row=` is not required.
-
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101011001)
-sce.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, BSPARAM=IrlbaParam())
+sce.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, subset.row=top.hvgs)
 sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA")
 ```
 
@@ -175,8 +173,7 @@ plotTSNE(sce.zeisel, colour_by="cluster")
 ```{r, echo=FALSE, results="hide"}
 # Hidden variables for use in text or hidden chunks,
 # to avoid the need for manual changes.
-chosen.inter.cluster <- 4
-chosen.inter.other <- 11
+chosen.inter.cluster <- 1
 ```
 
 We focus on upregulated marker genes as these can quickly provide positive identification of cell type in a heterogeneous population.
@@ -185,34 +182,27 @@ The same output is provided for each cluster in order to identify genes that dis
 
 ```{r}
 markers <- findMarkers(sce.zeisel, sce.zeisel$cluster, direction="up")
-marker.set <- markers[["4"]]
+marker.set <- markers[["1"]]
 head(marker.set[,1:8], 10) # only first 8 columns, for brevity
 ```
 
 ```{r, echo=FALSE, results="hide"}
-# Checking the cluster is what we wanted, along with its related cluster.
-other.inter <- chosen.inter.other - 1
+stopifnot(identical(marker.set, markers[[chosen.inter.cluster]]))
+
+# Checking the cluster is what we wanted.
 gad1 <- sapply(marker.set["Gad1",-(1:3)], sign)
-stopifnot(gad1[other.inter]==-1)
-stopifnot(all(gad1[-other.inter]==1))
-
+stopifnot(all(gad1==1))
 gad2 <- sapply(marker.set["Gad2",-(1:3)], sign)
-stopifnot(gad2[other.inter]==-1)
-stopifnot(all(gad2[-other.inter]==1))
-
-stopifnot(all(sapply(marker.set["Synpr",-(1:3)], sign)==1))
+stopifnot(all(gad2==1))
 ```
 
 The heatmap below indicates that most of the top markers are strongly DE in cells of cluster `r chosen.inter.cluster` compared to some or all of the other clusters.
 We can use these markers to identify cells from cluster `r chosen.inter.cluster` in validation studies with an independent population of cells.
 A quick look at the markers suggest that cluster `r chosen.inter.cluster` represents interneurons based on expression of *Gad1* and *Slc6a1* [@zeng2012largescale],
-differing from closely related cells in cluster `r chosen.inter.other` by virtue of high *Synpr* expression.
 
 ```{r, fig.wide=TRUE, fig.asp=1.5}
 top.markers <- rownames(marker.set)[marker.set$Top <= 10]
-plotHeatmap(sce.zeisel, features=top.markers, columns=order(sce.zeisel$cluster),
-    colour_columns_by="cluster", cluster_cols=FALSE,
-    center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
+plotHeatmap(sce.zeisel, features=top.markers, order_columns_by="cluster")
 ```
 
 An alternative visualization approach is to plot the log-fold changes to all other clusters directly.
@@ -226,7 +216,6 @@ library(pheatmap)
 max.lfc <- max(abs(range(logFCs)))
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 ```
-
 
 ## Session Info {-}
 
