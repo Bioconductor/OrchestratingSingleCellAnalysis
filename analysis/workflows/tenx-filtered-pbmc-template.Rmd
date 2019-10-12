@@ -45,10 +45,7 @@ pbmcID <- logNormCounts(pbmcID)
 ```{r variance-modelling}
 library(scran)
 decID <- modelGeneVar(pbmcID)
-```
-
-```{r feature-selection}
-chosen.hvgs <- which(decID$bio > 0)
+chosen.hvgs <- getTopHVGs(decID, prop=0.1)
 ```
 
 ### Dimensionality reduction

@@ -77,13 +77,14 @@ sce.pbmc <- logNormCounts(sce.pbmc)
 ```{r variance-modelling}
 set.seed(1001)
 dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+top.hvgs <- getTopHVGs(dec.pbmc, prop=0.1)
 ```
 
 ### Dimensionality reduction
 
 ```{r dimensionality-reduction}
 set.seed(10000)
-sce.pbmc <- denoisePCA(sce.pbmc, technical=dec.pbmc)
+sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.hvgs, technical=dec.pbmc)
 
 set.seed(100000)
 sce.pbmc <- runTSNE(sce.pbmc, use_dimred="PCA")
@@ -167,8 +168,8 @@ plotTSNE(sce.pbmc, colour_by="cluster")
 ### Interpretation
 
 ```{r, echo=FALSE}
-chosen.mono <- 1
-chosen.macro <- 11
+chosen.mono <- 7
+chosen.macro <- 5
 ```
 
 ```{r}
@@ -181,8 +182,8 @@ High expression of _CD14_, _CD68_ and _MNDA_ combined with low expression of _CD
 compared to macrophages in cluster `r chosen.macro`.
 
 ```{r}
-marker.set <- markers[["1"]]
-as.data.frame(marker.set[1:20,1:2])
+marker.set <- markers[["7"]]
+as.data.frame(marker.set[1:40,1:2])
 ```
 
 ```{r, echo=FALSE, results="hide"}
@@ -190,9 +191,9 @@ as.data.frame(marker.set[1:20,1:2])
 stopifnot(identical(marker.set, markers[[chosen.mono]]))
 
 # Checking the cluster is what we wanted.
-top20 <- rownames(marker.set)[1:20]
-stopifnot(all(c("CD14", "CD68", "MNDA") %in% top20))
-stopifnot(marker.set["FCGR3A",paste0("logFC.", chosen.macro)] < -2)
+topset <- rownames(marker.set)[1:40]
+stopifnot(all(c("CD14", "CD68", "MNDA") %in% topset))
+stopifnot(marker.set["FCGR3A",paste0("logFC.", chosen.macro)] < -1)
 ```
 
 ```{r, fig.wide=TRUE, fig.asp=0.8}
