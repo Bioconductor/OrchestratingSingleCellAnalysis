@@ -131,7 +131,7 @@ This yields a dimensionality reduction result that is closely related to $t$-SNE
 ```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbour graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
 set.seed(2000)
 reducedDim(sce.pbmc, "force") <- igraph::layout_with_fr(g)
-plotReducedDim(sce.pbmc, colour_by="cluster", use_dimred="force")
+plotReducedDim(sce.pbmc, colour_by="cluster", dimred="force")
 ```
 
 ### Other parameters
@@ -463,7 +463,7 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
-## Nested clustering {#clustering-nested}
+## Subclustering {#subclustering}
 
 Another simple approach to improving resolution is to repeat the feature selection and clustering _within_ a single cluster.
 This aims to select HVGs and PCs that are more relevant to internal structure, improving resolution by avoiding noise from unnecessary features.
@@ -481,8 +481,8 @@ memory <- 8L
 sce.memory <- sce.pbmc[,clust.full==memory]
 dec.memory <- modelGeneVar(sce.memory)
 sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
+    subset.row=getTopHVGs(dec.memory, prop=0.1),
     BSPARAM=BiocSingular::IrlbaParam())
-sce.memory <- runTSNE(sce.memory)
 ```
 
 ```{r, echo=FALSE}
@@ -491,11 +491,11 @@ by.clust.m <- vapply(by.clust, mean, 0)
 stopifnot(identical(unname(which.max(by.clust.m)), memory))
 ```
 
-We apply graph-based clustering within this memory subset to obtain CD4^+^ and CD8^+^ subclusters (Figure \@ref(fig:cd48-memory-expression)).
-Admittedly, the expression of CD4 is so low that the change is rather modest, but the interpretation is clear enough.
+We apply graph-based clustering within this memory subset to obtain _CD4_^+^ and _CD8_^+^ subclusters (Figure \@ref(fig:cd48-memory-expression)).
+Admittedly, the expression of _CD4_ is so low that the change is rather modest, but the interpretation is clear enough.
 
 ```{r cd48-memory-expression, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of _CD4_ and _CD8A_ log-normalized expression values within each cluster in the memory T cell subset of the 10X PBMC dataset."}
-g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA")
+g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA", k=20)
 clust.memory <- igraph::cluster_walktrap(g.memory)$membership
 plotExpression(sce.memory, features=c("CD8A", "CD4"),
     x=I(factor(clust.memory)))
@@ -511,10 +511,31 @@ by.clust.cd4 <- vapply(by.clust, mean, 0)
 stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
 ```
 
-Nested clustering is a general and conceptually straightforward procedure for increasing resolution. 
-It also simplifies the interpretation of the subclusters, which only need to be considered in the context of the parent cluster's identity.
-On the other hand, it tends to encourage the construction of a "house of cards" of cell type assignments, simply because it is difficult for practitioners to consider the uncertainty of identification for parent clusters when working with deep nesting.
-We tend to avoid nested clustering as a routine procedure, though it has its uses when the parent clusters can be well-defined.
+For subclustering analyses, it is helpful to define a customized function that calls our desired algorithms to obtain a clustering from a given `SingleCellExperiment`.
+This function can then be applied multiple times on different subsets without having to repeatedly copy and modify the code for each subset.
+(Of course, the downside is that this assumes that a similar analysis is appropriate for each subset.
+If different subsets require extensive reparametrization, copying the code may actually be more straightforward.)
+
+```{r}
+mySubClusteringFunction <- function(input) {
+    dec <- modelGeneVar(input)
+    input <- denoisePCA(input, technical=dec,
+        subset.row=getTopHVGs(dec, prop=0.1),
+        BSPARAM=BiocSingular::IrlbaParam())
+    g <- buildSNNGraph(input, use.dimred="PCA", k=20)
+    input$cluster <- igraph::cluster_walktrap(g)$membership
+    input
+}
+
+sce.sub.1 <- mySubClusteringFunction(sce.pbmc[,clust.full==1])
+sce.sub.2 <- mySubClusteringFunction(sce.pbmc[,clust.full==2])
+# etc.
+```
+
+Subclustering is a general and conceptually straightforward procedure for increasing resolution. 
+It can also simplify the interpretation of the subclusters, which only need to be considered in the context of the parent cluster's identity - for example, we did not have to re-identify the cells in cluster `r memory` as T cells.
+However, this is a double-edged sword as it is difficult for practitioners to consider the uncertainty of identification for parent clusters when working with deep nesting.
+If cell types or states span cluster boundaries, conditioning on the putative cell type identity of the parent cluster can encourage the construction of a "house of cards" of cell type assignments, e.g., where a subcluster of one parent cluster is actually contamination from a cell type in a separate parent cluster.
 
 ## Session Info {-}
 
