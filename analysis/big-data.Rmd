@@ -50,6 +50,15 @@ clusters <- igraph::cluster_walktrap(snn.gr)
 table(Exact=sce.pbmc$cluster, Approx=clusters$membership)
 ```
 
+```{r, echo=FALSE}
+# Checking that I'm not just talking shit.
+library(fossil)
+stopifnot(rand.index(
+    as.integer(factor(sce.pbmc$cluster)),
+    as.integer(factor(clusters$membership))
+) > 0.95)
+```
+
 Note that Annoy writes the NN index to disk prior to performing the search.
 Thus, it may not actually be faster than the default exact algorithm for small datasets, depending on whether the overhead of disk write is offset by the computational complexity of the search.
 It is also not difficult to find situations where the approximation deteriorates, especially at high dimensions, though this may not have an appreciable impact on the biological conclusions.
