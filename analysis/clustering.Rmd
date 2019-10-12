@@ -480,14 +480,13 @@ Subsetting also encourages clustering methods to separate cells according to mor
 We demonstrate with a cluster of putative memory T cells from the PBMC dataset, identified according to several markers (Figure \@ref(fig:ccr7-dist-memory)).
 
 ```{r ccr7-dist-memory, fig.cap="Distribution of log-normalized expression values for several T cell markers within each cluster in the 10X PBMC dataset. Each cluster is color-coded for convenience."}
-# Using a higher 'k' just for demonstration purposes here.
-g.full <- buildSNNGraph(sce.pbmc, k=20, use.dimred = 'PCA')
+g.full <- buildSNNGraph(sce.pbmc, use.dimred = 'PCA')
 clust.full <- igraph::cluster_walktrap(g.full)$membership
 plotExpression(sce.pbmc, features=c("CD3E", "CCR7", "CD69", "CD44"),
     x=I(factor(clust.full)), colour_by=I(factor(clust.full)))
 
 # Repeating modelling and PCA on the subset.
-memory <- 5L
+memory <- 6L
 sce.memory <- sce.pbmc[,clust.full==memory]
 dec.memory <- modelGeneVar(sce.memory)
 sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
@@ -504,7 +503,7 @@ We apply graph-based clustering within this memory subset to obtain _CD4_^+^ and
 Admittedly, the expression of _CD4_ is so low that the change is rather modest, but the interpretation is clear enough.
 
 ```{r cd48-memory-expression, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of _CD4_ and _CD8A_ log-normalized expression values within each cluster in the memory T cell subset of the 10X PBMC dataset."}
-g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA", k=20)
+g.memory <- buildSNNGraph(sce.memory, use.dimred="PCA")
 clust.memory <- igraph::cluster_walktrap(g.memory)$membership
 plotExpression(sce.memory, features=c("CD8A", "CD4"),
     x=I(factor(clust.memory)))
