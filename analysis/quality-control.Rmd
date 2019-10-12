@@ -295,35 +295,7 @@ plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
     colour_by="phenotype", shape_by="discard") 
 ```
 
-## Marking or removal?
-
-Once low-quality cells have been identified, we can choose to either remove them or mark them.
-Removal is the most straightforward option and is achieved by subsetting the `SingleCellExperiment` by column.
-In this case, we use the low-quality calls from Section \@ref(qc-batch) to generate a subsetted `SingleCellExperiment` that we would use for downstream analyses.
-
-```{r}
-# Keeping the columns we DON'T want to discard.
-filtered <- sce.416b[,!reasons$discard]
-```
-
-The other option is to simply mark the low-quality cells as such and retain them in the downstream analysis.
-The aim here is to allow clusters of low-quality cells to form, and then to identify and ignore such clusters during interpretation of the results.
-This approach avoids discarding cell types that have poor values for the QC metrics, giving users an opportunity to decide whether a cluster of such cells represents a genuine biological state.
-The downside is that it shifts the burden of QC to the interpretation of the clusters, which is already the bottleneck in scRNA-seq data analysis (Chapters \@ref(clustering), \@ref(marker-detection) and \@ref(cell-type-annotation)).
-Indeed, if we do not trust the QC metrics, we would have to distinguish between genuine cell types and low-quality cells based only on marker genes, and this is not always easy due to the tendency of the latter to "express" interesting genes (Section \@ref(quality-control-motivation)).
-Retention of low-quality cells also compromises the accuracy of the variance modelling, requiring, e.g., use of more PCs to offset the fact that the early PCs are driven by differences between low-quality and other cells.
-
-```{r}
-marked <- sce.416b
-marked$discard <- batch.reasons$discard
-```
-
-For routine analyses, we suggest performing removal by default to avoid complications from low-quality cells.
-This allows most of the population structure to be characterized with no - or, at least, fewer - concerns about its validity.
-Once the initial analysis is done, and if there are any concerns about discarded cell types (Section \@ref(quality-control-discarded)), a more thorough re-analysis can be performed where the low-quality cells are only marked.
-This recovers cell types with low RNA content, high mitochondrial proportions, etc. that only need to be interpreted insofar as they "fill the gaps" in the initial analysis.
-
-## Cell calling in droplet data
+## Cell calling for droplet data
 
 ### Background
 
@@ -373,30 +345,16 @@ This allows us to discriminate between well-sequenced empty droplets and droplet
 We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
 
 ```{r}
+# emptyDrops performs Monte Carlo simulations to compute p-values,
+# so we need to set the seed to obtain reproducible results.
 set.seed(100)
 e.out <- emptyDrops(counts(sce.pbmc))
-sum(e.out$FDR <= 0.001, na.rm=TRUE)
+
+# See ?emptyDrops for an explanation of why there are NA values.
+summary(e.out$FDR <= 0.001)
 ```
 
-`emptyDrops()` computes Monte Carlo $p$-values based on a Dirichlet-multinomial model of sampling molecules into droplets.
-These $p$-values are stochastic so it is important to set the random seed to obtain reproducible results.
-The stability of the Monte Carlo $p$-values depends on the number of iterations used to compute them. 
-This is controlled using the `niters=` argument in `emptyDrops()`, set to a default of 10000 for speed.
-Larger values improve stability with the only cost being that of time, so users should set `niters=` to the largest value they are willing to wait for.
-
-`emptyDrops()` assumes that libraries with total UMI counts below a certain threshold (`lower=100` by default) correspond to empty droplets.
-These are used to estimate the ambient expression profile against which the remaining libraries are tested.
-Under this definition, these low-count libraries cannot be cell-containing droplets and are excluded from the hypothesis testing - hence the `NA`s in the output of the function.
-
-To retain only the detected cells, we subset our `SingleCellExperiment` object.
-Discerning readers will notice the use of `which()`, which conveniently removes the `NA`s prior to the subsetting.
-
-```{r}
-sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
-```
-
-### Examining cell-calling diagnostics
-
+`emptyDrops()` uses Monte Carlo simulations to compute $p$-values for the multinomial sampling transcripts from the ambient pool.
 The number of Monte Carlo iterations determines the lower bound for the $p$-values [@phipson2010permutation].
 The `Limited` field in the output indicates whether or not the computed $p$-value for a particular barcode is bounded by the number of iterations.
 If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations.
@@ -410,19 +368,23 @@ As mentioned above, `emptyDrops()` assumes that barcodes with low total UMI coun
 Thus, the null hypothesis should be true for all of these barcodes. 
 We can check whether the hypothesis testing procedure holds its size by examining the distribution of $p$-values for low-total barcodes with `test.ambient=TRUE`.
 Ideally, the distribution should be close to uniform (Figure \@ref(fig:ambientpvalhist)).
+Large peaks near zero indicate that barcodes with total counts below `lower` are not all ambient in origin.
+This can be resolved by decreasing `lower` further to ensure that barcodes corresponding to droplets with very small cells are not used to estimate the ambient profile.
 
 ```{r ambientpvalhist, fig.cap="Distribution of $p$-values for the assumed empty droplets."}
-full.data <- read10xCounts(fname, col.names=TRUE)
-
 set.seed(100)
 limit <- 100   
-all.out <- emptyDrops(counts(full.data), lower=limit, test.ambient=TRUE)
+all.out <- emptyDrops(counts(sce.pbmc), lower=limit, test.ambient=TRUE)
 hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0],
     xlab="P-value", main="", col="grey80") 
 ```
 
-Large peaks near zero indicate that barcodes with total counts below `lower` are not all ambient in origin.
-This can be resolved by decreasing `lower` further to ensure that barcodes corresponding to droplets with very small cells are not used to estimate the ambient profile.
+Once we are satisfied with the performance of `emptyDrops()`, we subset our `SingleCellExperiment` object to retain only the detected cells.
+Discerning readers will notice the use of `which()`, which conveniently removes the `NA`s prior to the subsetting.
+ 
+```{r}
+sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
+```
 
 ### Relationship with other QC metrics
 
@@ -451,7 +413,16 @@ If we had started our analysis with the **filtered** count matrix, we could go s
 We would not need to run `emptyDrops()` manually as shown here, and indeed, attempting to do so would lead to nonsensical results if not outright software errors.
 Nonetheless, it may still be desirable to load the **unfiltered** matrix and apply `emptyDrops()` ourselves, on occasions where more detailed inspection or control of the cell-calling statistics is desired.
 
-## Checking for discarded cell types {#quality-control-discarded}
+## Removing low-quality cells
+
+Once low-quality cells have been identified, we can choose to either remove them or mark them.
+Removal is the most straightforward option and is achieved by subsetting the `SingleCellExperiment` by column.
+In this case, we use the low-quality calls from Section \@ref(qc-batch) to generate a subsetted `SingleCellExperiment` that we would use for downstream analyses.
+
+```{r}
+# Keeping the columns we DON'T want to discard.
+filtered <- sce.416b[,!reasons$discard]
+```
 
 The biggest practical concern during QC is whether an entire cell type is inadvertently discarded.
 There is always some risk of this occurring as the QC metrics are never fully independent of biological state.
@@ -459,6 +430,8 @@ We can diagnose cell type loss by looking for systematic differences in gene exp
 To demonstrate, we compute the average count across the discarded and retained pools in the 416B data set, and we compute the log-fold change between the pool averages.
 
 ```{r}
+# Using the 'discard' vector for demonstration, 
+# as it has more cells for stable calculation of 'lost'.
 lost <- calculateAverage(counts(sce.416b)[,!discard])
 kept <- calculateAverage(counts(sce.416b)[,discard])
 
@@ -504,13 +477,33 @@ points(abundance[ids], logFC[ids], col="orange", pch=16)
 If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters for metrics that are associated with genuine biological differences.
 For example, outlier detection can be relaxed by increasing `nmads=` in the `isOutlier()` calls.
 Of course, this increases the risk of retaining more low-quality cells and encountering the problems discussed in Section \@ref(quality-control-motivation).
-The logical endpoint of this line of reasoning is to avoid filtering altogether, instead marking putative low-quality cells for later consideration.
+The logical endpoint of this line of reasoning is to avoid filtering altogether, as discussed in Section \@ref(marking-qc).
 
 As an aside, it is worth mentioning that the true technical quality of a cell may also be correlated with its type.
 (This differs from a correlation between the cell type and the QC metrics, as the latter are our imperfect proxies for quality.)
 This can arise if some cell types are not amenable to dissociation or microfluidics handling during the scRNA-seq protocol.
 In such cases, it is possible to "correctly" discard an entire cell type during QC if all of its cells are damaged.
 Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.
+
+## Marking low-quality cells {#marking-qc}
+
+The other option is to simply mark the low-quality cells as such and retain them in the downstream analysis.
+The aim here is to allow clusters of low-quality cells to form, and then to identify and ignore such clusters during interpretation of the results.
+This approach avoids discarding cell types that have poor values for the QC metrics, giving users an opportunity to decide whether a cluster of such cells represents a genuine biological state.
+
+```{r}
+marked <- sce.416b
+marked$discard <- batch.reasons$discard
+```
+
+The downside is that it shifts the burden of QC to the interpretation of the clusters, which is already the bottleneck in scRNA-seq data analysis (Chapters \@ref(clustering), \@ref(marker-detection) and \@ref(cell-type-annotation)).
+Indeed, if we do not trust the QC metrics, we would have to distinguish between genuine cell types and low-quality cells based only on marker genes, and this is not always easy due to the tendency of the latter to "express" interesting genes (Section \@ref(quality-control-motivation)).
+Retention of low-quality cells also compromises the accuracy of the variance modelling, requiring, e.g., use of more PCs to offset the fact that the early PCs are driven by differences between low-quality and other cells.
+
+For routine analyses, we suggest performing removal by default to avoid complications from low-quality cells.
+This allows most of the population structure to be characterized with no - or, at least, fewer - concerns about its validity.
+Once the initial analysis is done, and if there are any concerns about discarded cell types (Section \@ref(quality-control-discarded)), a more thorough re-analysis can be performed where the low-quality cells are only marked.
+This recovers cell types with low RNA content, high mitochondrial proportions, etc. that only need to be interpreted insofar as they "fill the gaps" in the initial analysis.
 
 ## Session Info {-}
 
