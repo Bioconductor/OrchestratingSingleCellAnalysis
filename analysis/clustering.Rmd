@@ -43,7 +43,7 @@ Indeed, asking for an unqualified "best" clustering is akin to asking for the be
 
 It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data.
 We can zoom in and out by changing the resolution of the clustering parameters, and we can experiment with different clustering algorithms to obtain alternative perspectives of the data.
-This iterative approach is entirely permissible for data exploration, which constitutes the majority of all scRNA-seq data analysis.
+This iterative approach is entirely permissible for data exploration, which constitutes the majority of all scRNA-seq data analyses.
    
 ## Graph-based clustering {#clustering-graph}
 
