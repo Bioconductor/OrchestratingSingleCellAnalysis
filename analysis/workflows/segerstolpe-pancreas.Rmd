@@ -7,7 +7,7 @@ chapterPreamble(use_cache = TRUE)
 
 ## Introduction
 
-This performs an analysis of the @segerstolpe2016singlcell dataset,
+This performs an analysis of the @segerstolpe2016singlecell dataset,
 consisting of human pancreas cells from various donors.
 
 ## Analysis code
