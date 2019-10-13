@@ -127,7 +127,7 @@ table(Cluster=merged$cluster, Sample=merged$sample)
 ```
 
 ```{r}
-plotTSNE(merged, colour_by="cluster")
+plotTSNE(merged, colour_by="cluster", text_by="cluster", text_col="red")
 plotUMAP(merged, colour_by="cluster")
 ```
 
