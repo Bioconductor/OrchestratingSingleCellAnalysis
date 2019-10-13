@@ -82,9 +82,7 @@ This improves the quality of the correction by removing one aspect of the techni
 3. We perform feature selection by averaging the variance components across all batches with the `combineVar()` function.
 We compute the average as it is responsive to batch-specific HVGs while still preserving the within-batch ranking of genes.
 This allows us to use the same strategies described in Section \@ref(hvg-selection) to select genes of interest.
-(In contrast, approaches based on taking the intersection or union of HVGs across batches become increasingly conservative or liberal, respectively, with an increasing number of batches.)
-When integrating datasets, it is generally safer to err on the side of including more genes than are used in a single dataset analysis, to ensure that markers are retained for any dataset-specific subpopulations that might be present.
-For a top $X$ approach, this means using a larger $X$ (say, ~5000), or in this case, we simply take all genes above the trend.
+In contrast, approaches based on taking the intersection or union of HVGs across batches become increasingly conservative or liberal, respectively, with an increasing number of batches.
 
     ```{r}
     library(scran)
@@ -92,6 +90,9 @@ For a top $X$ approach, this means using a larger $X$ (say, ~5000), or in this c
     chosen.hvgs <- combined.dec$bio > 0
     sum(chosen.hvgs)
     ```
+
+    When integrating datasets of variable composition, it is generally safer to err on the side of including more genes than are used in a single dataset analysis, to ensure that markers are retained for any dataset-specific subpopulations that might be present.
+    For a top $X$ selection, this means using a larger $X$ (say, ~5000), or in this case, we simply take all genes above the trend.
 
 ## Diagnosing batch effects {#batch-diagnosis}
 
