@@ -1,7 +1,8 @@
 # Mammary gland dataset
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
@@ -14,25 +15,8 @@ from which we will consider a single sample of epithelial cells from the mouse m
 ### Data loading
 
 ```{r loading}
-library(BiocFileCache)
-bfc <- BiocFileCache()
-base.path <- "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2834nnn/GSM2834500/suppl"
-barcode.fname <- bfcrpath(bfc, file.path(base.path, 
-    "GSM2834500%5FG%5F1%5Fbarcodes%2Etsv%2Egz"))
-gene.fname <- bfcrpath(bfc, file.path(base.path,
-    "GSM2834500%5FG%5F1%5Fgenes%2Etsv%2Egz"))
-counts.fname <- bfcrpath(bfc, file.path(base.path,
-    "GSM2834500%5FG%5F1%5Fmatrix%2Emtx%2Egz"))
-
-library(Matrix)
-library(SingleCellExperiment)
-gene.info <- read.table(gene.fname, stringsAsFactors=FALSE)
-colnames(gene.info) <- c("Ensembl", "Symbol")
-sce.mam <- SingleCellExperiment(
-    list(counts=as(readMM(counts.fname), "dgCMatrix")), 
-    rowData=gene.info, 
-    colData=DataFrame(Barcode=readLines(barcode.fname))
-)
+library(scRNAseq)
+sce.mam <- BachMammaryData(samples="G_1")
 ```
 
 ### Gene annotation
@@ -50,11 +34,15 @@ rowData(sce.mam)$SEQNAME <- mapIds(ens.mm.v97, keys=rowData(sce.mam)$Ensembl,
 
 ### Quality control
 
+```{r}
+unfiltered <- sce.mam
+```
+
 ```{r quality-control}
 is.mito <- rowData(sce.mam)$SEQNAME == "MT"
-df <- perCellQCMetrics(sce.mam, subsets=list(Mito=which(is.mito)))
-discarded <- quickCellQC(df, percent_subsets="subsets_Mito_percent", nmads=3)
-sce.mam <- sce.mam[,!discarded$discard]
+stats <- perCellQCMetrics(sce.mam, subsets=list(Mito=which(is.mito)))
+qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent", nmads=3)
+sce.mam <- sce.mam[,!qc$discard]
 ```
 
 ### Normalization 
@@ -82,7 +70,6 @@ dec.mam <- modelGeneVarByPoisson(sce.mam)
 library(BiocSingular)
 set.seed(101010011)
 sce.mam <- denoisePCA(sce.mam, technical=dec.mam, BSPARAM=IrlbaParam())
-
 sce.mam <- runTSNE(sce.mam, dimred="PCA")
 ```
 
@@ -93,4 +80,82 @@ We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` la
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
 sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+### Marker detection
+
+```{r marker-detection}
+markers.mam <- findMarkers(sce.mam, cluster=sce.mam$cluster,
+    direction="up", lfc=1)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") + 
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") + 
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="subsets_Mito_percent", 
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent", 
+    colour_by="discard") + scale_x_log10()
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.mam))
+```
+
+```{r}
+plot(librarySizeFactors(sce.mam), sizeFactors(sce.mam), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")     
+```
+
+### Variance modelling
+
+```{r}
+plot(dec.mam$mean, dec.mam$total, pch=16, cex=0.5,
+    xlab="Mean of log-expression", ylab="Variance of log-expression")
+curfit <- metadata(dec.mam)
+curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.mam, "PCA"))
+```
+
+### Clustering
+
+```{r}
+table(sce.mam$cluster)
+```
+
+```{r}
+plotTSNE(sce.mam, colour_by="cluster")
+```
+
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
 ```

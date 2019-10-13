@@ -1,0 +1,208 @@
+# PBMC 10X dataset (unfiltered)
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
+```
+
+## Introduction
+
+Here, we describe a brief analysis of the peripheral blood mononuclear cell (PBMC) dataset from 10X Genomics [@zheng2017massively].
+The data are publicly available from the [10X Genomics website](https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/pbmc4k),
+from which we download the raw gene/barcode count matrices, i.e., before cell calling from the _CellRanger_ pipeline.
+
+## Analysis code
+
+### Data loading
+
+```{r loading}
+library(BiocFileCache)
+bfc <- BiocFileCache("raw_data", ask = FALSE)
+raw.path <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com/samples",
+    "cell-exp/2.1.0/pbmc4k/pbmc4k_raw_gene_bc_matrices.tar.gz"))
+untar(raw.path, exdir=file.path(tempdir(), "pbmc4k"))
+
+library(DropletUtils)
+fname <- file.path(tempdir(), "pbmc4k/raw_gene_bc_matrices/GRCh38")
+sce.pbmc <- read10xCounts(fname, col.names=TRUE)
+```
+
+### Gene annotation
+
+```{r gene-annotation}
+library(scater)
+rownames(sce.pbmc) <- uniquifyFeatureNames(
+    rowData(sce.pbmc)$ID, rowData(sce.pbmc)$Symbol)
+
+library(EnsDb.Hsapiens.v86)
+location <- mapIds(EnsDb.Hsapiens.v86, keys=rowData(sce.pbmc)$ID, 
+    column="SEQNAME", keytype="GENEID")
+```
+
+### Cell detection
+
+```{r cell-detection}
+set.seed(100)
+e.out <- emptyDrops(counts(sce.pbmc))
+sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
+```
+
+### Quality control
+
+```{r}
+unfiltered <- sce.pbmc
+```
+
+We use a relaxed QC strategy and only remove cells with large mitochondrial proportions, using it as a proxy for cell damage.
+This reduces the risk of removing cell types with low RNA content, especially in a heterogeneous PBMC population with many different cell types.
+
+```{r quality-control}
+stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=which(location=="MT")))
+high.mito <- isOutlier(stats$subsets_Mito_percent, nmads=3, type="higher")
+sce.pbmc <- sce.pbmc[,!high.mito]
+```
+
+### Normalization
+
+```{r normalization}
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
+sce.pbmc <- logNormCounts(sce.pbmc)
+```
+
+### Variance modelling
+
+```{r variance-modelling}
+set.seed(1001)
+dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+top.hvgs <- getTopHVGs(dec.pbmc, prop=0.1)
+```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+set.seed(10000)
+sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.hvgs, technical=dec.pbmc)
+
+set.seed(100000)
+sce.pbmc <- runTSNE(sce.pbmc, use_dimred="PCA")
+
+set.seed(1000000)
+sce.pbmc <- runUMAP(sce.pbmc, use_dimred="PCA")
+```
+
+### Clustering
+
+```{r clustering}
+g <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust <- igraph::cluster_walktrap(g)$membership
+sce.pbmc$cluster <- factor(clust)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- high.mito
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
+    colour_by="discard") + scale_x_log10()
+```
+
+```{r}
+summary(high.mito)
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.pbmc))
+```
+
+```{r}
+plot(librarySizeFactors(sce.pbmc), sizeFactors(sce.pbmc), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r}
+plot(dec.pbmc$mean, dec.pbmc$total, pch=16, cex=0.5,
+    xlab="Mean of log-expression", ylab="Variance of log-expression")
+curfit <- metadata(dec.pbmc)
+curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.pbmc, "PCA"))
+```
+
+### Clustering
+
+```{r}
+table(sce.pbmc$cluster)
+```
+
+```{r}
+plotTSNE(sce.pbmc, colour_by="cluster")
+```
+
+### Interpretation
+
+```{r, echo=FALSE}
+chosen.mono <- 7
+chosen.macro <- 5
+```
+
+```{r}
+markers <- findMarkers(sce.pbmc, clusters=sce.pbmc$cluster, 
+    pval.type="some", direction="up")
+```
+
+We examine the markers for cluster `r chosen.mono` in more detail.
+High expression of _CD14_, _CD68_ and _MNDA_ combined with low expression of _CD16_ suggests that this cluster contains monocytes,
+compared to macrophages in cluster `r chosen.macro`.
+
+```{r}
+marker.set <- markers[["7"]]
+as.data.frame(marker.set[1:40,1:2])
+```
+
+```{r, echo=FALSE, results="hide"}
+# Checking 'marker.set' and 'chosen.platelets' are consistent.
+stopifnot(identical(marker.set, markers[[chosen.mono]]))
+
+# Checking the cluster is what we wanted.
+topset <- rownames(marker.set)[1:40]
+stopifnot(all(c("CD14", "CD68", "MNDA") %in% topset))
+stopifnot(marker.set["FCGR3A",paste0("logFC.", chosen.macro)] < -1)
+```
+
+```{r, fig.wide=TRUE, fig.asp=0.8}
+plotExpression(sce.pbmc, features=c("CD14", "CD68",
+    "MNDA", "FCGR3A"), x="cluster", colour_by="cluster")
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```

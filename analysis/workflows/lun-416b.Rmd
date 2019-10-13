@@ -1,13 +1,18 @@
+# (PART) Workflows {-}
+
 # 416B Smart-seq2 dataset
 
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
 
 ## Introduction
 
-This performs an analysis of the @lun2018assessing Smart-seq2 dataset, 
-which contains two 96-well plates of 416B cells with and without induction of a _CBFB-MYH11_ oncogene.
+The @lun2017assessing dataset contains two 96-well plates of 416B cells (an immortalized mouse myeloid progenitor cell line), processed using the Smart-seq2 protocol [@picelli2014fulllength].
+A constant amount of spike-in RNA from the External RNA Controls Consortium (ERCC) was also added to each cell's lysate prior to library preparation.
+High-throughput sequencing was performed and the expression of each gene was quantified by counting the total number of reads mapped to its exonic regions.
+Similarly, the quantity of each spike-in transcript was measured by counting the number of reads mapped to the spike-in reference sequences.
 
 ## Analysis code
 
@@ -16,9 +21,14 @@ which contains two 96-well plates of 416B cells with and without induction of a 
 ```{r loading}
 library(scRNAseq)
 sce.416b <- LunSpikeInData(which="416b") 
+sce.416b$block <- factor(sce.416b$block)
 ```
 
 ### Gene annotation
+
+Ensembl identifiers are stable but difficult to interpret compared to the gene symbols. 
+Thus, we obtain the symbols corresponding to each row using the relevant annotation package.
+We also rename the rows of our `SingleCellExperiment` with the symbols, reverting to Ensembl identifiers for missing or duplicate symbols.
 
 ```{r gene-annotation}
 library(AnnotationHub)
@@ -42,16 +52,20 @@ We save an unfiltered copy of the `SingleCellExperiment` for later use.
 unfiltered <- sce.416b
 ```
 
+Technically, we do not need to use the mitochondrial proportions as we already have the spike-in proportions (which serve a similar purpose) for this dataset.
+However, it probably doesn't do any harm to include it anyway.
+
 ```{r quality-control}
 mito <- which(rowData(sce.416b)$SEQNAME=="MT")
 stats <- perCellQCMetrics(sce.416b, subsets=list(Mt=mito))
-qc <- quickCellQC(stats, percent_subsets="subsets_Mt_percent")
+qc <- quickPerCellQC(stats, percent_subsets=c("subsets_Mt_percent",
+    "altexps_ERCC_percent"), nmads=3, batch=sce.416b$block)
 sce.416b <- sce.416b[,!qc$discard]
 ```
 
 ### Normalization
 
-No pre-clustering is performed here, as the dataset is small and the cells are all similar.
+No pre-clustering is performed here, as the dataset is small and all cells are derived from the same cell line anyway.
 
 ```{r normalization}
 library(scran)
@@ -61,17 +75,19 @@ sce.416b <- logNormCounts(sce.416b)
 
 ### Variance modelling
 
-We take all of the genes with positive biological components.
+We block on the plate of origin to minimize plate effects, 
+and then we take the top 10% of genes with the largest biological components.
 
 ```{r variance-modelling}
-dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC")
-chosen.hvgs <- rownames(dec.416b)[dec.416b$bio > 0]
+dec.416b <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=sce.416b$block)
+chosen.hvgs <- getTopHVGs(dec.416b, prop=0.1)
 ```
 
 ### Batch correction
 
 The composition of cells is expected to be the same across the two plates, 
 hence the use of `removeBatchEffect()` rather than more complex methods.
+For larger datasets, consider using `regressBatches()` from the `r Biocpkg("batchelor")` package.
 
 ```{r batch-correction}
 library(limma)
@@ -81,12 +97,15 @@ assay(sce.416b, "corrected") <- removeBatchEffect(logcounts(sce.416b),
 
 ### Dimensionality reduction
 
+We do not expect a great deal of heterogeneity in this dataset, so we only request 10 PCs.
+We use an exact SVD to avoid warnings from `r BiocStyle::CRANpkg("irlba")` about handling small datasets.
+
 ```{r dimensionality-reduction}
-sce.416b <- denoisePCA(sce.416b, technical=dec.416b, 
-    subset.row=chosen.hvgs, assay.type="corrected")
+sce.416b <- runPCA(sce.416b, ncomponents=10, subset_row=chosen.hvgs,
+    exprs_values="corrected", BSPARAM=BiocSingular::ExactParam())
 
 set.seed(1010)
-sce.416b <- runTSNE(sce.416b, use_dimred="PCA", perplexity=10)
+sce.416b <- runTSNE(sce.416b, dimred="PCA", perplexity=10)
 ```
 
 ### Clustering
@@ -105,20 +124,30 @@ sce.416b$cluster <- factor(my.clusters)
 
 ### Quality control statistics
 
-```{r, fig.asp=0.5}
-par(mfrow=c(1,2))
-plot(stats$sum, stats$detected, xlab="Library size",
-    ylab="Number of detected genes", log="xy")     
-plot(stats$sum, stats$subsets_Mt_percent, xlab="Library size",
-    ylab="Number of detected genes", log="x")
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$block <- factor(unfiltered$block)
+unfiltered$discard <- qc$discard
 
-par(mfrow=c(1,2))
-boxplot(split(log10(stats$sum), unfiltered$block), ylab="Log10 library size")
-boxplot(split(log10(stats$detected), unfiltered$block), ylab="Log10 number of genes")
+gridExtra::grid.arrange(
+    plotColData(unfiltered, x="block", y="sum", 
+        colour_by="discard") + scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, x="block", y="detected", 
+        colour_by="discard") + scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, x="block", y="subsets_Mt_percent", 
+        colour_by="discard") + ggtitle("Mito percent"),
+    plotColData(unfiltered, x="block", y="altexps_ERCC_percent", 
+        colour_by="discard") + ggtitle("ERCC percent"),
+    nrow=2,
+    ncol=2
+)
+```
 
-par(mfrow=c(1,2))
-boxplot(split(log10(stats$sum), unfiltered$phenotype), ylab="Log10 library size")
-boxplot(split(log10(stats$detected), unfiltered$phenotype), ylab="Log10 number of genes")
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mt_percent", 
+    colour_by="discard") + scale_x_log10()
+plotColData(unfiltered, x="altexps_ERCC_percent", y="subsets_Mt_percent",
+    colour_by="discard") 
 ```
 
 ```{r}
@@ -131,30 +160,48 @@ colSums(as.matrix(qc))
 summary(sizeFactors(sce.416b))
 ```
 
+We see that the induced cells have size factors that are systematically shifted from the uninduced cells,
+consistent with the presence of a composition bias.
+
 ```{r}
 plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
-    xlab="Library size factors", ylab="Deconvolution factors", log="xy")     
+    xlab="Library size factors", ylab="Deconvolution factors", 
+    col=c("black", "red")[grepl("induced", sce.416b$phenotype)+1],
+    log="xy")
 ```
 
 ### Variance modelling
 
+```{r, fig.asp=0.5}
+par(mfrow=c(1,2))
+blocked.stats <- dec.416b$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Dimensionality reduction
+
 ```{r}
-plot(dec.416b$mean, dec.416b$total, col="black", pch=16,
-    xlab="Mean log-expression", ylab="Variance of log-expression")     
-fit.416b <- metadata(dec.416b)
-points(fit.416b$mean, fit.416b$var, col="red", pch=16)
-curve(fit.416b$trend(x), add=TRUE, col="dodgerblue")
+ncol(reducedDim(sce.416b, "PCA"))
 ```
 
 ### Clustering
 
 We compare the clusters to the plate of origin.
+Each cluster is comprised of cells from both batches, indicating that the clustering is not driven by a batch effect.
 
 ```{r}
 table(Cluster=sce.416b$cluster, Plate=sce.416b$block)
 ```
 
 We compare the clusters to the oncogene induction status.
+We observe differences in in the composition of each cluster, consistent with a biological effect of oncogene induction.
 
 ```{r}
 table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
@@ -164,4 +211,49 @@ table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
 plotTSNE(sce.416b, colour_by="cluster")
 ```
 
-## References
+Most cells have relatively small positive widths in the silhouette plot below, indicating that the separation between clusters is weak.
+This may be symptomatic of over-clustering where clusters that are clearly defined on oncogene induction status are further split into subsets that are less well separated.
+Nonetheless, we will proceed with the current clustering scheme as it provides reasonable partitions for further characterization of heterogeneity.
+
+```{r}
+library(cluster)
+clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
+sil <- silhouette(my.clusters, dist = my.dist)
+sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
+sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
+plot(sil, main = paste(length(unique(my.clusters)), "clusters"),
+    border=sil.cols, col=sil.cols, do.col.sort=FALSE)
+```
+
+### Interpretation
+
+```{r}
+markers <- findMarkers(sce.416b, my.clusters, block=sce.416b$block)
+marker.set <- markers[["1"]]
+head(marker.set, 10)
+```
+
+```{r, echo=FALSE, results="hide"}
+# Crashing if cluster 1 is not what we think it is; 
+# thus, avoid mismatch between text and results.
+stopifnot(all(sapply(marker.set["Myh11",-(1:3)], sign)==1))
+stopifnot(all(sapply(marker.set["Mcm2",-(1:3)], sign)==-1))
+```
+
+We visualize the expression profiles of the top candidates in the heatmap below to verify that the DE signature is robust.
+Most of the top markers have strong and consistent up- or downregulation in cells of cluster 1 compared to some or all of the other clusters.
+A cursory examination of the heatmap indicates that cluster 1 contains oncogene-induced cells with strong downregulation of DNA replication and cell cycle genes.
+This is consistent with the potential induction of senescence as an anti-tumorigenic response [@wajapeyee2010senescence].
+
+```{r, fig.width=10, fig.asp=0.8}
+top.markers <- rownames(marker.set)[marker.set$Top <= 10]
+plotHeatmap(sce.416b, features=top.markers, columns=order(sce.416b$cluster), 
+    colour_columns_by=c("cluster", "block", "phenotype"),
+    cluster_cols=FALSE, center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```

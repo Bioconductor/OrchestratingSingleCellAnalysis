@@ -1,20 +1,34 @@
-```{r, echo=FALSE}
-knitr::opts_chunk$set(cache=TRUE, error=FALSE, warning=FALSE, message=FALSE)
+# Human pancreas dataset (Muraro)
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
 ```
+
+## Introduction
+
+This performs an analysis of the @muraro2016singlecell CEL-seq dataset,
+consisting of human pancreas cells from various donors.
+
+## Analysis code
+
+### Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.muraro <- MuraroPancreasData()
 ```
 
+### Gene annotation
+
+Converting back to Ensembl identifiers.
+
 ```{r gene-annotation}
-# Converting back to Ensembl identifiers.
-library(org.Hs.eg.db)
+library(AnnotationHub)
+edb <- AnnotationHub()[["AH73881"]]
 gene.symb <- sub("__chr.*$", "", rownames(sce.muraro))
-gene.ids <- mapIds(org.Hs.eg.db, keys=gene.symb, 
-    keytype="SYMBOL", column="ENSEMBL")
-is.spike <- isSpike(sce.muraro)
-gene.ids[is.spike] <- gene.symb[is.spike]
+gene.ids <- mapIds(edb, keys=gene.symb, 
+    keytype="SYMBOL", column="GENEID")
 
 # Removing duplicated genes or genes without Ensembl IDs.
 keep <- !is.na(gene.ids) & !duplicated(gene.ids)
@@ -22,29 +36,132 @@ sce.muraro <- sce.muraro[keep,]
 rownames(sce.muraro) <- gene.ids[keep]
 ```
 
+### Quality control
+
+This dataset lacks mitochondrial genes so we will do without.
+
+```{r}
+unfiltered <- sce.muraro
+```
+
 ```{r quality-control}
 library(scater)
-sce.muraro <- calculateQCMetrics(sce.muraro, compact=TRUE)
-QC <- sce.muraro$scater_qc
-low.lib <- isOutlier(QC$all$log10_total_counts, type="lower", nmad=3)
-low.genes <- isOutlier(QC$all$log10_total_features_by_counts, type="lower", nmad=3)
-high.spike <- isOutlier(QC$feature_control_ERCC$pct_counts, type="higher", nmad=3)
-discard <- low.lib | low.genes | high.spike
-sce.muraro <- sce.muraro[,!discard]
+stats <- perCellQCMetrics(sce.muraro)
+qc <- quickPerCellQC(stats, nmads=3, percent_subsets="altexps_ERCC_percent")
+sce.muraro <- sce.muraro[,!qc$discard]
 ```
+
+### Normalization
 
 ```{r normalization}
 library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.muraro)
 sce.muraro <- computeSumFactors(sce.muraro, min.mean=0.1, clusters=clusters)
-sce.muraro <- computeSpikeFactors(sce.muraro, general.use=FALSE)
-sce.muraro <- normalize(sce.muraro)
+sce.muraro <- logNormCounts(sce.muraro)
 ```
 
+### Variance modelling
+
+We block on a combined plate and donor factor.
+
 ```{r variance-modelling}
-# Blocking on a combined plate and donor factor.
 block <- paste0(sce.muraro$plate, "_", sce.muraro$donor)
-fit.muraro <- trendVar(sce.muraro, block=block, parametric=TRUE) 
-dec.muraro <- decomposeVar(sce.muraro, fit.muraro)
+dec.muraro <- modelGeneVarWithSpikes(sce.muraro, "ERCC", block=block)
+```
+
+### Data integration
+
+```{r data-integration}
+library(batchelor)
+set.seed(1001010)
+merged.muraro <- fastMNN(sce.muraro, batch=sce.muraro$donor)
+```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+set.seed(100111)
+merged.muraro <- runTSNE(merged.muraro, dimred="corrected")
+```
+
+### Clustering
+
+```{r clustering}
+snn.gr <- buildSNNGraph(merged.muraro, use.dimred="corrected")
+merged.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, x="donor", y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, x="donor", y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, x="donor", y="altexps_ERCC_percent",
+        colour_by="discard") + ggtitle("ERCC percent"),
+    ncol=2
+)
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.muraro))
+```
+
+```{r}
+plot(librarySizeFactors(sce.muraro), sizeFactors(sce.muraro), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r, fig.asp=2, fig.height=10}
+par(mfrow=c(8,4))
+blocked.stats <- dec.muraro$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Data integration
+
+```{r}
+metadata(merged.muraro)$merge.info$lost.var
+```
+
+### Clustering
+
+```{r}
+table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
+```
+
+```{r}
+plotTSNE(merged.muraro, colour_by="cluster")
+plotTSNE(merged.muraro, colour_by="batch")
+```
+
+
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
 ```

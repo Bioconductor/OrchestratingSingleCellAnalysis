@@ -1,4 +1,5 @@
 *_cache
+*_files
 *.html
 .Rproj.user
 *.Rproj

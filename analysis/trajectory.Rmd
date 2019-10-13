@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Trajectory Analysis
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 In this chapter, we will walk through a minimal analysis to perform lineage reconstruction and psuedotime inference for single-cells along a continuum. 
@@ -82,7 +83,7 @@ plot(reducedDims(pbmc4k)$PCA, col = brewer.pal(9,'Set1')[pbmc4k$cluster], pch=16
 lines(SlingshotDataSet(pbmc4k), lwd=2, type = 'lineages', col = 'black')
 ```
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

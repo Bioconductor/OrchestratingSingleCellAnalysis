@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Dimensionality reduction
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 ## Overview
@@ -18,7 +19,7 @@ In these applications, each individual gene represents a dimension of the data.
 More intuitively, if we had a scRNA-seq data set with two genes, we could make a two-dimensional plot where each axis represents the expression of one gene and each point in the plot represents a cell.
 This concept can be extended to data sets with thousands of genes where each cell's expression profile defines its location in the high-dimensional expression space.
 
-Dimensionality reduction aims to reduce the number of separate dimensions^[Duh.] in the data.
+As the name suggests, dimensionality reduction aims to reduce the number of separate dimensions in the data.
 This is possible because different genes are correlated if they are affected by the same biological process.
 Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
 This reduces computational work in downstream analyses, as calculations only need to be performed for a few dimensions rather than thousands of genes;
@@ -29,7 +30,7 @@ We will use the @zeisel2015brain dataset to demonstrate the applications of vari
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/zeisel-brain", "variance-modelling", 
-    c("sce.zeisel", "chosen.hvgs", "dec.zeisel"))
+    c("sce.zeisel", "dec.zeisel"))
 ```
 
 ```{r}
@@ -37,8 +38,6 @@ sce.zeisel
 ```
 
 ## Principal components analysis
-
-### Background
 
 Principal components analysis (PCA) discovers axes in high-dimensional space that capture the largest amount of variation.
 This is best understood by imagining each axis as a line.
@@ -54,97 +53,61 @@ It takes advantage of the well-studied theoretical properties of the PCA - namel
 It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.
 
 When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner.
-This means the the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
-By comparison, random (technical) noise is expected to affect each gene independently.
-There is unlikely to be an axis that can capture random variation across many genes, suggesting that noise is mostly concentrated in the later PCs.
+This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
+By comparison, random technical or biological noise is expected to affect each gene independently.
+There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs.
 This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise. 
 
-### Performing the PCA
-
-We perform the PCA on the log-normalized expression values using the HVGs we selected earlier.
-By restricting to the HVGs, we reduce computational work and noise to improve the performance of the PCA.
-(While PCA is robust to noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure.)
-The `runPCA()` function from `r Biocpkg("scater")` will compute the PCA and store the coordinates in the output object.
+We perform the PCA on the log-normalized expression values using the `runPCA()` function from `r Biocpkg("scater")`.
+By default, `runPCA()` will compute the first 50 PCs and store them in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
+Here, we use only the top 2000 genes with the largest biological components to reduce computational work and noise.
+Specifically, PCA is generally robust to random noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
+This effect can be avoided - or at least mitigated - by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter \@ref(feature-selection).
 
 ```{r}
+library(scran)
+top.zeisel <- getTopHVGs(dec.zeisel, n=2000)
+
 library(scater)
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE)
+set.seed(100) # See below.
+sce.zeisel <- runPCA(sce.zeisel, subset_row=top.zeisel) 
 reducedDimNames(sce.zeisel)
-```
-
-The PCA is based on a mathematical technique called the singular decomposition decomposition (SVD).
-By default, `runPCA()` will use an exact SVD based on base R's `svd()` function.
-It then only keeps the first 50 PCs for downstream analysis.
-
-```{r}
 dim(reducedDim(sce.zeisel, "PCA"))
 ```
 
 For large data sets, greater efficiency is obtained by using approximate SVD algorithms that only compute the top PCs.
-For example, we can use methods from the `r CRANpkg("irlba")` package:
+By default, most PCA-related functions in `r Biocpkg("scater")` and `r Biocpkg("scran")` will use methods from the `r CRANpkg("irlba")` or `r CRANpkg("rsvd")` packages to perform the SVD.
+We can explicitly specify the SVD algorithm to use by passing an `BiocSingularParam` object (from the `r Biocpkg("BiocSingular")` package) to the `BSPARAM=` argument (see Section \@ref(big-data-svd) for more details).
+Many of these approximate algorithms are based on randomization and thus require `set.seed()` to obtain reproducible results.
 
 ```{r}
 library(BiocSingular)
 set.seed(1000)
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
-    BSPARAM=IrlbaParam(), name="IRLBA")
+sce.zeisel <- runPCA(sce.zeisel, subset_row=top.zeisel, 
+    BSPARAM=RandomParam(), name="IRLBA")
 reducedDimNames(sce.zeisel)
 ```
 
-The `BSPARAM=` argument from `r Biocpkg("BiocSingular")` provides a flexible interface for specifying different SVD algorithms. 
-Any function that accepts a `BSPARAM=` argument can often be sped up by using an alternative SVD algorithm.
-Another strategy is to perform the SVD using methods from the `r CRANpkg("rsvd")` package:
+## Choosing the number of PCs
 
-```{r}
-set.seed(1001) # Slightly different seed to add some variety!
-sce.zeisel <- runPCA(sce.zeisel, feature_set=chosen.hvgs, scale=FALSE,
-    BSPARAM=RandomParam(), name="RSVD")
-reducedDimNames(sce.zeisel)
-```
-
-The majority of these approximate methods are based on randomization and thus require `set.seed()` to obtain reproducible results^[Some of us leave coded messages in binary via the seeds. Just so you know.].
-
-### Choosing the number of PCs
-
-#### Motivation
+### Motivation
 
 How many of the top PCs should we retain for downstream analyses?
 The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
 Using more PCs will avoid discarding biological signal in later PCs, at the cost of retaining more noise.
 Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
-This is often satisfactory^[Or in other words: if the choice of $d$ is your biggest concern, you must lead a blessed life.] provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
+This is often satisfactory provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
 Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of $d$.
 
-#### Using the elbow point
+### Using the elbow point
 
 A simple heuristic for choosing $d$ involves identifying the elbow point in the percentage of variance explained by successive PCs.
 This refers to the "elbow" in the curve of a scree plot as shown in Figure \@ref(fig:elbow).
 
 ```{r elbow, fig.cap="Percentage of variance explained by successive PCs in the Zeisel brain data. The identified elbow point is marked with a red line."}
-# Hoping to find this guy a better home.
-elbowFinder <- function(var.exp) {
-    var.exp <- sort(var.exp, decreasing=TRUE)
-
-    dy <- -diff(range(var.exp))
-    dx <- length(var.exp) - 1
-    l2 <- sqrt(dx^2 + dy^2)
-    dx <- dx/l2
-    dy <- dy/l2
-
-    dy0 <- var.exp - var.exp[1]
-    dx0 <- seq_along(var.exp) - 1
-
-    parallel.l2 <- sqrt((dx0 * dx)^2 + (dy0 * dy)^2)
-    normal.x <- dx0 - dx * parallel.l2
-    normal.y <- dy0 - dy * parallel.l2
-    normal.l2 <- sqrt(normal.x^2 + normal.y^2)
-
-    which.max(normal.l2)
-}
-
 # Percentage of variance explained is tucked away in the attributes.
 percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
-chosen.elbow <- elbowFinder(percent.var)
+chosen.elbow <- PCAtools::findElbowPoint(percent.var)
 chosen.elbow
 
 plot(percent.var, xlab="PC", ylab="Variance explained (%)")
@@ -159,72 +122,85 @@ From a practical perspective, the use of the elbow point tends to retain fewer P
 The definition of "much more variance" is relative so, in order to be retained, later PCs must explain a amount of variance that is comparable to that explained by the first few PCs.
 Strong biological variation in the early PCs will shift the elbow to the left, potentially excluding weaker (but still interesting) variation in the next PCs immediately following the elbow.
 
-#### Using the technical noise
+### Using the technical noise
 
 Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
-For example, one might retain the top set of PCs that explains 80% of the total variation in the data.
+For example, we might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
-Instead, we define $T$ as the proportion of variance in the data that is attributed to the biological component.
-This is done using the `denoisePCA()` function, which uses our estimates from `decomposeVar()` to determine $d$.
+Instead, we derive a suitable value for $T$ by calculating the proportion of variance in the data that is attributed to the biological component.
+This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVar()` or related functions, where $T$ is defined as the ratio of the sum of the biological components to the sum of total variances.
+
+To illustrate, we use this strategy to pick the number of PCs in the 10X PBMC dataset.
+Note that explicit feature selection is not strictly necessary, as `denoisePCA()` will automatically restrict the PCA to genes with positive biological components (Section \@ref(feature-selection-positive)) to ensure that $T$ is always a positive value.
+We also use `IrlbaParam()` to speed up the SVD as previously described.
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/tenx-unfiltered-pbmc4k", "variance-modelling", 
+    c("sce.pbmc", "dec.pbmc", "top.pbmc"))
+```
 
 ```{r}
 library(scran)
-set.seed(001001001)
-
-# Setting value="n" to just report the number of PCs.
-# Setting max.rank=200 to circumvent the default max of 100.
-# Also setting BSPARAM to perform a fast SVD with IRLBA.
-denoised.n <- denoisePCA(sce.zeisel, technical=dec.zeisel, value='n',
-    subset.row=chosen.hvgs, BSPARAM=IrlbaParam(), max.rank=200)
-as.integer(denoised.n)
+set.seed(111001001)
+denoised.pbmc <- denoisePCA(sce.pbmc, technical=dec.pbmc, subset.row=top.pbmc)
+ncol(reducedDim(denoised.pbmc))
 ```
 
-This choice of $d$ represents the lower bound on the number of PCs required to retain all biological variation.
-Any fewer PCs will definitely discard variance in the biological component.
-In reality, the choice returned by `denoisePCA()` will only be optimal if the early PCs capture all the biological signal with minimal noise.
-This is unlikely to be true as the PCA cannot distinguish between technical noise and weak biological signal in the later PCs.
+The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation.
+Any fewer PCs will definitely discard some aspect of biological signal.
+Note that the converse is not true, i.e., there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.
+The returned value of $d$ provides a reasonable choice of rank when we want to retain as much signal as possible while still removing some noise.
 
-From a practical perspective, the `denoisePCA()` approach retains more PCs than the elbow point method.
+From a practical perspective, the `denoisePCA()` approach usually retains more PCs than the elbow point method.
 This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
-Whether this is a "better" outcome depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
+Thus, whether this is a "better" approach depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
 
-#### Based on population structure
-
-Yet another choice for $d$ uses information about the number of subpopulations in the data.
-We assume that each subpopulation differs from the others along a different axis in the high-dimensional space.
-This suggests that we should set $d$ to the number of unique subpopulations minus 1.
-By doing so, we guarantee separation of all subpopulations while retaining as few dimensions (and noise) as possible.
-
-The number of subpopulations is usually not known in advance so instead we use the number of clusters as a proxy.
-However, this is itself dependent on the choice of $d$ as clustering is often performed on the PCs (see Chapter ???).
-To handle this circularity, we test multiple choices for $d$ and we pick a value that is closest to the number of clusters minus 1.
-This aims to achieve self-consistency in the number of PCs and clusters based on the reasoning above.
+Incidentally, `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
+By default, the number is bounded within the "reasonable" limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low).
+For example, applying this function to the Zeisel brain data hits the upper limit:
 
 ```{r}
-pcs <- reducedDim(sce.zeisel)
-n <- seq(10, 20, by=1)
-collected <- integer(0)
-
-# Using graph-based clustering here, but this can be
-# replaced with any clustering method of choice, provided
-# that the method determines the number of clusters by itself.
-for (i in n) {
-    g <- buildSNNGraph(pcs[,seq_len(i)], transposed=TRUE)
-    clust <- igraph::cluster_walktrap(g)$membership
-    collected <- c(collected, length(unique(clust)))
-}
-
-data.frame(n.pcs=n, n.clusters=collected)
-n[collected-1==n]
+set.seed(001001001)
+denoised.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
+    subset.row=top.zeisel)
+ncol(reducedDim(denoised.zeisel))
 ```
 
-This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses.
+### Based on population structure
+
+Yet another method to choose $d$ uses information about the number of subpopulations in the data.
+Consider a situation where each subpopulation differs from the others along a different axis in the high-dimensional space
+(e.g., because it is defined by a unique set of marker genes).
+This suggests that we should set $d$ to the number of unique subpopulations minus 1,
+which guarantees separation of all subpopulations while retaining as few dimensions (and noise) as possible.
+We can use this reasoning to loosely motivate an _a priori_ choice for $d$ -
+for example, if we expect around 10 different cell types in our population, we would set $d \approx 10$.
+
+In practice, the number of subpopulations is usually not known in advance.
+Rather, we use a heuristic approach that uses the number of clusters as a proxy for the number of subpopulations.
+We perform clustering (graph-based by default, see Chapter \@ref(clustering)) on the first $d^*$ PCs and only consider the values of $d^*$ that yield no more than $d^*+1$ clusters.
+If we detect more clusters with fewer dimensions, we consider this to represent overclustering rather than distinct subpopulations, assuming that multiple subpopulations should not be distinguishable on the same axes.
+We test a range of $d^*$ and set $d$ to the value that maximizes the number of clusters while satisfying the above condition.
+This attempts to capture as many distinct (putative) subpopulations as possible by retaining biological signal in later PCs, up until the point that the additional noise reduces resolution.
+
+```{r cluster-pc-choice, fig.cap="Number of clusters detected in the Zeisel brain dataset as a function of the number of PCs. The red unbroken line represents the theoretical upper constraint on the number of clusters, while the grey dashed line is the number of PCs suggested by `getClusteredPCs()`."}
+pcs <- reducedDim(sce.zeisel)
+choices <- getClusteredPCs(pcs)
+metadata(choices)$chosen
+plot(choices$n.pcs, choices$n.clusters,
+    xlab="Number of PCs", ylab="Number of clusters")
+abline(a=1, b=1, col="red")
+abline(v=metadata(choices)$chosen, col="grey80", lty=2)
+```
+
+This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses, specifically clustering.
 There is no need to preserve biological signal beyond what is distinguishable in later steps.
 However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
 
 ### Putting it together
 
-Once we have chosen $d$, enforcing it is as simple as subsetting the PC matrix by column.
+Once we have chosen $d$, applying it is as simple as subsetting the PC matrix by column.
 We then use the `reducedDim()<-` command to reassign the subsetted matrix back into the `SingleCellExperiment` object.
 For example, if we were to take the top 20 PCs, we would do:
 
@@ -241,6 +217,9 @@ reducedDim(sce.zeisel, "PCA_20") <- reducedDim(sce.zeisel, "PCA")[,1:20]
 reducedDimNames(sce.zeisel)
 ```
 
+Note that this is not necessary if the desired number of PCs is directly specified in the initial call to `runPCA()`.
+Similarly, `denoisePCA()` will return its chosen number of PCs without requiring further user intervention.
+
 ## Dimensionality reduction for visualization
 
 ### Motivation
@@ -255,7 +234,7 @@ Further dimensionality reduction strategies are required to pack the most salien
 The simplest visualization approach is to plot the top 2 PCs (Figure \@ref(fig:zeisel-pca)):
 
 ```{r zeisel-pca, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
-plotReducedDim(sce.zeisel, use_dimred="PCA", colour_by="level1class")
+plotReducedDim(sce.zeisel, dimred="PCA", colour_by="level1class")
 ```
 
 The problem is that PCA is a linear technique, i.e., only variation along a line in high-dimensional space is captured by each PC.
@@ -267,7 +246,7 @@ One workaround is to plot several of the top PCs against each other in pairwise 
 However, it is difficult to interpret multiple plots simultaneously, and even this approach is not sufficient to separate some of the annotated subpopulations.
 
 ```{r zeisel-pca-multi, fig.wide=TRUE, fig.asp=1, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
-plotReducedDim(sce.zeisel, use_dimred="PCA", ncomponents=4,
+plotReducedDim(sce.zeisel, dimred="PCA", ncomponents=4,
     colour_by="level1class")
 ```
 
@@ -276,7 +255,7 @@ It is predictable and will not introduce artificial structure in the visualizati
 It is also deterministic and robust to small changes in the input values.
 However, as shown above, PCA is usually not satisfactory for visualization of complex populations.
 
-### t-stochastic neighbor embedding
+### $t$-stochastic neighbor embedding
 
 The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbour embedding ($t$-SNE) method [@van2008visualizing].
 This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbours in the high-dimensional space. 
@@ -285,60 +264,67 @@ This means that it has much more freedom in how it arranges cells in low-dimensi
 
 ```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(00101001101)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA")
-plotReducedDim(sce.zeisel, use_dimred="TSNE", colour_by="level1class")
+
+# runTSNE() stores the t-SNE coordinates in the reducedDims
+# for re-use across multiple plotReducedDim() calls.
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA")
+plotReducedDim(sce.zeisel, dimred="TSNE", colour_by="level1class")
 ```
 
 One of the main disadvantages of $t$-SNE is that it is much more computationally intensive than other visualization methods.
-We mitigate this effect by performing the calculations on the top PCs with `use_dimred="PCA"` in `runtTSNE()`.
-This takes advantage of the PCA to compact the data and remove noise, followed by $t$-SNE to create the visualization.
+We mitigate this effect by setting `dimred="PCA"` in `runtTSNE()`, which instructs the function to perform the $t$-SNE calculations on the top PCs to exploit the data compaction and noise removal provided by the PCA.
 It is possible to run $t$-SNE on the original expression matrix but this is less efficient.
 
 Another issue with $t$-SNE is that it requires the user to be aware of additional parameters (discussed [here](http://distill.pub/2016/misread-tsne/) in some depth).
-It involves a random initialization so we need to set the seed to ensure that the chosen results are reproducible.
+It involves a random initialization so we need to (i) repeat the visualization several times to ensure that the results are representative and (ii) set the seed to ensure that the chosen results are reproducible.
 The "perplexity" is another important parameter that determines the granularity of the visualization (Figure \@ref(fig:tsne-perplexity)).
 Low perplexities will favour resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
 Thus, it is advisable to test different perplexity values to ensure that the choice of perplexity does not drive the interpretation of the plot.
 
-```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.5}
+```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.3}
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=5)
-out5 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=5)
+out5 <- plotReducedDim(sce.zeisel, dimred="TSNE",
     colour_by="level1class") + ggtitle("perplexity = 5")
 
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=20)
-out20 <- plotReducedDim(sce.zeisel, use_dimred="TSNE",
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=20)
+out20 <- plotReducedDim(sce.zeisel, dimred="TSNE",
     colour_by="level1class") + ggtitle("perplexity = 20")
 
 set.seed(100)
-sce.zeisel <- runTSNE(sce.zeisel, use_dimred="PCA", perplexity=80)
-out80 <- plotReducedDim(sce.zeisel, use_dimred="TSNE", 
+sce.zeisel <- runTSNE(sce.zeisel, dimred="PCA", perplexity=80)
+out80 <- plotReducedDim(sce.zeisel, dimred="TSNE", 
     colour_by="level1class") + ggtitle("perplexity = 80")
 
 multiplot(out5, out20, out80, cols=3)
 ```
 
-Despite its shortcomings, $t$-SNE is proven tool for general-purpose visualization of scRNA-seq data.
-It sees routine use in many analysis pipelines and will likely continue to do so for some time.
+Finally, it is tempting to interpret the $t$-SNE results as a "map" of single-cell identities.
+This is generally unwise as any such interpretation is easily misled by the size and positions of the visual clusters.
+Specifically, $t$-SNE will inflate dense clusters and compress sparse ones, such that we cannot use the size as a measure of subpopulation heterogeneity.
+Similarly, $t$-SNE is not obliged to preserve the relative locations of non-neighboring clusters, such that we cannot use their positions to determine relationships between distant clusters.
+We provide some suggestions on how to interpret these plots in Section \@ref(visualization-interpretation).
+
+Despite its shortcomings, $t$-SNE is proven tool for general-purpose visualization of scRNA-seq data and remains a popular choice in many analysis pipelines.
 
 ### Uniform manifold approximation and projection
 
-The uniform manifold approximation and projection (UMAP) method [@mcinnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
+The uniform manifold approximation and projection (UMAP) method [@mcInnes2018umap] is an alternative to $t$-SNE for non-linear dimensionality reduction.
 It is roughly similar to $t$-SNE in that it also tries to find a low-dimensional representation that preserves relationships between neighbors in high-dimensional space.
-However, the two methods are based on different theory, represented by differences in the various graph weighting equations^[That we will not discuss here, thank god.].
+However, the two methods are based on different theory, represented by differences in the various graph weighting equations.
 This manifests as a different visualization as shown in Figure \@ref(fig:umap-brain).
 
 ```{r umap-brain, fig.cap="UMAP plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
 set.seed(1100101001)
-sce.zeisel <- runUMAP(sce.zeisel, use_dimred="PCA")
-plotReducedDim(sce.zeisel, use_dimred="UMAP", colour_by="level1class")
+sce.zeisel <- runUMAP(sce.zeisel, dimred="PCA")
+plotReducedDim(sce.zeisel, dimred="UMAP", colour_by="level1class")
 ```
 
 Compared to $t$-SNE, the UMAP visualization tends to have more compact visual clusters with more empty space between them.
 It also attempts to preserve more of the global structure than $t$-SNE.
 From a practical perspective, UMAP is much faster than $t$-SNE, which may be an important consideration for large datasets.
-(Nonetheless, we have still run UMAP on the top 20 PCs here for consistency.)
+(Nonetheless, we have still run UMAP on the top PCs here for consistency.)
 UMAP also involves a series of randomization steps so setting the seed is critical.
 
 Like $t$-SNE, UMAP has its own suite of hyperparameters that affect the visualization.
@@ -347,24 +333,29 @@ If these values are too low, random noise will be incorrectly treated as high-re
 Again, it is a good idea to test a range of values for these parameters to ensure that they do not compromise any conclusions drawn from a UMAP plot.
 
 It is arguable whether the UMAP or $t$-SNE visualizations are more useful or aesthetically pleasing.
-However, it is clear that UMAP is much faster.
-For that reason alone, it is increasingly displacing $t$-SNE as the method of choice for visualizing large scRNA-seq data sets.
+UMAP aims to preserve more global structure but this necessarily reduces resolution within each visual cluster.
+However, UMAP is unarguably much faster, and for that reason alone, it is increasingly displacing $t$-SNE as the method of choice for visualizing large scRNA-seq data sets.
 
-### Interpreting the plots
+### Interpreting the plots {#visualization-interpretation}
 
-Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells.
-One might then ask whether the results of such extreme data compression can be trusted.
-Indeed, it would probably be unwise to directly analyze the low-dimensional coordinates used for plotting.
-Rather, the plots should be used to interpret/communicate the results of quantitative analyses based on a more accurate higher-rank representation of the data.
+Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells in order to fit high-dimensional data into a 2-dimensional space.
+One might wonder whether the results of such extreme data compression can be trusted.
+Some of our more quantitative colleagues consider such visualizations to be more artistic than scientific, fit for little but impressing collaborators and reviewers.
+Perhaps this perspective is not entirely invalid, but we suggest that there is some value to be extracted from them provided that they are accompanied by an analysis of a higher-rank representation. 
 
 To illustrate, consider the interaction between clustering and $t$-SNE.
 As a general rule, we would not perform clustering on the $t$-SNE coordinates.
-Rather, we would cluster on the first 10-50 PCs (see Chapter ???) and then visualize the cluster identities on the $t$-SNE plot.
+Rather, we would cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on the $t$-SNE plot.
 This ensures that clustering makes use of the information that was lost during compression into two dimensions.
-Given a discrepancy between the visible clusters on a $t$-SNE plot and those identified by our clustering, we would be inclined to favour the latter.
+The $t$-SNE plot can then be used for a diagnostic inspection of the clustering output.
+In particular, the plot is most useful for checking whether two clusters are actually neighboring subclusters or whether a cluster can be split into further subclusters, which are generally safe interpretations of $t$-SNE coordinates.
 
+It is worth elaborating on why we should not perform downstream analyses directly on the $t$-SNE or UMAP coordinates.
+Let us put aside the fact that operating on the high-dimensional representations preserves more information; from a naive perspective, using the $t$-SNE coordinates is very tempting as it ensures that any results are immediately consistent with the visualizations (regardless of whether they are right).
+However, this can actually be considered a disservice as it masks the uncertainty of the results, leading us to place more confidence in them than is warranted.
+Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the more ambiguous parts of the dataset; conversely, the lack of discrepancies increases trust in the results.
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

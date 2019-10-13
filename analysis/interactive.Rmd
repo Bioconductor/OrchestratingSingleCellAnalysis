@@ -7,7 +7,8 @@ bibliography: ../ref.bib
 # Interactive Interfaces and Sharing {#interactive-sharing}
 
 ```{r setup, echo=FALSE, results="asis"}
-source("workflows/knitr_options.R")
+library(OSCAUtils)
+chapterPreamble()
 ```
 
 ## Motivation
@@ -25,7 +26,7 @@ To this end, `iSEE` provides a flexible framework immediately compatible with a 
 In this chapter, we use the 10X PBMC dataset for demonstration purposes.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-pbmc4k", "dimensionality-reduction", "sce.pbmc")
+extractCached("workflows/tenx-unfiltered-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 ```
 
 Then, we load the `iSEE` and `shiny` packages for use in the rest of this chapter.
@@ -88,7 +89,7 @@ In the example below, we demonstrate that an `iSEE` app can be preconfigured to 
 
 ```{r}
 # Rank cells by decreasing library size
-colData(sce.pbmc)[["total_counts_rank"]] <- rank(-colData(sce.pbmc)[["total_counts"]])
+colData(sce.pbmc)[["total_counts_rank"]] <- rank(colSums(counts(sce.pbmc)))
 
 # Configure a "Column data plot" panel
 colDataArgs <- colDataPlotDefaults(sce.pbmc, 1)
@@ -266,8 +267,10 @@ Examples of advanced tours showcasing a selection of published data sets can be 
 ## Reproducibility
 
 Although this chapter focuses on interactive exploration of data, we note that it is important to retain reproducibility, and to have a record of how each figure was generated.
-With `iSEE`, this information is readily available via the "Export R code" button under the "Diagnostics" tab in the top-right corner of the GUI.
+With `iSEE`, this information is readily available via the "Extract the R code" button under the "Diagnostics" dropdown menu in the top-right corner of the GUI.
 At any time, copying the code displayed in the modal window and executing it in the R session from which the `iSEE` app was launched exactly reproduces all plots currently displayed in the GUI.
+Similarly, the information on the panel setup is available by clicking on "Display panel settings" in the same dropdown menu.
+Another modal window will show the R code the user would need to use to reproduce the exact panel settings; copying and pasting this into an R script or a RMarkdown report will store this information in a permanent way.
 
 ## Additional resources
 
@@ -279,10 +282,10 @@ For demontration and inspiration, we refer readers to the following examples of 
     - Gallery of examples notebooks to reproduce analyses on public data: https://github.com/federicomarini/iSEE_instances
     - Gallery of example custom panels: https://github.com/kevinrue/iSEE_custom 
 
-## Session Info
+## Session Info {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
 
-## References {-}
+
