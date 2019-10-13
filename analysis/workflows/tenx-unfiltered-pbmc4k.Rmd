@@ -187,7 +187,7 @@ as.data.frame(marker.set[1:40,1:2])
 ```
 
 ```{r, echo=FALSE, results="hide"}
-# Checking 'marker.set' and 'chosen.platelets' are consistent.
+# Checking 'marker.set' and 'chosen.mono' are consistent.
 stopifnot(identical(marker.set, markers[[chosen.mono]]))
 
 # Checking the cluster is what we wanted.
