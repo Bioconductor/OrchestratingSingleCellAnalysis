@@ -57,7 +57,7 @@ sce.muraro <- sce.muraro[,!qc$discard]
 library(scran)
 set.seed(1000)
 clusters <- quickCluster(sce.muraro)
-sce.muraro <- computeSumFactors(sce.muraro, min.mean=0.1, clusters=clusters)
+sce.muraro <- computeSumFactors(sce.muraro, clusters=clusters)
 sce.muraro <- logNormCounts(sce.muraro)
 ```
 
@@ -68,6 +68,7 @@ We block on a combined plate and donor factor.
 ```{r variance-modelling}
 block <- paste0(sce.muraro$plate, "_", sce.muraro$donor)
 dec.muraro <- modelGeneVarWithSpikes(sce.muraro, "ERCC", block=block)
+top.muraro <- getTopHVGs(dec.muraro, prop=0.1)
 ```
 
 ### Data integration
@@ -75,7 +76,8 @@ dec.muraro <- modelGeneVarWithSpikes(sce.muraro, "ERCC", block=block)
 ```{r data-integration}
 library(batchelor)
 set.seed(1001010)
-merged.muraro <- fastMNN(sce.muraro, batch=sce.muraro$donor)
+merged.muraro <- fastMNN(sce.muraro, subset.row=top.muraro, 
+    batch=sce.muraro$donor)
 ```
 
 ### Dimensionality reduction
@@ -150,6 +152,10 @@ metadata(merged.muraro)$merge.info$lost.var
 ### Clustering
 
 ```{r}
+table(Cluster=merged.muraro$cluster, CellType=sce.muraro$label)
+```
+
+```{r}
 table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
 ```
 
@@ -157,8 +163,6 @@ table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
 plotTSNE(merged.muraro, colour_by="cluster")
 plotTSNE(merged.muraro, colour_by="batch")
 ```
-
-
 
 ## Session Info {-}
 
