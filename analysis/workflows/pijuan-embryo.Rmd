@@ -7,7 +7,7 @@ chapterPreamble(use_cache = TRUE)
 
 ## Introduction
 
-This performs an analysis of the @pijuan2019singlcell dataset on mouse gastrulation.
+This performs an analysis of the @pijuansala2019single dataset on mouse gastrulation.
 Here, we examine chimeric embryos at the E7.5 stage of development 
 where td-Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
 
@@ -53,7 +53,7 @@ sce.chimera <- logNormCounts(sce.chimera)
 
 ### Variance modelling
 
-Retaining all genes with any positive biological component, to preserve as much signal as possible across many samples.
+We retain all genes with any positive biological component, to preserve as much signal as possible across a very heterogeneous dataset.
 
 ```{r variance-modelling}
 library(scran)
@@ -68,6 +68,7 @@ and then merge samples across different genotypes.
 
 ```{r merging}
 library(batchelor)
+set.seed(01001001)
 merged <- correctExperiments(sce.chimera, 
     batch=sce.chimera$sample, 
     subset.row=chosen.hvgs,
@@ -129,7 +130,6 @@ table(Cluster=merged$cluster, Sample=merged$sample)
 plotTSNE(merged, colour_by="cluster")
 plotUMAP(merged, colour_by="cluster")
 ```
-
 
 ## Session Info {-}
 
