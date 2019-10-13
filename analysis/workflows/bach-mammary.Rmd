@@ -51,7 +51,7 @@ sce.mam <- sce.mam[,!qc$discard]
 library(scran)
 set.seed(101000110)
 clusters <- quickCluster(sce.mam)
-sce.mam <- computeSumFactors(sce.mam, clusters=clusters, min.mean=0.1) 
+sce.mam <- computeSumFactors(sce.mam, clusters=clusters)
 sce.mam <- logNormCounts(sce.mam)
 ```
 
@@ -62,6 +62,7 @@ We use a Poisson-based technical trend to capture more genuine biological variat
 ```{r variance-modelling}
 set.seed(00010101)
 dec.mam <- modelGeneVarByPoisson(sce.mam)
+top.mam <- getTopHVGs(dec.mam, prop=0.1)
 ```
 
 ### Dimensionality reduction
@@ -69,7 +70,7 @@ dec.mam <- modelGeneVarByPoisson(sce.mam)
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101010011)
-sce.mam <- denoisePCA(sce.mam, technical=dec.mam, BSPARAM=IrlbaParam())
+sce.mam <- denoisePCA(sce.mam, technical=dec.mam, subset.row=top.mam)
 sce.mam <- runTSNE(sce.mam, dimred="PCA")
 ```
 
@@ -80,13 +81,6 @@ We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` la
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
 sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
-```
-
-### Marker detection
-
-```{r marker-detection}
-markers.mam <- findMarkers(sce.mam, cluster=sce.mam$cluster,
-    direction="up", lfc=1)
 ```
 
 ## Results
@@ -152,7 +146,6 @@ table(sce.mam$cluster)
 ```{r}
 plotTSNE(sce.mam, colour_by="cluster")
 ```
-
 
 ## Session Info {-}
 

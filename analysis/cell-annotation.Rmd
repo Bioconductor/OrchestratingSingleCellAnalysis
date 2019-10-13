@@ -274,15 +274,16 @@ This identifies the pathways and processes that are (relatively) active in each 
 We demonstrate on the mouse mammary dataset from @bach2017differentiation, using markers that are identified by `findMarkers()` as being upregulated at a log-fold change threshold of 1.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/bach-mammary", "marker-detection", c("sce.mam", "markers.mam"))
+extractCached("workflows/bach-mammary", "clustering", "sce.mam")
 ```
 
 ```{r}
-markers.mam
+markers.mam <- findMarkers(sce.mam, sce.mam$cluster,
+    direction="up", lfc=1)
 ```
 
 ```{r, echo=FALSE}
-chosen.text <- 4
+chosen.text <- 2
 ```
 
 As an example, we obtain annotations for the marker genes that define cluster `r chosen.text`.
@@ -292,7 +293,7 @@ This performs a hypergeometric test to identify GO terms that are overrepresente
 (The log-fold change threshold mentioned above is useful here, as it avoids including an excessive number of genes from the overpowered nature of per-cell DE comparisons.)
 
 ```{r}
-chosen <- "4"
+chosen <- "2"
 cur.markers <- markers.mam[[chosen]]
 is.de <- cur.markers$FDR <= 0.05 
 summary(is.de)
