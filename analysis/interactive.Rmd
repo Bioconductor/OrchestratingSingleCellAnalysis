@@ -85,11 +85,20 @@ Depending on the experimental context, such observations may result from technic
 For instance, it may indicate that normalization was not completely effective at removing cell biases.
 Alternatively, it could also indicate the presence of multiple cell types or states that differ in total RNA content.
 
-In the example below, we demonstrate that an `iSEE` app can be preconfigured to immediately display the views described above.
+In the example below, we demonstrate that an `iSEE` app can be preconfigured to immediately display the views described above, after compute the apropriate per-cell quality control metrics.
+
+In addition, we also preconfigure the app to automatically highlight in the _Reduced dimension plot_ panel any point selection made in the _Column data plot_ panel.
+For instance, select the cells with either large or small library sizes, to inspect their distribution in reduced dimensions.
 
 ```{r}
-# Rank cells by decreasing library size
-colData(sce.pbmc)[["total_counts_rank"]] <- rank(colSums(counts(sce.pbmc)))
+# Compute per-cell QC metrics
+sce.pbmc <- addQCPerCell(sce.pbmc, exprs_values="counts")
+
+# Compute the log10-transformed library size
+colData(sce.pbmc)[["log10_total_counts"]] <- log10(sce.pbmc$total)
+
+# Compute the rank of each cell by decreasing library size
+colData(sce.pbmc)[["total_counts_rank"]] <- rank(-sce.pbmc$total)
 
 # Configure a "Column data plot" panel
 colDataArgs <- colDataPlotDefaults(sce.pbmc, 1)
@@ -100,11 +109,14 @@ colDataArgs$DataBoxOpen <- TRUE
 
 # Configure a "Reduced dimension plot " panel
 redDimArgs <- redDimPlotDefaults(sce.pbmc, 1)
+redDimArgs$DataBoxOpen <- TRUE
 redDimArgs$Type <- "TSNE"
+redDimArgs$VisualBoxOpen <- TRUE
 redDimArgs$ColorBy <- "Column data"
 redDimArgs$ColorByColData <- "log10_total_counts"
-redDimArgs$DataBoxOpen <- TRUE
-redDimArgs$VisualBoxOpen <- TRUE
+redDimArgs$SelectBoxOpen <- TRUE
+redDimArgs$SelectByPlot <- "Column data plot 1"
+
 # Configure the set of panels initially visible
 initialPanels <- DataFrame(
     Name = c("Column data plot 1", "Reduced dimension plot 1"),
@@ -170,10 +182,10 @@ The next code chunk preconfigures an app that shows:
 - A plot showing the result of the UMAP dimensionality reduction method overlaid with the expression value of a chosen gene.
 
 Moreover, the code chunk below preconfigures the second and third panel to use the gene (i.e., row) selected in the first panel.
-This functionality is particularly convenient once the table is sorted by decreasing significance of the markers for a given cluster.
+This functionality is particularly convenient once the table is sorted by decreasing significance of the markers for a cluster of interest.
 
 For instance, once the application is launched, users can sort the table by ascending value of "log.FDR.markers.up:1" (where ":1" indicates cluster "1").
-Then, users may select the first row in the “Row statistics table 1” and watch the second and third panel automatically regenerate to display the most significant marker gene on the y-axis (“Feature assay plot 1” panel), and as a color scale overlaid on the data points (“Reduced dimension plot 1” panel).
+Then, users may select the first row in the “Row statistics table 1” and watch the second and third panel automatically update to display the most significant marker gene on the y-axis (“Feature assay plot 1” panel), and as a color scale overlaid on the data points (“Reduced dimension plot 1” panel).
 
 ```{r}
 # Configure a "Row statistics table" panel (NOTE: we leave all parameters to default)
