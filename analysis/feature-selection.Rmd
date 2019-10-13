@@ -232,6 +232,7 @@ The main advantage of this approach is that the user can directly control the nu
 For `modelGeneVar()` and `modelGeneVarWithSpikes()`, we would select the genes with the largest biological components:
 
 ```{r}
+# Taking the top 1000 genes here:
 hvg.pbmc.var <- getTopHVGs(dec.pbmc, n=1000)
 str(hvg.pbmc.var)
 ```
@@ -244,18 +245,22 @@ str(hvg.pbmc.cv2)
 ```
 
 The choice of $X$ also has a fairly straightforward biological interpretation.
-Recall our trend-fitting assumption that most genes are not differentially expressed between cell types or states in our population.
+Recall our trend-fitting assumption that most genes do not exhibit biological heterogeneity; this implies that they are not differentially expressed between cell types or states in our population.
 If we quantify this assumption into a statement that, e.g., no more than 5% of genes are differentially expressed, we can naturally set $X$ to 5% of the number of genes.
 In practice, we usually do not know the proportion of DE genes beforehand so this interpretation just exchanges one unknown for another.
 Nonetheless, it is still useful as it implies that we should lower $X$ for less heterogeneous datasets, retaining most of the biological signal without unnecessary noise from irrelevant genes.
 Conversely, more heterogeneous datasets should use larger values of $X$ to preserve secondary factors of variation beyond those driving the most obvious HVGs.
 
 The main disadvantage of this approach that it turns HVG selection into a competition between genes, whereby a subset of very highly variable genes can push other informative genes out of the top set.
-This can be problematic for analyses of highly heterogeneous populations, especially when a single subpopulation is very different from the others.
-In such cases, the top set will be dominated by differentially expressed genes involving the outlier subpopulation, compromising resolution of heterogeneity between the other populations.
+This can be problematic for analyses of highly heterogeneous populations if the loss of important markers prevents the resolution of certain subpopulations.
+In the most extreme example, consider a situation where a single subpopulation is very different from the others.
+In such cases, the top set will be dominated by differentially expressed genes involving that distinct subpopulation, compromising resolution of heterogeneity between the other populations.
 (This can salvaged with a nested analysis, as discussed in Section \@ref(subclustering), but we would prefer to avoid the problem in the first place.)
+
+<!--
 Similarly, abundance-dependent changes in the magnitude of the chosen variance metric can introduce unexpected biases in competitive gene selection. 
 For example, the wave shape in Figure \@ref(fig:blocked-fit) means that the largest biological components usually occur around the peak and will be preferentially selected, while an upper bound on the CV^2^ discriminates against selection of low-abundance genes.
+-->
 
 Another possible concern with this approach is the fact that the choice of $X$ is fairly arbitrary, with any value from 500 to 5000 considered "reasonable". 
 We have chosen $X=1000$ in the code above though there is no particular _a priori_ reason for doing so.
@@ -283,7 +288,7 @@ The number of genes returned depends on the type II error rate of the test and t
 One might obtain no genes or every gene at a given FDR threshold, depending on the circumstances.
 Moreover, control of the FDR is usually not helpful at this stage of the analysis.
 We are not interpreting the individual HVGs themselves but are only using them for feature selection prior to downstream steps.
-There is no reason to think that a 5% threshold on the FDR yields a more suitable compromise between bias and noise.
+There is no reason to think that a 5% threshold on the FDR yields a more suitable compromise between bias and noise compared to the top $X$ selection.
 
 As an aside, we might consider ranking genes by the $p$-value instead of the biological component for use in a top $X$ approach.
 This results in some counterintuitive behavior due to the nature of the underlying hypothesis test, which is based on the ratio of the total variance to the expected technical variance.
@@ -311,10 +316,12 @@ length(hvg.pbmc.cv2.3)
 ```
 
 By retaining all potential biological signal, we give secondary population structure the chance to manifest.
-This is most useful in scenarios where a weak but consistent effect is present across many genes with small biological components.
+This is most useful for rare subpopulations where the relevant markers will not exhibit strong overdispersion owing to the small number of affected cells.
+It will also preserve a weak but consistent effect across many genes with small biological components; admittedly, though, this is not of major interest in most scRNA-seq studies given the difficulty of experimentally validating population structure in the absence of strong marker genes.
+
 The obvious cost is that more noise is also captured, which can reduce the resolution of otherwise well-separated populations and mask the secondary signal that we were trying to preserve.
-From a practical perspective, the use of more genes involves more computational work in each downstream step.
-(And admittedly, preservation of weak but consistent effects is not of major interest in most scRNA-seq studies, given the difficulty of experimentally validating population structure in the absence of strong marker genes.)
+The use of more genes also introduces more computational work in each downstream step.
+This strategy is thus best suited to very heterogeneous populations containing many different cell types (possibly across many datasets that are to be merged, as in Chapter \@ref(integrating-datasets)) where there is a justified fear of ignoring marker genes for low-abundance subpopulations under a competitive top $X$ approach.
 
 ### Based on _a priori_ genes of interest
 
@@ -323,7 +330,7 @@ The aim is to focus on specific aspects of biological heterogeneity that may be 
 One example application lies in the dissection of transcriptional changes during the earliest stages of cell fate commitment [@messmer2019transcriptional], which may be modest relative to activity in other pathways (e.g., cell cycle, metabolism).
 Indeed, if our aim is to show that there is no meaningful heterogeneity in a given pathway, we would - at the very least - be obliged to repeat our analysis using only the genes in that pathway to maximize power for detecting such heterogeneity.
 
-This approach is conceptually equivalent to that of a fluorescence activated cell sorting (FACS) experiment, with the convenience of being able to (re)define the features of interest at any time.
+Using scRNA-seq data in this manner is conceptually equivalent to a fluorescence activated cell sorting (FACS) experiment, with the convenience of being able to (re)define the features of interest at any time.
 For example, in the PBMC dataset, we might use some of the C7 immunologic signatures from MSigDB [@godec2016compendium] to improve resolution of the various T cell subtypes.
 We stress that there is no shame in leveraging prior biological knowledge to address specific hypotheses in this manner.
 We say this because a common refrain in genomics is that the data analysis should be "unbiased", i.e., free from any biological preconceptions.
@@ -385,5 +392,3 @@ This avoids book-keeping problems in long analyses when the original dataset is 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
