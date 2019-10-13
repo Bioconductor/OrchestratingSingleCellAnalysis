@@ -12,12 +12,12 @@ chapterPreamble()
 ```
 
 In this chapter, we will walk through a minimal analysis to perform lineage reconstruction and psuedotime inference for single-cells along a continuum. 
-We will demonstrate this with the [`slinghot`](https://bioconductor.org/packages/slingshot) Bioconductor package. 
+We will demonstrate this with the [`r Biocpkg("slingshot")`](https://bioconductor.org/packages/slingshot) Bioconductor package. 
 The goal of slingshot is to use clusters of cells to uncover global structure and convert this structure into smooth lineages represented by one-dimensional variables, called "pseudotime".
 The package offers tools to learn the cluster relationships in an unsupervised or semi-supervised manner and constructing smooth curves representing each lineage, along with visualization methods for each step.
 Slingshot was designed to model developmental trajectories in scRNA-seq data and serve as a component in an analysis pipeline after dimensionality reduction and clustering. 
 
-We will use the 10X PBMC data in the Bioconductor data package `TENxPBMCData` that we have been using in previous chapters. 
+We will use the 10X PBMC data in the Bioconductor data package `r Biocpkg("TENxPBMCData")` that we have been using in previous chapters. 
 
 ```{r, results='asis', echo=FALSE}
 extractCached("workflows/tenx-batch-pbmc/4k", "clustering", "pbmc4k")
@@ -27,7 +27,7 @@ extractCached("workflows/tenx-batch-pbmc/4k", "clustering", "pbmc4k")
 pbmc4k
 ```
 
-If you recall, we created our cluster labels and have three reduced dimensions in our `SingleCellExperiment` object. 
+If you recall, we created our cluster labels and have three reduced dimensions in our `r Biocpkg("SingleCellExperiment")` object. 
 
 ```{r}
 head(pbmc4k$cluster)
@@ -45,7 +45,7 @@ Here, we use the wrapper function for the analysis of the single-trajectory data
 
 The `slingshot()` wrapper function performs both steps of lineage inference in a single call. 
 The necessary inputs are a reduced dimensional matrix of coordinates and a set of cluster labels. 
-These can be separate objects or elements contained in a `SingleCellExperiment` object.
+These can be separate objects or elements contained in a `r Biocpkg("SingleCellExperiment")` object.
 
 To run `slingshot()` with the dimensionality reduction produced by PCA and our cluster labels, we do the following:
 
@@ -56,11 +56,11 @@ pbmc4k <- slingshot(pbmc4k, clusterLabels = 'cluster', reducedDim = 'PCA')
 If no clustering results are provided, it is assumed that all cells are part of the same cluster and a single curve will be constructed. 
 If no dimensionality reduction is provided, slingshot will use the first element of the list returned by `reducedDims()`.
 
-The output is a `SingleCellExperiment` object with `slingshot` results incorporated. 
+The output is a `r Biocpkg("SingleCellExperiment")` object with `r Biocpkg("slingshot")` results incorporated. 
 Most of the output is added to the metadata in the form of a list and is accessible via `metadata(pbmc4k)$slingshot`.
 Additionally, all inferred pseudotime variables (one per lineage) are added to the `colData`. 
 To extract all `slingshot` results in a single object, we can use the `SlingshotDataSet()` function. 
-This can be useful for visualization, as several plotting methods for `SlingshotDataSet` objects are included with the package. Below, we visuzalize the inferred lineage for the single-trajectory data with points colored by pseudotime.
+This can be useful for visualization, as several plotting methods for `r Biocpkg("SlingshotDataSet")` objects are included with the package. Below, we visuzalize the inferred lineage for the single-trajectory data with points colored by pseudotime.
 
 ```{r}
 summary(pbmc4k$slingPseudotime_1)
@@ -79,7 +79,7 @@ lines(SlingshotDataSet(pbmc4k), lwd=2, col='black')
 We can also see how the lineage structure was intially estimated by the cluster-based minimum spanning tree by using the type argument.
 
 ```{r}
-plot(reducedDims(pbmc4k)$PCA, col = brewer.pal(9,'Set1')[pbmc4k$cluster], pch=16, asp = 1)
+plot(reducedDim(pbmc4k, "PCA"), col = brewer.pal(9,'Set1')[pbmc4k$cluster], pch=16, asp = 1)
 lines(SlingshotDataSet(pbmc4k), lwd=2, type = 'lineages', col = 'black')
 ```
 
