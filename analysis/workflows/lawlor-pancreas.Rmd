@@ -58,8 +58,8 @@ sce.lawlor <- logNormCounts(sce.lawlor)
 Using age as a proxy for the donor.
 
 ```{r variance-modelling}
-dec.lawlor <- modelGeneVar(sce.lawlor, block=sce.lawlor$age)
-chosen.genes <- head(order(dec.lawlor$bio, decreasing=TRUE), 2000)
+dec.lawlor <- modelGeneVar(sce.lawlor, block=sce.lawlor$`islet unos id`)
+chosen.genes <- getTopHVGs(dec.lawlor, n=2000)
 ```
 
 ### Dimensionality reduction
@@ -67,8 +67,7 @@ chosen.genes <- head(order(dec.lawlor$bio, decreasing=TRUE), 2000)
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101011001)
-sce.lawlor <- runPCA(sce.lawlor, subset_row=chosen.genes, 
-    ncomponents=25, BSPARAM=IrlbaParam())
+sce.lawlor <- runPCA(sce.lawlor, subset_row=chosen.genes, ncomponents=25)
 sce.lawlor <- runTSNE(sce.lawlor, dimred="PCA")
 ```
 
@@ -135,13 +134,17 @@ for (i in colnames(blocked.stats)) {
 ### Clustering
 
 ```{r}
-table(sce.lawlor$cluster)
+table(sce.lawlor$cluster, sce.lawlor$`cell type`)
+```
+
+```{r}
+table(sce.lawlor$cluster, sce.lawlor$`islet unos id`)
 ```
 
 ```{r}
 plotTSNE(sce.lawlor, colour_by="cluster")
+plotTSNE(sce.lawlor, colour_by="islet unos id")
 ```
-
 
 ## Session Info {-}
 

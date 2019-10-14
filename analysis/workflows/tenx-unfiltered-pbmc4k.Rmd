@@ -77,14 +77,14 @@ sce.pbmc <- logNormCounts(sce.pbmc)
 ```{r variance-modelling}
 set.seed(1001)
 dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
-top.hvgs <- getTopHVGs(dec.pbmc, prop=0.1)
+top.pbmc <- getTopHVGs(dec.pbmc, prop=0.1)
 ```
 
 ### Dimensionality reduction
 
 ```{r dimensionality-reduction}
 set.seed(10000)
-sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.hvgs, technical=dec.pbmc)
+sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.pbmc, technical=dec.pbmc)
 
 set.seed(100000)
 sce.pbmc <- runTSNE(sce.pbmc, use_dimred="PCA")
@@ -187,7 +187,7 @@ as.data.frame(marker.set[1:40,1:2])
 ```
 
 ```{r, echo=FALSE, results="hide"}
-# Checking 'marker.set' and 'chosen.platelets' are consistent.
+# Checking 'marker.set' and 'chosen.mono' are consistent.
 stopifnot(identical(marker.set, markers[[chosen.mono]]))
 
 # Checking the cluster is what we wanted.

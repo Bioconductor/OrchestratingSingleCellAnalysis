@@ -7,7 +7,7 @@ chapterPreamble(use_cache = TRUE)
 
 ## Introduction
 
-This performs an analysis of the @segerstolpe2016singlcell dataset,
+This performs an analysis of the @segerstolpe2016singlecell dataset,
 consisting of human pancreas cells from various donors.
 
 ## Analysis code
@@ -53,13 +53,13 @@ sce.seger$CellType <- paste0(
 
 ### Quality control
 
-We remove low quality cells that were marked by the authors.
-We then perform additional quality control, as some of the remaining 
-still have very low counts and numbers of detected features.
-
 ```{r}
 unfiltered <- sce.seger
 ```
+
+We remove low quality cells that were marked by the authors.
+We then perform additional quality control, as some of the remaining 
+still have very low counts and numbers of detected features.
 
 ```{r quality-control}
 low.qual <- sce.seger$Quality == "low quality cell"
@@ -90,7 +90,7 @@ Donor AZ also has very low spike-in counts and is subsequently ignored.
 for.hvg <- sce.seger[,librarySizeFactors(altExp(sce.seger)) > 0
     & sce.seger$Donor!="AZ"]
 dec.seger <- modelGeneVarWithSpikes(for.hvg, "ERCC", block=for.hvg$Donor)
-chosen.hvgs <- head(order(dec.seger$bio, decreasing=TRUE), 2000)
+chosen.hvgs <- getTopHVGs(dec.seger, n=2000)
 ```
 
 ### Dimensionality reduction
@@ -98,8 +98,7 @@ chosen.hvgs <- head(order(dec.seger$bio, decreasing=TRUE), 2000)
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101011001)
-sce.seger <- runPCA(sce.seger, subset_row=chosen.hvgs, 
-    ncomponents=25, BSPARAM=IrlbaParam())
+sce.seger <- runPCA(sce.seger, subset_row=chosen.hvgs, ncomponents=25)
 sce.seger <- runTSNE(sce.seger, dimred="PCA")
 ```
 
@@ -167,15 +166,20 @@ ncol(reducedDim(sce.seger, "PCA"))
 
 ### Clustering
 
+We see a strong donor effect, which suggests that should have called `fastMNN()` at some point.
+
 ```{r}
-table(sce.seger$cluster)
+table(Cluster=sce.seger$cluster, Donor=sce.seger$Donor)
+```
+
+```{r}
+table(Cluster=sce.seger$cluster, Donor=sce.seger$CellType)
 ```
 
 ```{r}
 plotTSNE(sce.seger, colour_by="cluster")
 plotTSNE(sce.seger, colour_by="Donor")
 ```
-
 
 ## Session Info {-}
 

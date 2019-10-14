@@ -25,6 +25,9 @@ pbmcID <- TENxPBMCData('pbmcID')
 unfiltered <- pbmcID
 ```
 
+Cell calling implicitly serves as a QC step to remove libraries with low total counts and number of detected genes.
+Thus, we will only filter on the mitochondrial proportion.
+
 ```{r quality-control}
 is.mito <- grep("MT", rowData(pbmcID)$Symbol_TENx)
 
@@ -50,8 +53,9 @@ chosen.hvgs <- getTopHVGs(decID, prop=0.1)
 
 ### Dimensionality reduction
 
+We use randomized SVD, which is more efficient for file-backed matrices.
+
 ```{r dimensionality-reduction}
-# Using randomized SVD, which is more efficient for file-backed matrices.
 set.seed(10000)
 pbmcID <- runPCA(pbmcID, subset_row=chosen.hvgs, ncomponents=25,
     BSPARAM=BiocSingular::RandomParam())

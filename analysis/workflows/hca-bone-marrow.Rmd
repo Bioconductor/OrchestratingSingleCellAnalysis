@@ -1,4 +1,4 @@
-# Human Cell Atlas Quickstart
+# Human Cell Atlas bone marrow dataset
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)

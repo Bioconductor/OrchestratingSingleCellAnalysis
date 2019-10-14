@@ -32,7 +32,7 @@ The main difference between these two methods is whether or not they need cluste
 We will demonstrate the use of these methods on 10X Genomics data from a droplet-based scRNA-seq study of the mouse mammary gland [@bach2017differentiation].
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/bach-mammary", "clustering", c("sce.mam", "dec.mam"))
+extractCached("workflows/bach-mammary", "clustering", c("sce.mam", "top.mam"))
 ```
 
 ```{r}
@@ -40,8 +40,6 @@ sce.mam
 ```
 
 ## Doublet detection with clusters
-
-### Overview
 
 The `doubletCluster()` function identifes clusters with expression profiles lying between two other clusters [@bach2017differentiation].
 We consider every possible triplet of clusters consisting of a query cluster and two putative "source" clusters.
@@ -75,26 +73,23 @@ chosen.doublet <- rownames(dbl.out)[isOutlier(dbl.out$N,
 chosen.doublet
 ```
 
-### Application to the mammary data
-
 ```{r, echo=FALSE, results="hide"}
 # Hidden variables for use in text or hidden chunks,
 # to avoid the need for manual changes.
-chosen.doublet <- 10
+stopifnot(length(chosen.doublet)==1L)
 ```
 
-Examination of the output of `doubletCluster()` indicates that cluster `r chosen.doublet` has the fewest unique genes and library sizes that are comparable to or greater than its parents.
-We see that every gene detected in this cluster is also expressed in either of the two proposed parent clusters (Figure \@ref(fig:heatclust)).
+Examination of the output of `doubletCluster()` indicates that cluster `r chosen.doublet` has the fewest unique genes and library sizes that are comparable to or greater than its sources.
+We see that every gene detected in this cluster is also expressed in either of the two proposed source clusters (Figure \@ref(fig:heatclust)).
 
-```{r heatclust, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %i in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
+```{r heatclust, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %s in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
 markers <- findMarkers(sce.mam, sce.mam$cluster, direction="up")
-dbl.markers <- markers[["10"]]
+dbl.markers <- markers[[chosen.doublet]]
 
 library(scater)
 chosen <- rownames(dbl.markers)[dbl.markers$Top <= 10]
-plotHeatmap(sce.mam, columns=order(sce.mam$cluster), 
-    colour_columns_by="cluster", features=chosen, cluster_cols=FALSE, 
-    center=TRUE, symmetric=TRUE, zlim=c(-5, 5), show_colnames=FALSE)
+plotHeatmap(sce.mam, order_columns_by="cluster", features=chosen, 
+    center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
 ```
 
 ```{r, echo=FALSE, results="hide"}
@@ -109,7 +104,7 @@ stopifnot(all(acta2[below] == 1))
 ```
 
 Closer examination of some known markers suggests that the offending cluster consists of doublets of basal cells (_Acta2_) and alveolar cells (_Csn2_) (Figure \@ref(fig:markerexprs)).
-Indeed, no cell type is known to strongly express both of these genes at the same time, which supports the hypothesis that this cluster consists solely of doublets^[While it is possible that this cluster represents an entirely novel cell type, the presence of doublets provides a more sober explanation for its expression profile. So, there's probably no _Nature_ paper here, move along.].
+Indeed, no cell type is known to strongly express both of these genes at the same time, which supports the hypothesis that this cluster consists solely of doublets rather than being an entirely novel cell type.
 
 ```{r markerexprs, fig.asp=0.5, fig.width=10, fig.cap="Distribution of log-normalized expression values for _Acta2_ and _Csn2_ in each cluster. Each point represents a cell."}
 plotExpression(sce.mam, features=c("Acta2", "Csn2"), 
@@ -146,8 +141,7 @@ set.seed(100)
 
 # Setting up the parameters for consistency with denoisePCA();
 # this can be changed depending on your feature selection scheme.
-dbl.dens <- doubletCells(sce.mam, 
-    subset.row=dec.mam$bio > 0,
+dbl.dens <- doubletCells(sce.mam, subset.row=top.mam, 
     d=ncol(reducedDim(sce.mam)))
 summary(dbl.dens)
 ```
@@ -165,8 +159,6 @@ From the clustering information, we see that the affected cells belong to the sa
 plotColData(sce.mam, x="cluster", y="DoubletScore", colour_by="cluster")
 ```
 
-## Strengths and weaknesses 
-
 The advantage of `doubletCells()` is that it does not depend on clusters, reducing the sensitivity of the results to clustering quality.
 The downside is that it requires some strong assumptions about how doublets form, such as the combining proportions and the sampling from pure subpopulations.
 In particular, `doubletCells()` treats the library size of each cell as an accurate proxy for its total RNA content.
@@ -174,8 +166,7 @@ If this is not true, the simulation will not combine expression profiles from di
 This means that the simulated doublets will be systematically shifted away from the real doublets, resulting in doublet scores that are too low.
 
 Simply removing cells with high doublet scores will not be sufficient to eliminate real doublets from the data set.
-In some cases, only a subset of the cells in the putative doublet cluster actually have high scores.
-Removing these would still leave enough cells in that cluster to mislead downstream analyses.
+In some cases, only a subset of the cells in the putative doublet cluster actually have high scores, and removing these would still leave enough cells in that cluster to mislead downstream analyses.
 In fact, even defining a threshold on the doublet score is difficult as the interpretation of the score is relative.
 There is no general definition for a fixed threshold above which libraries are to be considered doublets.
 
@@ -202,7 +193,7 @@ Some protection is provided by the non-linear nature of many real trajectories, 
 One can also put more weight on the relative library sizes in `doubletCluster()` instead of relying solely on `N`, 
 under the assumption that sudden spikes in RNA content are unlikely in a continuous biological process.
 
-The best solution to the doublet problem is experimental - that is, to avoid generating them in the first place^[Doh!].
+The best solution to the doublet problem is experimental - that is, to avoid generating them in the first place.
 This should be a consideration when designing scRNA-seq experiments, where the desire to obtain large numbers of cells at minimum cost should be weighed against the general deterioration in data quality and reliability when doublets become more frequent.
 If cell labelling information is available [@kang2018multiplexed;@stoekius2018hashing], we recommend using it to mark doublet cells for use in identification of problematic clusters or cellular states in downstream analyses.
 Direct removal fails to account for unlabelled intra-sample doublets that can still be present in sufficient numbers to drive misleading conclusions, while the marking approach uses "guilt by association" to identify neighboring unlabelled doublets.
@@ -212,5 +203,3 @@ Direct removal fails to account for unlabelled intra-sample doublets that can st
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-## References

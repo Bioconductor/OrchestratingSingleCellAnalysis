@@ -54,7 +54,7 @@ sce.grun <- sce.grun[,!qc$discard]
 library(scran)
 set.seed(1000) # for irlba. 
 clusters <- quickCluster(sce.grun)
-sce.grun <- computeSumFactors(sce.grun, min.mean=0.1, clusters=clusters)
+sce.grun <- computeSumFactors(sce.grun, clusters=clusters)
 sce.grun <- logNormCounts(sce.grun)
 ```
 
@@ -65,6 +65,7 @@ We block on a combined plate and donor factor.
 ```{r variance-modelling}
 block <- paste0(sce.grun$sample, "_", sce.grun$donor)
 dec.grun <- modelGeneVarWithSpikes(sce.grun, spikes="ERCC", block=block)
+top.grun <- getTopHVGs(dec.grun, prop=0.1)
 ```
 
 ### Data integration
@@ -72,7 +73,7 @@ dec.grun <- modelGeneVarWithSpikes(sce.grun, spikes="ERCC", block=block)
 ```{r data-integration}
 library(batchelor)
 set.seed(1001010)
-merged.grun <- fastMNN(sce.grun, batch=sce.grun$donor)
+merged.grun <- fastMNN(sce.grun, subset.row=top.grun, batch=sce.grun$donor)
 ```
 
 ### Dimensionality reduction
@@ -154,7 +155,6 @@ table(Cluster=merged.grun$cluster, Donor=merged.grun$batch)
 plotTSNE(merged.grun, colour_by="cluster")
 plotTSNE(merged.grun, colour_by="batch")
 ```
-
 
 ## Session Info {-}
 

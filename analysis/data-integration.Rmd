@@ -80,7 +80,7 @@ This improves the quality of the correction by removing one aspect of the techni
     ```
 
 3. We perform feature selection by averaging the variance components across all batches with the `combineVar()` function.
-We use the average as it is responsive to batch-specific HVGs while still preserving the within-batch ranking of genes.
+We compute the average as it is responsive to batch-specific HVGs while still preserving the within-batch ranking of genes.
 This allows us to use the same strategies described in Section \@ref(hvg-selection) to select genes of interest.
 In contrast, approaches based on taking the intersection or union of HVGs across batches become increasingly conservative or liberal, respectively, with an increasing number of batches.
 
@@ -90,6 +90,9 @@ In contrast, approaches based on taking the intersection or union of HVGs across
     chosen.hvgs <- combined.dec$bio > 0
     sum(chosen.hvgs)
     ```
+
+    When integrating datasets of variable composition, it is generally safer to err on the side of including more genes than are used in a single dataset analysis, to ensure that markers are retained for any dataset-specific subpopulations that might be present.
+    For a top $X$ selection, this means using a larger $X$ (say, ~5000), or in this case, we simply take all genes above the trend.
 
 ## Diagnosing batch effects {#batch-diagnosis}
 
@@ -384,14 +387,11 @@ We demonstrate this approach using a blocked $t$-test to detect markers in the P
 
 ```{r pbmc-marker-blocked, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distributions of RPSA uncorrected log-expression values within each cluster in each batch of the merged PBMC dataset."}
 m.out <- findMarkers(uncorrected, clusters.mnn, block=uncorrected$batch,
-    direction="up", lfc=1)
+    direction="up", lfc=1, row.data=rowData(uncorrected)[,3,drop=FALSE])
 
 # A (probably activated?) T cell subtype of some sort:
-# TODO: kick annototion code into findMarkers().
 demo <- m.out[["10"]]
-demo$Symbol <- rowData(uncorrected)$Symbol[match(rownames(demo), rownames(uncorrected))]
-as.data.frame(demo[1:20,c("Top", "p.value", "FDR", "Symbol")]) 
-
+as.data.frame(demo[1:20,c("Symbol", "Top", "p.value", "FDR")]) 
 plotExpression(uncorrected, x=I(factor(clusters.mnn)), 
     features="ENSG00000177954", colour_by="batch") + facet_wrap(~colour_by)
 ```
@@ -411,5 +411,3 @@ Use of the corrected values in any quantitative procedure should be treated with
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
