@@ -14,7 +14,7 @@ chapterPreamble()
 ## Motivation
 
 On occasion, it can be desirable to determine cell cycle activity from scRNA-seq data.
-In and of itself, the distribution of cells across phases of the cell cycle is not usually informative, but we can use this to determine if there are differences in cell cycle progression between subpopulations or across treatment conditions.
+In and of itself, the distribution of cells across phases of the cell cycle is not usually informative, but we can use this to determine if there are differences in proliferation between subpopulations or across treatment conditions.
 Many of the key events in the cell cycle (e.g., passage through checkpoints) are post-translational and thus not directly visible in transcriptomic data; nonetheless, there are enough changes in expression that can be exploited to determine cell cycle phase.
 We demonstrate using the 416B dataset, which is known to contain actively cycling cells after oncogene induction.
 
@@ -45,21 +45,21 @@ plotHeatmap(sce.416b, order_columns_by="cluster",
 
 ```{r, echo=FALSE, results="hide"}
 library(scran)
-markers <- findMarkers(sce.416b, subset.row=cyclin.genes, clusters=sce.416b$cluster)
+markers <- findMarkers(sce.416b, subset.row=cyclin.genes, group=sce.416b$cluster)
 stopifnot(all(as.matrix(markers[[1]][c("Ccnd1", "Ccnd2"),-(1:3)]) > 0))
 stopifnot(all(as.matrix(markers[[1]][c("Ccna2", "Ccnb1", "Ccne1"),-(1:3)]) < 0))
 ```
 
-The 416B dataset is somewhat unusual as each cluster maps clealy onto a distinct phase of the cell cycle.
-Such separation is not typical in more heterogeneous datasets where the cell cycle is only a secondary factor of variation.
-However, it is not strictly necessary to know the exact phase of each cell or cluster to answer most cycle-related questions.
-For example, we can use standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin, allowing us to determine if there are more cells in the corresponding phase of the cell cycle between subpopulations.
+The 416B dataset is somewhat unusual as each cluster maps cleanly onto a distinct phase of the cell cycle.
+This separation is not typically seen in more heterogeneous datasets where the cell cycle is only a secondary factor of variation.
+Fortunately, it is not strictly necessary to know the exact phase of each cell or cluster to answer most cycle-related questions.
+For example, we can use standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin, which would imply that a subpopulation contains more cells in the corresponding cell cycle phase.
 The same logic applies to comparisons between treatment conditions, as described in Chapter \@ref(multi-sample-comparisons).
 
 ```{r}
 library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
-    clusters=sce.416b$cluster, test.type="wilcox", direction="up")
+    group=sce.416b$cluster, test.type="wilcox", direction="up")
 
 # We can infer that cluster 4 has more cells in G2/M than the other clusters,
 # based on higher expression of the cyclin B's.
@@ -71,10 +71,10 @@ library(scran)
 stopifnot(all(as.matrix(markers[[4]][c("Ccnb1"),-(1:3)]) > 0.5))
 ```
 
-Direct examination of cyclin expression is easily understood, interpreted and validated with other technologies.
+Direct examination of cyclin expression is easily to understand, interprete and experimentally validate.
 However, it is best suited for statements about relative cell cycle activity; for example, we would find it difficult to assign cell cycle phase in Figure \@ref(fig:heat-cyclin) without the presence of clusters spanning all phases to provide benchmarks for "high" and "low" expression of each cyclin.
 We also assume that cyclin expression is not affected by biological processes other than the cell cycle, which may be a strong assumption in some cases, e.g., malignant cells.
-On a practical note, we rely on having good coverage of the cyclins (if they are present), which is not a problem for the whole-of-transcriptome methods described below.
+This strategy is strongly dependent on having good sequencing coverage of the cyclins, which is less of an issue for the whole-of-transcriptome methods described below that use information from more genes.
 
 ## Using reference profiles
 
@@ -102,7 +102,7 @@ sce.ref$phases <- rep(c("G1", "S", "G2M"), c(ncol(g1), ncol(s), ncol(g2m)))
 ```
 
 We identify phase-specific markers from the reference and use them to assign labels to the 416B data.
-Cluster 1 mostly consists of G1 cells while the other clusters are assigned to G2M, which is broadly consistent with our conclusions from the cyclin-based analysis.
+Cluster 1 mostly consists of G1 cells while the other clusters are predominantly assigned to G2/M, which is broadly consistent with our conclusions from the cyclin-based analysis.
 Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
 
 ```{r}
@@ -201,6 +201,17 @@ For some time, it was popular to regress out the cell cycle phase prior to downs
 The aim was to remove uninteresting variation due to cell cycle, thus improving resolution of other biological processes of interest.
 We could implement this by performing cell cycle phase assignment as described above, treating each phase as a separate batch and applying any of the batch correction strategies described in Chapter \@ref(data-integration).
 The most common approach is to use a linear model to simply regress out the phase effect, e.g., via `regressBatches()`.
+
+```{r}
+library(batchelor)
+sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
+
+# Similar use in related functions that support blocking:
+dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", 
+    block=assignments$phases)
+marker.nocycle <- findMarkers(sce.416b, sce.416b$cluster, 
+    block=assignments$phases)
+```
 
 That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.
 In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
