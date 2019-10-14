@@ -101,22 +101,34 @@ sce.ref <- SingleCellExperiment(list(counts=cbind(g1, s, g2m)))
 sce.ref$phases <- rep(c("G1", "S", "G2M"), c(ncol(g1), ncol(s), ncol(g2m)))
 ```
 
-We identify phase-specific markers from the reference and use them to assign labels to the 416B data.
-Cluster 1 mostly consists of G1 cells while the other clusters are predominantly assigned to G2/M, which is broadly consistent with our conclusions from the cyclin-based analysis.
-Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
+We identify phase-specific markers from the reference, restricting to genes with annotated roles in cell cycle.
+The use of prior annotation aims to avoid detecting markers for other biological processes that happen to be correlated with the cell cycle in the reference dataset, which would reduce classification performance if those processes are absent or uncorrelated in the test dataset.
 
 ```{r}
+# Find genes that are present in both datasets and are cell cycle-related.
+library(org.Mm.eg.db)
+cycle.anno <- select(org.Mm.eg.db, keytype="GOALL", keys="GO:0007049", 
+    columns="ENSEMBL")[,"ENSEMBL"]
+common <- Reduce(intersect, list(rownames(sce.ref), rowData(sce.416b)$ENSEMBL,
+    cycle.anno))
+
 # Identifying markers between cell cycle phases.
-common <- intersect(rownames(sce.ref), rowData(sce.416b)$ENSEMBL)
 sce.ref <- logNormCounts(sce.ref)
 phase.stats <- pairwiseWilcox(logcounts(sce.ref), sce.ref$phases, 
     direction="up", subset.row=common)
 cycle.markers <- getTopMarkers(phase.stats[[1]], phase.stats[[2]], n=20)
+```
 
-# Switching row names back to Ensembl.
-library(SingleR)
+We use the identified markers to assign labels to the 416B data with the `SingleR()` function.
+Cluster 1 mostly consists of G1 cells while the other clusters have more cells in the other phases, which is broadly consistent with our conclusions from the cyclin-based analysis.
+Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
+
+```{r}
+# Switching row names back to Ensembl to match with reference.
 test.data <- logcounts(sce.416b)
 rownames(test.data) <- rowData(sce.416b)$ENSEMBL
+
+library(SingleR)
 assignments <- SingleR(test.data, ref=sce.ref,
     label=sce.ref$phases, genes=cycle.markers)
 tab <- table(assignments$labels, sce.416b$cluster)
@@ -124,18 +136,20 @@ tab
 ```
 
 ```{r, echo=FALSE, results="hide"}
+singler.assignments <- assignments
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
-stopifnot(all(tab["G1",-1] < 0.5 * colSums(tab[,-1])))
+stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
+stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
 ```
 
 The key assumption here is that the cell cycle is orthogonal to cell type and other aspects of cell behavior.
 This justifies the use of a reference involving cell types that are quite different from the cells in the test dataset, provided that the cell cycle transcriptional program is conserved across datasets [@bertoli2013control;@conboy2007cell].
-However, it is not difficult to find routine violations of this assumption - for example, _Dppa3_ is detected as one of the top markers to distinguish between G1 from G2/M in the reference but has no detectable expression in the 416B dataset (Figure \@ref(fig:dist-dppa3)).
+However, it is not difficult to find routine violations of this assumption - for example, _Lef1_ is detected as one of the top markers to distinguish between G1 from G2/M in the reference but has no detectable expression in the 416B dataset (Figure \@ref(fig:dist-lef1)).
 
-```{r dist-dppa3, fig.cap="Distribution of log-normalized expression values for _Dppa3_ in the reference dataset (left) and in the 416B dataset (right)."}
+```{r dist-lef1, fig.cap="Distribution of log-normalized expression values for _Lef1_ in the reference dataset (left) and in the 416B dataset (right).", fig.wide=TRUE}
 gridExtra::grid.arrange(
-    plotExpression(sce.ref, features="ENSMUSG00000046323", x="phases"),
-    plotExpression(sce.416b, features="Dppa3", x="cluster"),
+    plotExpression(sce.ref, features="ENSMUSG00000027985", x="phases"),
+    plotExpression(sce.416b, features="Lef1", x="cluster"),
     ncol=2)
 ```
 
@@ -178,7 +192,7 @@ plot(assignments$score$G1, assignments$score$G2M,
 Cells are classified as being in G1 phase if the G1 score is above 0.5 and greater than the G2/M score;
     in G2/M phase if the G2/M score is above 0.5 and greater than the G1 score;
     and in S phase if neither score is above 0.5.
-Here, the majority of cells in cluster 1 are again classified as being in G1 phase. 
+We see that the results are quite similar to those from `SingleR()`, which is reassuring.
 
 ```{r}
 table(assignments$phases, sce.416b$cluster)
@@ -187,13 +201,18 @@ table(assignments$phases, sce.416b$cluster)
 ```{r, echo=FALSE, results="hide"}
 tab <- table(assignments$phases, sce.416b$cluster)
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
+stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
 stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
+
+library(fossil)
+stopifnot(rand.index(
+    as.integer(factor(singler.assignments$labels)),
+    as.integer(factor(assignments$phases))
+) > 0.8)
 ```
 
-The main difference from the `r Biocpkg("SingleR")`-based assignment is that additional manual curation was performed on the marker pairs in `cyclone()` to focus on genes with known roles in cell cycle progression.
-This can be expected to yield somewhat more accurate results, though there is no reason that the same filtering could not be applied prior to calling `SingleR()`.
-The same considerations and caveats described for the previous `r Biocpkg("SingleR")`-based cell approach are also applicable here.
-From a practical perspective, `cyclone()` takes longer but does not require an explicit reference as the marker pairs are already computed.
+The same considerations and caveats described for the `r Biocpkg("SingleR")`-based approach are also applicable here.
+From a practical perspective, `cyclone()` takes much longer but does not require an explicit reference as the marker pairs are already computed.
 
 ## Regressing out cell cycle phase
 
