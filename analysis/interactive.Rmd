@@ -92,6 +92,7 @@ For instance, select the cells with either large or small library sizes, to insp
 
 ```{r}
 # Compute per-cell QC metrics
+library(scater)
 sce.pbmc <- addQCPerCell(sce.pbmc, exprs_values="counts")
 
 # Compute the log10-transformed library size
