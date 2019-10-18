@@ -68,8 +68,8 @@ If a more concrete threshold is necessary, we can identify clusters that have un
 
 ```{r}
 library(scater)
-chosen.doublet <- rownames(dbl.out)[isOutlier(dbl.out$N,
-    type="lower", nmads=3, log=TRUE)]
+chosen.doublet <- rownames(dbl.out)[isOutlier(dbl.out$N, 
+    type="lower", log=TRUE)]
 chosen.doublet
 ```
 

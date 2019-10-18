@@ -58,7 +58,7 @@ This reduces the risk of removing cell types with low RNA content, especially in
 
 ```{r quality-control}
 stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=which(location=="MT")))
-high.mito <- isOutlier(stats$subsets_Mito_percent, nmads=3, type="higher")
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
 sce.pbmc <- sce.pbmc[,!high.mito]
 ```
 

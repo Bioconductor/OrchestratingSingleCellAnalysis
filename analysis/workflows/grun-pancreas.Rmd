@@ -44,7 +44,7 @@ unfiltered <- sce.grun
 ```{r quality-control}
 library(scater)
 stats <- perCellQCMetrics(sce.grun)
-qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent", nmads=3)
+qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent")
 sce.grun <- sce.grun[,!qc$discard]
 ```
 

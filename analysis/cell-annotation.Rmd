@@ -247,7 +247,7 @@ The example below identifies small outlier $\Delta_{AUC}$ values under the assum
 library(scater)
 library(DelayedMatrixStats)
 deltas <- rowMaxs(results) - rowMedians(results)
-discard <- isOutlier(deltas, nmads=3, type="lower", batch=new.labels)
+discard <- isOutlier(deltas, type="lower", batch=new.labels)
 table(new.labels[discard])
 
 par(mar=c(10,4,1,1))

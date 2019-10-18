@@ -35,7 +35,7 @@ is.mito <- grep("MT", rowData(pbmc3k)$Symbol_TENx)
 
 library(scater)
 stats <- perCellQCMetrics(pbmc3k, subsets=list(Mito=is.mito))
-high.mito <- isOutlier(stats$subsets_Mito_percent, nmads=3, type="higher")
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
 pbmc3k <- pbmc3k[,!high.mito]
 ```
 

@@ -39,7 +39,7 @@ unfiltered <- sce.lawlor
 library(scater)
 stats <- perCellQCMetrics(sce.lawlor, 
     subsets=list(Mito=which(rowData(sce.lawlor)$SEQNAME=="MT")))
-qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent", nmads=3)
+qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent")
 sce.lawlor <- sce.lawlor[,!qc$discard]
 ```
 

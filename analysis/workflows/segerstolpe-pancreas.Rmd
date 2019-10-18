@@ -66,7 +66,7 @@ low.qual <- sce.seger$Quality == "low quality cell"
 
 library(scater)
 stats <- perCellQCMetrics(sce.seger)
-qc <- quickPerCellQC(stats, nmads=3, percent_subsets="altexps_ERCC_percent")
+qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent")
 sce.seger <- sce.seger[,!(qc$discard | low.qual)]
 ```
 
@@ -78,7 +78,7 @@ We don't normalize the spike-ins as there are some cells with no spike-in counts
 library(scran)
 clusters <- quickCluster(sce.seger)
 sce.seger <- computeSumFactors(sce.seger, clusters=clusters)
-sce.seger <- logNormCounts(sce.seger, use_altexps=FALSE)
+sce.seger <- logNormCounts(sce.seger) 
 ```
 
 ### Variance modelling

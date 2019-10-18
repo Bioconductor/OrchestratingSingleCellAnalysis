@@ -125,13 +125,13 @@ In particular, it guarantees that the threshold is not a negative value, which w
 Moreover, these metrics can occasionally exhibit a heavy right tail, and the log-transformation makes the distribution seem more normal to justify the 99% rationale mentioned above.
 
 ```{r}
-qc.lib2 <- isOutlier(df$sum, log=TRUE, nmads=3, type="lower")
+qc.lib2 <- isOutlier(df$sum, log=TRUE, type="lower")
 ```
 
 We do the same for the log-transformed number of expressed genes. 
 
 ```{r}
-qc.nexprs2 <- isOutlier(df$detected, nmads=3, log=TRUE, type="lower")
+qc.nexprs2 <- isOutlier(df$detected, log=TRUE, type="lower")
 ```
 
 `isOutlier()` will also return the exact filter thresholds for each metric in the attributes of the output vector.
@@ -146,9 +146,9 @@ We identify outliers for the proportion-based metrics in a similar manner.
 Here, no transformation is required as we are identifying large outliers that should already be clearly distinguishable from zero.
 
 ```{r}
-qc.spike2 <- isOutlier(df$altexps_ERCC_percent, nmads=3, type="higher")
+qc.spike2 <- isOutlier(df$altexps_ERCC_percent, type="higher")
 attr(qc.spike2, "thresholds")
-qc.mito2 <- isOutlier(df$subsets_Mito_percent, nmads=3, type="higher")
+qc.mito2 <- isOutlier(df$subsets_Mito_percent, type="higher")
 attr(qc.mito2, "thresholds")
 ```
 
@@ -167,7 +167,7 @@ This is a wrapper that simply calls `isOutlier()` with the settings described ab
 
 ```{r}
 reasons <- quickPerCellQC(df, percent_subsets=c("subsets_Mito_percent",
-    "altexps_ERCC_percent"), nmads=3)
+    "altexps_ERCC_percent"))
 colSums(as.matrix(reasons))
 ```
 
@@ -209,7 +209,7 @@ This results in the removal of more cells as the MAD is no longer inflated by (i
 ```{r}
 batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
 batch.reasons <- quickPerCellQC(df, percent_subsets=c("subsets_Mito_percent",
-    "altexps_ERCC_percent"), nmads=3, batch=batch)
+    "altexps_ERCC_percent"), batch=batch)
 colSums(as.matrix(batch.reasons))
 ```
 
@@ -224,7 +224,7 @@ library(scRNAseq)
 sce.grun <- GrunPancreasData()
 sce.grun <- addPerCellQC(sce.grun)
 discard.ercc <- isOutlier(sce.grun$altexps_ERCC_percent,
-    nmads=3, type="higher", batch=sce.grun$donor)
+    type="higher", batch=sce.grun$donor)
 plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc))
 ```
@@ -396,7 +396,7 @@ Filtering on the mitochondrial proportion provides the most additional benefit i
 ```{r qc-mito-pbmc, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size. The red line represents the upper threshold used for QC filtering."}
 is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
 pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets=list(MT=is.mito))
-discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher", nmads=3)
+discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher")
 summary(discard.mito)
 plot(pbmc.qc$sum, pbmc.qc$subsets_MT_percent, log="x",
     xlab="Total count", ylab='Mitochondrial %')
