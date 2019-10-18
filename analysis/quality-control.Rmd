@@ -222,7 +222,7 @@ In such cases, it is better to either not use `batch=` or to apply a custom filt
 ```{r qc-plot-pancreas, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier within each batch."}
 library(scRNAseq)
 sce.grun <- GrunPancreasData()
-sce.grun <- addQCPerCell(sce.grun)
+sce.grun <- addPerCellQC(sce.grun)
 discard.ercc <- isOutlier(sce.grun$altexps_ERCC_percent,
     nmads=3, type="higher", batch=sce.grun$donor)
 plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
