@@ -1,0 +1,74 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Integrating with protein abundance
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble()
+```
+
+```{r, fig.cap="This page is under construction. Enjoy these platelets at work instead.", echo=FALSE}
+knitr::include_graphics("https://honeysanime.com/wp-content/uploads/2018/10/Hataraku-Saibou-Cells-at-Work-Wallpaper-5.jpg")
+```
+
+## Motivation
+
+Cellular indexing of transcriptomes and epitopes by sequencing (CITE-seq) is a technique that quantifies both gene expression and the abundance of selected surface proteins in each cell simultaneously [@stoeckius2017simultaneous].
+In this approach, cells are first labelled with antibodies that have been conjugated with synthetic RNA tags.
+A cell with a higher abundance of a target protein will be bound by more antibodies, resulting in more of the corresponding tags.
+Both the tags and endogenous transcripts are reverse transcribed and captured in a cDNA library; the abundance of each protein or expression of each gene is subsequently quantified by sequencing of each set of features.
+This provides a powerful tool for interrogating aspects of the proteome (such as post-translational modifications) and other cellular features that would normally be invisible to transcript-based studies.
+
+How should the data for these antibody tags be incorporated into the analysis?
+While we have counts for both tags and transcripts, there are fundamental differences in nature of the data that make it difficult to treat the former as additional features in the latter.
+Most experiments involve only a small number of antibodies (<20) that are chosen by the researcher because they are of _a priori_ interest, in contrast to gene expression data that captures the entire transcriptome regardless of the study.
+The coverage of the tags is also much deeper as they are sequenced separately from the transcripts, allowing the sequencing resources to be concentrated into a smaller number of features.
+And, of course, the use of antibodies against protein targets involves consideration of separate biases compared to those observed for transcripts.
+
+In this chapter, we will describe some strategies for integrated analysis of antibody tag and transcript data in CITE-seq experiments.
+We will demonstrate using a PBMC dataset from 10X Genomics that contains quantified abundances for a number of interesting surface proteins.
+
+```{r}
+# Caching it locally with BiocFileCache to avoid repeating it.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+stuff <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com",
+    "samples/cell-exp/3.0.0/pbmc_10k_protein_v3",
+    "pbmc_10k_protein_v3_filtered_feature_bc_matrix.tar.gz"))
+untar(stuff, exdir=tempdir())
+
+# Loading it in as a SingleCellExperiment object.
+library(DropletUtils)
+sce <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
+sce
+```
+
+## Setting up the data
+
+The `SingleCellExperiment` class has an "alternative Experiment" concept to store data for different sets of features but the same cells.
+This is achieved by storing another `SummarizedExperiment` (or an instance of its subclass) _inside_ our `SingleCellExperiment` where the rows can differ but the columns are the same.
+In previous chapters, we were using the alternative Experiments to store spike-in data, but here we will use the concept to split off the antibody tag data.
+This isolates the two sets of features to ensure that analyses on one set do not inadvertently use data from the other set, and vice versa.
+
+```{r}
+sce <- splitAltExps(sce, rowData(sce)$Type)
+altExpNames(sce)
+altExp(sce) # Can be used like any other SingleCellExperiment. 
+```
+
+At this point, it is also helpful to coerce the sparse matrix for antibody tags into a dense matrix.
+The tag counts are usually not sparse so storage as a sparse matrix provides no advantage; in fact, it actually increases memory usage and computational time as the indices of non-zero entries must be unnecessarily stored and processed.
+
+```{r}
+counts(altExp(sce)) <- as.matrix(counts(altExp(sce)))
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+``` 
