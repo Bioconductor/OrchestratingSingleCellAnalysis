@@ -137,16 +137,17 @@ Like in Section \@ref(library-size-normalization), these "tag library size facto
 
 2. Ideally, we would like to compute size factors that adjust for the composition biases.
 This usually requires an assumption that most tags are not differentially expressed between cell types/states.
-At first glance, this appears to be a strong assumption - the target proteins were specifically chosen as they exhibit interesting heterogeneity across the population, such that a non-DE majority across tags would be unlikely.
+At first glance, this appears to be a strong assumption - the target proteins were specifically chosen as they exhibit interesting heterogeneity across the population, meaning that a non-DE majority across tags would be unlikely.
 However, we can still make it work by assuming that (i) each cell only expresses a minority of the targeted proteins and (ii) the ambient contamination in each library is the same in terms of the number of molecules captured by each droplet.
 We can then compute size factors to equalize the coverage of these contaminating tags, thus eliminating cell-to-cell differences in capture efficiency.
 This is loosely based on a similar approach for normalization of ChIP-seq data based on background enrichment [@lun2016csaw].
 
-    If possible, we would obtain an estimate of the ambient profile from the barcodes that were identified as empty droplets (Section \@ref(qc-droplet)).
-    However, this information has already been discarded from the provided dataset, so we instead use a proxy profile constructed from the average of all cells under the assumption that all cell types are equally likely to contribute to the ambient profile.
+    If possible, we would prefer to obtain an estimate of the ambient profile from the barcodes that were identified as empty droplets (Section \@ref(qc-droplet)).
+    In this case, though, this information has already been discarded from the provided dataset, so we instead use a proxy profile constructed from the average of all cells under the assumption that all cell types are equally likely to contribute to the ambient profile.
     We define size factors using a `r Biocpkg("DESeq")`-like approach based on the median of the ratio of each cell's counts to the ambient profile.
 
     ```{r}
+    library(DelayedMatrixStats)
     # TODO: move into the DropletUtils package.
     ambient <- rowMeans(counts(altExp(sce)))
     sf.amb <- colMedians(counts(altExp(sce))/ambient)
@@ -154,7 +155,9 @@ This is loosely based on a similar approach for normalization of ChIP-seq data b
     summary(sf.amb)
     ```
 
-    These DESeq-like size factors exhibit some subpopulation-driven differences from the library size factors (Figure \@ref(fig:comp-bias-norm)), consistent with the presence of composition biases due to differential abundance of the targeted proteins across subpopulations.
+    In one subpopulation, the DESeq-like size factors are consistently larger than the tag library size factors, whereas the opposite is true for most of the other subpopulations (Figure \@ref(fig:comp-bias-norm)).
+    This is consistent with the presence of composition biases due to differential abundance of the targeted proteins between subpopulations.
+    Here, composition biases would introduce a spurious 2-fold change in normalized tag abundance if the library size factors were used.
 
     ```{r comp-bias-norm, fig.cap="DESeq-like size factors for each cell in the PBMC dataset, compared to tag library size factors. Each point is a cell and is colored according to the cluster identity defined from normalized tag data."}
     # Coloring by cluster to highlight the composition biases.
@@ -163,15 +166,23 @@ This is loosely based on a similar approach for normalization of ChIP-seq data b
     g <- buildSNNGraph(tagdata, k=20, d=NA) # no need for PCA.
     clusters <- igraph::cluster_walktrap(g)$membership
 
-    plot(sf.lib, sf.amb, log="xy", col=clusters,
+    plot(sf.lib, sf.amb, log="xy", col=clusters, 
         xlab="Library size factors (tag)",
         ylab="DESeq-like size factors (tag)")
+    abline(0, 1, col="grey", lty=2)
+    ```
+
+    ```{r, echo=FALSE, results="hide"}
+    # Checking my trash talk.
+    by.clust <- split(log2(sf.lib/sf.amb), clusters)
+    med.clust <- vapply(by.clust, median, 0)
+    stopifnot(diff(range(med.clust)) > 1)
     ```
 
 3. Some experiments will include antibodies to uninteresting "control" proteins such as MHC components that are constitutively expressed on every cell.
 As with spike-in normalization (Section \@ref(spike-norm)), we could make the assumption that these control tags should not be differentially expressed between cells.
 Any difference thus represents some bias that should be normalized by defining control-based size factors from the sum of counts over all control tags.
-We demonstrate this approach below by pretending that all immunoglobins are control proteins, though obviously one should use something more sensible in practice.
+We demonstrate this approach below by pretending that all immunoglobins are control proteins, though obviously one should use something more sensible in real analyses.
 
     ```{r}
     controls <- grep("^Ig", rownames(altExp(sce)))
