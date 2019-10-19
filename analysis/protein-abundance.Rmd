@@ -47,7 +47,9 @@ sce <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
 sce
 ```
 
-## Setting up the data
+## Preprocessing 
+
+### Setting up the data
 
 The `SingleCellExperiment` class has an "alternative Experiment" concept to store data for different sets of features but the same cells.
 This is achieved by storing another `SummarizedExperiment` (or an instance of its subclass) _inside_ our `SingleCellExperiment` where the rows can differ but the columns are the same.
@@ -65,7 +67,52 @@ The tag counts are usually not sparse so storage as a sparse matrix provides no 
 
 ```{r}
 counts(altExp(sce)) <- as.matrix(counts(altExp(sce)))
+counts(altExp(sce))[,1:10] # sneak peek
 ```
+
+### Quality control
+
+For most part, we can depend on QC on the endogenous transcripts to remove empty droplets and low-quality cells.
+Any failure in cDNA capture for a particular cell will affect the coverage of both transcripts and tags, and changes in mitochondrial RNA content are only reflected in the transcriptomic data; as a result, the tags provide little additional information for QC.
+For this dataset, the count matrix has already been filtered in _CellRanger_ to remove empty droplets so we only filter on the mitochondrial proportions to remove putative low-quality cells.
+
+```{r}
+library(scater)
+mito <- grep("^MT-", rowData(sce)$Symbol)
+df <- perCellQCMetrics(sce, subsets=list(Mito=mito))
+mito.discard <- isOutlier(df$subsets_Mito_percent, type="higher")
+summary(mito.discard)
+```
+
+If we want to combine transcript and tag data, it is prudent to ensure that we only retain cells that actually have tag counts.
+Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
+As the tags are (relatively) deeply sequenced, we can expect non-zero counts for most tags in each cell (Figure \@ref(fig:detected-ab-hist); if this is not the case, we may suspect some failure of antibody tag processing for that cell.
+We thus remove cells that have unusually low numbers of detected tags, defined here as half of the median across all cells.
+(We could also use `isOutlier()`, but the MAD is zero in this case and filtering would discard useful cells with almost all tags detected.)
+
+```{r detected-ab-hist, fig.cap="Distribution of the number of detected tags across all cells in the PBMC dataset."}
+ab.detected <- df$`altexps_Antibody Capture_detected`
+med.detected <- median(ab.detected)
+threshold <- med.detected/2
+hist(ab.detected, col='grey', xlab="Number of detected tags")
+abline(v=threshold, col="red", lty=2)
+ab.discard <- ab.detected < threshold
+summary(ab.discard)
+```
+
+By comparison, the total tag count is less useful as a QC metric because it is heavily correlated with the biological state of the cell.
+The presence of a targeted protein can lead to a several-fold increase in the total tag count given the binary nature of most surface protein markers.
+Removing cells with low total tags would strongly penalize cell types that do not exhibit many (or any) of the selected protein targets, and would represent an extreme case of the issues discussed in Section \@ref(outlier-assumptions).
+
+Finally, to remove the low-quality cells, we subset the `SingleCellExperiment` as previously described.
+This automatically applies the filtering to both the transcript and tag data; such coordination is one of the advantages of storing both datasets in a single object.
+
+```{r, eval=FALSE}
+discard <- ab.discard | mito.discard
+sce <- sce[,!discard]
+```
+
+## Normalization
 
 ## Session Info {-}
 
