@@ -94,10 +94,11 @@ We thus remove cells that have unusually low numbers of detected tags, defined h
 ab.detected <- df$`altexps_Antibody Capture_detected`
 med.detected <- median(ab.detected)
 threshold <- med.detected/2
-hist(ab.detected, col='grey', xlab="Number of detected tags")
-abline(v=threshold, col="red", lty=2)
 ab.discard <- ab.detected < threshold
 summary(ab.discard)
+
+hist(ab.detected, col='grey', xlab="Number of detected tags")
+abline(v=threshold, col="red", lty=2)
 ```
 
 By comparison, the total tag count is less useful as a QC metric because it is heavily correlated with the biological state of the cell.
@@ -107,12 +108,91 @@ Removing cells with low total tags would strongly penalize cell types that do no
 Finally, to remove the low-quality cells, we subset the `SingleCellExperiment` as previously described.
 This automatically applies the filtering to both the transcript and tag data; such coordination is one of the advantages of storing both datasets in a single object.
 
-```{r, eval=FALSE}
+```{r}
 discard <- ab.discard | mito.discard
 sce <- sce[,!discard]
 ```
 
 ## Normalization
+
+Counts for the antibody tags are subject to several biases that must be normalized prior to further analysis.
+Capture efficiency varies from cell to cell though the differences in biophysical properties between endogenous transcripts and the (much shorter) antibody tags means that the capture-related biases for the two sets of features are unlikely to be identical.
+Composition biases are also much more pronounced in tag data due to binary nature of target protein abundances.
+As in Chapter \@ref(normalization), we assume that these are scaling biases and we compute tag-specific size factors to remove them.
+
+1. The simplest approach is to normalize on the total tag counts, effectively the library size for the tags.
+This is closely related to the common approach of taking the geometric mean of all counts as the size factors [@stoeckius2017simultaneous], with the only difference being that the total count effectively uses the arithmetic mean instead.
+Like in Section \@ref(library-size-normalization), these "tag library size factors" are adequate for clustering but will introduce composition biases that interfere with interpretation of the fold-changes between clusters.
+
+    ```{r}
+    sf.lib <- librarySizeFactors(altExp(sce))
+    summary(sf.lib)
+
+    # Alternatively using the geometric mean.
+    # TODO: move into the DropletUtils package.
+    sf.geo <- exp(colMeans(log1p(counts(altExp(sce)))))
+    sf.geo <- sf.geo/mean(sf.geo)
+    summary(sf.geo)
+    ```
+
+2. Ideally, we would like to compute size factors that adjust for the composition biases.
+This usually requires an assumption that most tags are not differentially expressed between cell types/states.
+At first glance, this appears to be a strong assumption - the target proteins were specifically chosen as they exhibit interesting heterogeneity across the population, such that a non-DE majority across tags would be unlikely.
+However, we can still make it work by assuming that (i) each cell only expresses a minority of the targeted proteins and (ii) the ambient contamination in each library is the same in terms of the number of molecules captured by each droplet.
+We can then compute size factors to equalize the coverage of these contaminating tags, thus eliminating cell-to-cell differences in capture efficiency.
+This is loosely based on a similar approach for normalization of ChIP-seq data based on background enrichment [@lun2016csaw].
+
+    If possible, we would obtain an estimate of the ambient profile from the barcodes that were identified as empty droplets (Section \@ref(qc-droplet)).
+    However, this information has already been discarded from the provided dataset, so we instead use a proxy profile constructed from the average of all cells under the assumption that all cell types are equally likely to contribute to the ambient profile.
+    We define size factors using a `r Biocpkg("DESeq")`-like approach based on the median of the ratio of each cell's counts to the ambient profile.
+
+    ```{r}
+    # TODO: move into the DropletUtils package.
+    ambient <- rowMeans(counts(altExp(sce)))
+    sf.amb <- colMedians(counts(altExp(sce))/ambient)
+    sf.amb <- sf.amb/mean(sf.amb)
+    summary(sf.amb)
+    ```
+
+    These DESeq-like size factors exhibit some subpopulation-driven differences from the library size factors (Figure \@ref(fig:comp-bias-norm)), consistent with the presence of composition biases due to differential abundance of the targeted proteins across subpopulations.
+
+    ```{r comp-bias-norm, fig.cap="DESeq-like size factors for each cell in the PBMC dataset, compared to tag library size factors. Each point is a cell and is colored according to the cluster identity defined from normalized tag data."}
+    # Coloring by cluster to highlight the composition biases.
+    library(scran)
+    tagdata <- logNormCounts(altExp(sce)) # library size factors by default.
+    g <- buildSNNGraph(tagdata, k=20, d=NA) # no need for PCA.
+    clusters <- igraph::cluster_walktrap(g)$membership
+
+    plot(sf.lib, sf.amb, log="xy", col=clusters,
+        xlab="Library size factors (tag)",
+        ylab="DESeq-like size factors (tag)")
+    ```
+
+3. Some experiments will include antibodies to uninteresting "control" proteins such as MHC components that are constitutively expressed on every cell.
+As with spike-in normalization (Section \@ref(spike-norm)), we could make the assumption that these control tags should not be differentially expressed between cells.
+Any difference thus represents some bias that should be normalized by defining control-based size factors from the sum of counts over all control tags.
+We demonstrate this approach below by pretending that all immunoglobins are control proteins, though obviously one should use something more sensible in practice.
+
+    ```{r}
+    controls <- grep("^Ig", rownames(altExp(sce)))
+    sf.control <- librarySizeFactors(altExp(sce), subset_row=controls) 
+    ```
+
+    This approach exchanges the previous non-DE assumption for another strong assumption about the lack of DE in control proteins, and it is difficult to predict which of these assumptions is more palatable in the general case.
+    Another interesting effect is that this approach will eliminate cell-to-cell variation in total protein content whereas the DESeq-like size factors will not (as total protein content does not affect the level of ambient contamination).
+    This represents a reversal from the behavior of the analogous normalization strategies for endogenous transcripts, where spike-in normalization preserves differences in total RNA content while deconvolution does not.
+
+We suggest using the DESeq-like size factors by default, as these are the most general and eliminate the major problems with composition biases.
+Running `logNormCounts()` will then perform scaling normalization and log-transformation for both the endogenous transcripts and the tags.
+
+```{r}
+sizeFactors(altExp(sce)) <- sf.amb
+sce <- logNormCounts(sce, use_altexps=TRUE)
+
+# Checking that we have normalized values:
+assayNames(sce)
+assayNames(altExp(sce))
+```
 
 ## Session Info {-}
 
