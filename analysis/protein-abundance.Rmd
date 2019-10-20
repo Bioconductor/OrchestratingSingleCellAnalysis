@@ -118,7 +118,8 @@ sce <- sce[,!discard]
 Counts for the antibody tags are subject to several biases that must be normalized prior to further analysis.
 Capture efficiency varies from cell to cell though the differences in biophysical properties between endogenous transcripts and the (much shorter) antibody tags means that the capture-related biases for the two sets of features are unlikely to be identical.
 Composition biases are also much more pronounced in tag data due to binary nature of target protein abundances.
-As in Chapter \@ref(normalization), we assume that these are scaling biases and we compute tag-specific size factors to remove them.
+As in Chapter \@ref(normalization), we assume that these are scaling biases and compute tag-specific size factors to remove them.
+To this end, we again have several strategies that we can choose from to calculate the size factor for each cell:
 
 1. The simplest approach is to normalize on the total tag counts, effectively the library size for the tags.
 This is closely related to the common approach of taking the geometric mean of all counts as the size factors [@stoeckius2017simultaneous], with the only difference being that the total count effectively uses the arithmetic mean instead.
@@ -161,9 +162,10 @@ This is loosely based on a similar approach for normalization of ChIP-seq data b
 
     ```{r comp-bias-norm, fig.cap="DESeq-like size factors for each cell in the PBMC dataset, compared to tag library size factors. Each point is a cell and is colored according to the cluster identity defined from normalized tag data."}
     # Coloring by cluster to highlight the composition biases.
+    # We set k=20 to get fewer, broader clusters for a clearer picture.
     library(scran)
     tagdata <- logNormCounts(altExp(sce)) # library size factors by default.
-    g <- buildSNNGraph(tagdata, k=20, d=NA) # no need for PCA.
+    g <- buildSNNGraph(tagdata, k=20, d=NA) # no need for PCA, see below.
     clusters <- igraph::cluster_walktrap(g)$membership
 
     plot(sf.lib, sf.amb, log="xy", col=clusters, 
@@ -204,6 +206,47 @@ sce <- logNormCounts(sce, use_altexps=TRUE)
 assayNames(sce)
 assayNames(altExp(sce))
 ```
+
+## Proceeding to downstream analysis
+
+Unlike transcript-based counts, feature selection is largely unnecessary for analyzing tag data.
+This is because feature selection has already occurred during experimental design, where the manual choice of target proteins means that all tags correspond to interesting features by definition.
+From a practical perspective, the tag count matrix is already small so there is no need for data compaction from using HVGs or PCs.
+Moreover, each tag is often chosen to capture some orthogonal biological signal, so there is not much extraneous noise in higher dimensions that can be readily removed.
+This suggests we should directly apply downstream procedures like clustering and visualization on the log-normalized abundance matrix for the tags (Figure \@ref(fig:tsne-tags)).
+
+```{r tsne-tags, fig.cap="$t$-SNE plot generated from the log-normalized abundance of each tag in the PBMC dataset. Each point is a cell and is labelled according to its assigned cluster."}
+# Set d=NA for no PCA.
+g <- buildSNNGraph(altExp(sce), d=NA) 
+clusters <- igraph::cluster_walktrap(g)$membership
+
+# Generating a t-SNE plot.
+set.seed(1010010)
+altExp(sce) <- runTSNE(altExp(sce))
+altExp(sce)$cluster <- factor(clusters)
+plotTSNE(altExp(sce), colour_by="cluster", text_by="cluster", text_col="red")
+```
+
+With only a few tags, characterization of each cluster is most efficiently achieved by creating a heatmap of the average log-abundance of each tag (Figure \@ref(fig:heat-tags)).
+For this experiment, we can easily identify B cells (CD19^+^), various subsets of T cells (CD3^+^, CD4^+^, CD8^+^), monocytes and macrophages (CD14^+^, CD16^+^), to name a few.
+More detailed examination of the distribution of abundances within each cluster is easily performed with `plotExpression()` where strong bimodality may indicate that finer clustering is required to resolve cell subtypes.
+
+```{r heat-tags, fig.cap="Heatmap of the average log-normalized abundance of each tag in each cluster of the PBMC dataset. Colors represent the log~2~-fold change from the grand average across all clusters."}
+averaged <- sumCountsAcrossCells(altExp(sce), clusters,
+    exprs_values="logcounts", average=TRUE)
+
+library(pheatmap)
+pheatmap(averaged - rowMeans(averaged),
+    breaks=seq(-3, 3, length.out=101))
+```
+
+Of course, this provides little information beyond what we could have obtained from a mass cytometry experiment; the real value of this data lies in the integration of protein abundance with gene expression.
+
+## Integration with transcriptomic results
+
+### By intersection
+
+### By combined analysis
 
 ## Session Info {-}
 
