@@ -58,7 +58,7 @@ This reduces the risk of removing cell types with low RNA content, especially in
 
 ```{r quality-control}
 stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=which(location=="MT")))
-high.mito <- isOutlier(stats$subsets_Mito_percent, nmads=3, type="higher")
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
 sce.pbmc <- sce.pbmc[,!high.mito]
 ```
 
@@ -169,7 +169,7 @@ plotTSNE(sce.pbmc, colour_by="cluster")
 
 ```{r, echo=FALSE}
 chosen.mono <- 7
-chosen.macro <- 5
+chosen.macro <- 12
 ```
 
 ```{r}
@@ -183,7 +183,7 @@ compared to macrophages in cluster `r chosen.macro`.
 
 ```{r}
 marker.set <- markers[["7"]]
-as.data.frame(marker.set[1:40,1:2])
+as.data.frame(marker.set[1:30,1:2])
 ```
 
 ```{r, echo=FALSE, results="hide"}
@@ -191,9 +191,15 @@ as.data.frame(marker.set[1:40,1:2])
 stopifnot(identical(marker.set, markers[[chosen.mono]]))
 
 # Checking the cluster is what we wanted.
-topset <- rownames(marker.set)[1:40]
+topset <- rownames(marker.set)[1:30]
 stopifnot(all(c("CD14", "CD68", "MNDA") %in% topset))
 stopifnot(marker.set["FCGR3A",paste0("logFC.", chosen.macro)] < -1)
+
+# Checking that the chosen.macro is actually a macrophage.
+alt.marker.set <- markers[[chosen.macro]]
+alt.topset <- rownames(alt.marker.set)[1:40]
+stopifnot(all(c("FCGR3A", "CD68", "MNDA") %in% alt.topset))
+stopifnot(alt.marker.set["CD14",paste0("logFC.", chosen.mono)] < -1)
 ```
 
 ```{r, fig.wide=TRUE, fig.asp=0.8}

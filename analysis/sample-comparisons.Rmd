@@ -136,7 +136,7 @@ The corresponding summed count vectors are likely to be highly variable and thus
 The exact definition of "very low" will vary, but in this case, we define it to be log-library sizes that are more than 3 median absolute deviations from the median.
 
 ```{r}
-discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower", nmads=3)
+discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower")
 y <- y[,!discarded]
 summary(discarded)
 ```
@@ -226,8 +226,7 @@ for (i in unique(summed$celltype.mapped)) {
     current <- summed[,i==summed$celltype.mapped]
     y <- DGEList(counts(current), samples=colData(current))
 
-    discarded <- isOutlier(colSums(counts(current)), 
-        log=TRUE, type="lower", nmads=3)
+    discarded <- isOutlier(colSums(counts(current)), log=TRUE, type="lower")
     y <- y[,!discarded]
     y <- y[filterByExpr(y, group=current$tomato),]
     y <- calcNormFactors(y)

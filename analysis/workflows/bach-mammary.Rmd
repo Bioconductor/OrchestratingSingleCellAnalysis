@@ -41,7 +41,7 @@ unfiltered <- sce.mam
 ```{r quality-control}
 is.mito <- rowData(sce.mam)$SEQNAME == "MT"
 stats <- perCellQCMetrics(sce.mam, subsets=list(Mito=which(is.mito)))
-qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent", nmads=3)
+qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent")
 sce.mam <- sce.mam[,!qc$discard]
 ```
 
