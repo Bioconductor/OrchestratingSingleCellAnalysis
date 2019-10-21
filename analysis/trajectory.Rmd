@@ -15,13 +15,10 @@ chapterPreamble()
 
 In contrast to describing population heterogenity using discrete labels (see Section \@ref(clustering-graph) for an example), some biological processes, such as cell differentiation, are better described and represented as a continuum of dynamic changes in cell states or cell types. 
 This idea is often referred to as _trajectory analysis_ (or _pseudotime inference_ or lineage reconstruction) where a _trajectory_ is a potential path that a cell follows along this continuum and _pseudotime_ is the ordering induced by the this path. 
-Using scRNA-seq data, the most common approaches for trajectory analysis [@saelens2019trajectory] are based on trees, probabilistic models or graphical models (see \@ref(trajectory-ideas) Section for more details), however trajectory analysis is not necessarily limited to scRNA-seq data (e.g. epigenomic or proteomic data). 
+Using scRNA-seq data, the most common approaches for trajectory analysis [@saelens2019trajectory] are based on trees, probabilistic models or graphical models (see \@ref(trajectory-ideas) Section for more details), however trajectory analysis is not necessarily limited to scRNA-seq data, for example it could theoretically could be applied to epigenomic or proteomic data. 
 
 In this section, we will walk through a minimal analysis to perform trajectory analysis and psuedotime inference for single-cells along a continuum. 
 We will demonstrate this with the [`r Biocpkg("slingshot")`](https://bioconductor.org/packages/slingshot) Bioconductor package. 
-The goal of slingshot is to use clusters of cells to uncover global structure and convert this structure into smooth lineages represented by one-dimensional variables, called "pseudotime".
-The package offers tools to learn the cluster relationships in an unsupervised or semi-supervised manner and constructing smooth curves representing each lineage, along with visualization methods for each step.
-Slingshot was designed to model developmental trajectories in scRNA-seq data and serve as a component in an analysis pipeline after dimensionality reduction and clustering. 
 
 We will use the 10X peripheral blood mononuclear cell (PBMC) data in the Bioconductor data package `r Biocpkg("TENxPBMCData")` that we have been using in previous chapters. 
 
@@ -44,14 +41,17 @@ reducedDimNames(pbmc4k)
 ```
 
 We will use this data in the example below, but first we will give a quick overview of the field, but refer the reader to outside references for more details [@saelens2019trajectory]. 
+## Estimating pseudotime {#trajectory-ideas} 
 
-## Quick overview of trajetory inference methods {#trajectory-ideas} 
+Most trajectory methods start from a count matrix with genes along the rows and cells along the columns and then apply feature selection or a dimensionality reduction method. 
+Next, these methods commonly infer pseudotime and/or branching trajectories using unsupervised clustering with a combination of minimum spanning trees (MST), principal curves (or graph fitting), or random walks and diffusion operations on graphs [@Laehnemann2019-twelvechallenges]. 
 
+In this chapter, we will demonstrate trajectory inference with [`r Biocpkg("slingshot")`](https://bioconductor.org/packages/slingshot). 
+The goal of slingshot is to use clusters of cells to uncover global structure and convert this structure into smooth lineages represented by one-dimensional variables, called "pseudotime".
+The package offers tools to learn the cluster relationships in an unsupervised or semi-supervised manner and constructing smooth curves representing each lineage, along with visualization methods for each step.
+Slingshot was designed to model developmental trajectories in scRNA-seq data and serve as a component in an analysis pipeline after dimensionality reduction and clustering. 
 
-## Estimating pseudotime 
-
-At this point, we have everything we need to run slingshot. 
-This is a two-step process composed of identifying the global lineage structure with a cluster-based minimum spanning tree (MST) and fitting simultaneous principal curves to describe each lineage.
+The package implements a two-step process composed of identifying the global lineage structure with a cluster-based minimum spanning tree and fitting simultaneous principal curves to describe each lineage.
 
 These two steps can be run separately with the `getLineages()` and `getCurves()` functions, or together with the wrapper function, `slingshot()` (recommended). 
 Here, we use the wrapper function for the analysis of the single-trajectory dataset. 
