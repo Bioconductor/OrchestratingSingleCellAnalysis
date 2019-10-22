@@ -286,17 +286,22 @@ chosen.cluster <- "12"
 
 One of the benefits of subclustering is that we can use the annotation on the tag-derived clusters to facilitate annotation of each subcluster.
 If we knew that cluster `X` contained T cells from the tag-derived data, there is no need to identify subclusters `X.1`, `X.2`, etc. as T cells from scratch; rather, we can focus on the more subtle (and interesting) differences between the subclusters using `findMarkers()`.
-For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on _GZMH_ activity (Figure \@ref(fig:gzmh-cd8-t)).
+For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on granzyme expression (Figure \@ref(fig:gzmh-cd8-t)).
 
-```{r gzmh-cd8-t, fig.cap="Distribution of log-normalized expression values of _GZMH_ in transcript-derived subclusters of a tag-derived subpopulation of CD8^+^ T cells."}
+```{r gzmh-cd8-t, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of log-normalized expression values of _GZMH_ (left) and _GZHK_ (right) in transcript-derived subclusters of a tag-derived subpopulation of CD8^+^ T cells."}
 of.interest <- "12"
-plotExpression(all.sce[[of.interest]], "ENSG00000100450", x="cluster")
+plotExpression(all.sce[[of.interest]], x="cluster",
+    features=c("ENSG00000100450", "ENSG00000113088"))
 ```
 
 ```{r, echo=FALSE}
 stopifnot(identical(of.interest, chosen.cluster))
 stopifnot(averaged["CD3",of.interest] > 10)
 stopifnot(averaged["CD8a",of.interest] > 10)
+
+stopifnot(length(all.markers[[chosen.cluster]])==2L)
+stopifnot("ENSG00000100450" %in% rownames(all.markers[[chosen.cluster]][[1]])[1:10])
+stopifnot("ENSG00000113088" %in% rownames(all.markers[[chosen.cluster]][[2]])[1:10])
 ```
 
 Subclustering is also conceptually appealing as it avoids comparing log-fold changes in tag abundances with log-fold changes in gene expression.
