@@ -103,7 +103,7 @@ str(candidates)
 sce.ref <- logNormCounts(sce.ref)
 phase.stats <- pairwiseWilcox(logcounts(sce.ref), sce.ref$phase, 
     direction="up", subset.row=candidates)
-cycle.markers <- getTopMarkers(phase.stats[[1]], phase.stats[[2]], n=20)
+cycle.markers <- getTopMarkers(phase.stats[[1]], phase.stats[[2]])
 ```
 
 We use the identified markers to assign labels to the 416B data with the `SingleR()` function.
@@ -139,6 +139,10 @@ gridExtra::grid.arrange(
     plotExpression(sce.ref, features="ENSMUSG00000027985", x="phase"),
     plotExpression(sce.416b, features="Lef1", x="cluster"),
     ncol=2)
+```
+
+```{r, echo=FALSE}
+stopifnot("ENSMUSG00000027985" %in% cycle.markers$G1$G2M)
 ```
 
 Thus, a healthy dose of skepticism is required when interpreting these assignments.
