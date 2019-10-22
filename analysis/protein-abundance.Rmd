@@ -181,10 +181,10 @@ This is loosely based on a similar approach for normalization of ChIP-seq data b
     stopifnot(diff(range(med.clust)) > 1)
     ```
 
-3. Some experiments will include antibodies to uninteresting "control" proteins such as MHC components that are constitutively expressed on every cell.
-As with spike-in normalization (Section \@ref(spike-norm)), we could make the assumption that these control tags should not be differentially expressed between cells.
+3. Some experiments will include antibodies such as isotype controls which maintain similar properties to a primary antibody but lack a specific target. In our example dataset, the three immunoglobulin "IgG" readouts are isotype controls derived from mice.
+As with spike-in normalization (Section \@ref(spike-norm)), we could make the assumption that these control tags should not be differentially expressed between cells. 
 Any difference thus represents some bias that should be normalized by defining control-based size factors from the sum of counts over all control tags.
-We demonstrate this approach below by pretending that all immunoglobins are control proteins, though obviously one should use something more sensible in real analyses.
+We demonstrate this approach below by using the immunoglobulins as control proteins, calculating size factors based on their abundance.
 
     ```{r}
     controls <- grep("^Ig", rownames(altExp(sce)))
@@ -196,7 +196,7 @@ We demonstrate this approach below by pretending that all immunoglobins are cont
     This represents a reversal from the behavior of the analogous normalization strategies for endogenous transcripts, where spike-in normalization preserves differences in total RNA content while deconvolution does not.
 
 We suggest using the DESeq-like size factors by default, as these are the most general and eliminate the major problems with composition biases.
-Running `logNormCounts()` will then perform scaling normalization and log-transformation for both the endogenous transcripts and the tags.
+Running `logNormCounts()` will then perform scaling normalization and log-transformation for both the endogenous transcripts and the tags using the separately derived size factors.
 
 ```{r}
 sizeFactors(altExp(sce)) <- sf.amb
