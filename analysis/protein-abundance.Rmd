@@ -242,9 +242,70 @@ pheatmap(averaged - rowMeans(averaged),
 
 Of course, this provides little information beyond what we could have obtained from a mass cytometry experiment; the real value of this data lies in the integration of protein abundance with gene expression.
 
-## Integration with transcriptomic results
+## Integration with gene expression data
 
-### By intersection
+### By subclustering
+
+In the simplest approach to integration, we take cells in each of the tag-derived clusters and perform subclustering using the transcript data.
+This is an _in silico_ equivalent to an experiment that performs FACS to isolate cell types followed by scRNA-seq for further characterization.
+We exploit the fact that the tag abundances are cleaner (larger counts, stronger signal) for more robust identification of broad cell types, and use the gene expression data to identify more subtle changes in the rest of the transcriptome. 
+We demonstrate below by looping over all of the tag-derived clusters and subclustering on gene expression:
+
+```{r}
+set.seed(101010)
+all.sce <- all.markers <- list()
+for (i in as.character(unique(clusters))) {
+    chosen <- clusters==i
+    x <- sce[,chosen]
+    x <- logNormCounts(x)
+
+    dec <- modelGeneVar(x)
+    top <- getTopHVGs(dec, prop=0.1)
+    x <- runPCA(x, subset_row=top, ncomponents=25)
+
+    g.trans <- buildSNNGraph(x, use.dimred="PCA")
+    x$cluster <- igraph::cluster_walktrap(g.trans)$membership
+    x$cluster <- paste0("SUB_", x$cluster) # avoid confusion with parents.
+
+    all.sce[[i]] <- x
+    all.markers[[i]] <- findMarkers(x, x$cluster, direction="up")
+}
+
+# Checking out how many subclusters are in each tag-derived cluster.
+lengths(all.markers)
+```
+
+```{r, echo=FALSE}
+chosen.cluster <- "12"
+```
+
+One of the benefits of subclustering is that we can use the annotation on the tag-derived clusters to facilitate annotation of each subcluster.
+If we knew that cluster `X` contained T cells from the tag-derived data, there is no need to identify subclusters `X.1`, `X.2`, etc. as T cells from scratch; rather, we can focus on the more subtle (and interesting) differences between the subclusters using `findMarkers()`.
+For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on _GZMH_ activity (Figure \@ref(fig:gzmh-cd8-t)).
+
+```{r gzmh-cd8-t, fig.cap="Distribution of log-normalized expression values of _GZMH_ in transcript-derived subclusters of a tag-derived subpopulation of CD8^+^ T cells."}
+of.interest <- "12"
+plotExpression(all.sce[[of.interest]], "ENSG00000100450", x="cluster")
+```
+
+```{r, echo=FALSE}
+stopifnot(identical(of.interest, chosen.cluster))
+stopifnot(averaged["CD3",of.interest] > 10)
+stopifnot(averaged["CD8a",of.interest] > 10)
+```
+
+Subclustering is also conceptually appealing as it avoids comparing log-fold changes in tag abundances with log-fold changes in gene expression.
+This ensures that orthogonal variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner tag abundances.
+The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as we have previously discussed in Section \@ref(subclustering).
+This requires some additional checks to ensure that each subcluster has similar tag abundances, e.g., using a heatmap as in Figure \@ref(fig:heat-tags) or with a series of plots like in Figure \@ref(fig:subcluster-tag-dist).
+
+```{r subcluster-tag-dist, fig.asp=0.5, fig.wide=TRUE, fig.cap="Distribution of log-normalized abundances of all tags in each subcluster of the CD8^+^ T cell population."}
+# Plotting the *expression* from the altExp in combination
+# with the *cluster* from the main experiment.
+plotExpression(altExp(all.sce[[of.interest]]), 
+    x=I(all.sce[[of.interest]]$cluster),
+    features=c("CD3", "CD8a"))
+```
 
 ### By combined analysis
 
