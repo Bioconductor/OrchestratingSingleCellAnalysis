@@ -305,7 +305,7 @@ stopifnot("ENSG00000113088" %in% rownames(all.markers[[chosen.cluster]][[2]])[1:
 ```
 
 Subclustering is also conceptually appealing as it avoids comparing log-fold changes in tag abundances with log-fold changes in gene expression.
-This ensures that orthogonal variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner tag abundances.
+This ensures that variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner tag abundances.
 The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as we have previously discussed in Section \@ref(subclustering).
 This requires some additional checks to ensure that each subcluster has similar tag abundances, e.g., using a heatmap as in Figure \@ref(fig:heat-tags) or with a series of plots like in Figure \@ref(fig:subcluster-tag-dist).
 
@@ -318,6 +318,42 @@ plotExpression(altExp(all.sce[[of.interest]]),
 ```
 
 ### By combined analysis
+
+Another strategy is to combine the transcript and tag data prior to or during the relevant steps of the analysis.
+This may be more convenient to implement and interpret compared to the two-step subclustering approach described above.
+A very simple _ad hoc_ approach is to literally combine the transcript-derived PCs with the log-expression matrix for the tags and use the resulting combined matrix for all downstream steps (Figure \@ref(fig:combined-tsne-naive)).
+The clustering algorithm can then directly capture differences in both transcript expression and tag abundances without the need for additional rounds of subclustering.
+
+```{r combined-tsne-naive, fig.cap="$t$-SNE plot of the PBMC dataset based on combined tag and transcript data. Each point is a cell and is colored according to the assigned cluster."}
+sce <- logNormCounts(sce)
+dec <- modelGeneVar(sce)
+top <- getTopHVGs(dec, prop=0.1)
+sce <- runPCA(sce, subset_row=top, ncomponents=25)
+
+# Literally cbind'ing the matrices:
+reducedDim(sce, "combined") <- cbind(reducedDim(sce), 
+    t(logcounts(altExp(sce))))
+
+g <- buildSNNGraph(sce, use.dimred="combined")
+clusters <- igraph::cluster_walktrap(g)$membership
+sce$cluster <- factor(clusters)
+
+set.seed(1000010)
+sce <- runTSNE(sce, dimred="combined")
+plotTSNE(sce, colour_by="cluster", text_by="cluster")
+```
+
+While convenient, this approach increases the risk that variation in the transcript data may overwhelm any signal in the tag data, especially as there are orders of magnitude more HVGs than tags.
+We observe this effect in Figure \@ref(fig:combined-heat) where several combined clusters contain cells from multiple tag-derived clusters, indicating that partitionings identified from the tag-only data are lost in the combined analysis.
+This leads us to the more general question - how much weight should be given to heterogeneity in the tag data compared to that in the transcript data? - which is difficult to answer objectively.
+
+```{r combined-heat, fig.cap="Distribution of cells in the combined clusters (rows) or the tag-only clusters (columns), where the color intensity is proportional to the log-number of cells with that combination of cluster labels."}
+correspondence <- table(Both=sce$cluster, TagOnly=altExp(sce)$cluster)
+pheatmap(log10(correspondence+10), cluster_cols=FALSE, cluster_rows=FALSE,
+    color=colorRampPalette(c("white", "blue"))(101))
+```
+
+A more sophisticated approach to combined analysis
 
 ## Session Info {-}
 
