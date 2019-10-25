@@ -269,11 +269,11 @@ for (i in as.character(unique(clusters))) {
     x <- runPCA(x, subset_row=top, ncomponents=25)
 
     g.trans <- buildSNNGraph(x, use.dimred="PCA")
-    x$cluster <- igraph::cluster_walktrap(g.trans)$membership
-    x$cluster <- paste0("SUB_", x$cluster) # avoid confusion with parents.
+    x$subcluster <- igraph::cluster_walktrap(g.trans)$membership
+    x$subcluster <- paste0("SUB_", x$subcluster) # avoid confusion with parents.
 
     all.sce[[i]] <- x
-    all.markers[[i]] <- findMarkers(x, x$cluster, direction="up")
+    all.markers[[i]] <- findMarkers(x, x$subcluster, direction="up")
 }
 
 # Checking out how many subclusters are in each tag-derived cluster.
@@ -284,13 +284,15 @@ lengths(all.markers)
 chosen.cluster <- "12"
 ```
 
-One of the benefits of subclustering is that we can use the annotation on the tag-derived clusters to facilitate annotation of each subcluster.
+Another benefit of subclustering is that we can use the annotation on the tag-derived clusters to facilitate annotation of each subcluster.
 If we knew that cluster `X` contained T cells from the tag-derived data, there is no need to identify subclusters `X.1`, `X.2`, etc. as T cells from scratch; rather, we can focus on the more subtle (and interesting) differences between the subclusters using `findMarkers()`.
 For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on granzyme expression (Figure \@ref(fig:gzmh-cd8-t)).
+Subclustering is also conceptually appealing as it avoids comparing log-fold changes in tag abundances with log-fold changes in gene expression.
+This ensures that variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner tag abundances.
 
 ```{r gzmh-cd8-t, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of log-normalized expression values of _GZMH_ (left) and _GZHK_ (right) in transcript-derived subclusters of a tag-derived subpopulation of CD8^+^ T cells."}
 of.interest <- "12"
-plotExpression(all.sce[[of.interest]], x="cluster",
+plotExpression(all.sce[[of.interest]], x="subcluster",
     features=c("ENSG00000100450", "ENSG00000113088"))
 ```
 
@@ -304,56 +306,62 @@ stopifnot("ENSG00000100450" %in% rownames(all.markers[[chosen.cluster]][[1]])[1:
 stopifnot("ENSG00000113088" %in% rownames(all.markers[[chosen.cluster]][[2]])[1:10])
 ```
 
-Subclustering is also conceptually appealing as it avoids comparing log-fold changes in tag abundances with log-fold changes in gene expression.
-This ensures that variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner tag abundances.
-The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as we have previously discussed in Section \@ref(subclustering).
+The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as previously discussed in Section \@ref(subclustering).
 This requires some additional checks to ensure that each subcluster has similar tag abundances, e.g., using a heatmap as in Figure \@ref(fig:heat-tags) or with a series of plots like in Figure \@ref(fig:subcluster-tag-dist).
 
 ```{r subcluster-tag-dist, fig.asp=0.5, fig.wide=TRUE, fig.cap="Distribution of log-normalized abundances of all tags in each subcluster of the CD8^+^ T cell population."}
-# Plotting the *expression* from the altExp in combination
-# with the *cluster* from the main experiment.
-plotExpression(altExp(all.sce[[of.interest]]), 
-    x=I(all.sce[[of.interest]]$cluster),
+sce.cd8 <- all.sce[[of.interest]]
+plotExpression(altExp(sce.cd8), x=I(sce.cd8$subcluster),
     features=c("CD3", "CD8a"))
 ```
 
-### By combined analysis
+### By differential testing 
 
-Another strategy is to combine the transcript and tag data prior to or during the relevant steps of the analysis.
-This may be more convenient to implement and interpret compared to the two-step subclustering approach described above.
-A very simple _ad hoc_ approach is to literally combine the transcript-derived PCs with the log-expression matrix for the tags and use the resulting combined matrix for all downstream steps (Figure \@ref(fig:combined-tsne-naive)).
-The clustering algorithm can then directly capture differences in both transcript expression and tag abundances without the need for additional rounds of subclustering.
+In more interesting applications, protein targets are chosen that reflect some functional activity rather than cell type.
+(Because, frankly, the latter is not particularly hard to infer from transcript data in most cases.)
+A particularly elegant example is the use of antibodies targeting influenza peptide-MHCII complexes in T cells, albeit for mass cytometry [@fehlings2018multiplex].
+If the aim is to test for differences in the functional readout, a natural analysis strategy is to use the transcript data for clustering (Figure \@ref(tsne-naive)) and perform differential testing between clusters or conditions for the relevant tags.
 
-```{r combined-tsne-naive, fig.cap="$t$-SNE plot of the PBMC dataset based on combined tag and transcript data. Each point is a cell and is colored according to the assigned cluster."}
+```{r tsne-naive, fig.cap="$t$-SNE plot of the PBMC dataset based on the transcript data. Each point is a cell and is colored according to the assigned cluster."}
 sce <- logNormCounts(sce)
 dec <- modelGeneVar(sce)
 top <- getTopHVGs(dec, prop=0.1)
 sce <- runPCA(sce, subset_row=top, ncomponents=25)
 
-# Literally cbind'ing the matrices:
-reducedDim(sce, "combined") <- cbind(reducedDim(sce), 
-    t(logcounts(altExp(sce))))
-
-g <- buildSNNGraph(sce, use.dimred="combined")
+g <- buildSNNGraph(sce, use.dimred="PCA")
 clusters <- igraph::cluster_walktrap(g)$membership
 sce$cluster <- factor(clusters)
 
 set.seed(1000010)
-sce <- runTSNE(sce, dimred="combined")
+sce <- runTSNE(sce, dimred="PCA")
 plotTSNE(sce, colour_by="cluster", text_by="cluster")
 ```
 
-While convenient, this approach increases the risk that variation in the transcript data may overwhelm any signal in the tag data, especially as there are orders of magnitude more HVGs than tags.
-We observe this effect in Figure \@ref(fig:combined-heat) where several combined clusters contain cells from multiple tag-derived clusters, indicating that partitionings identified from the tag-only data are lost in the combined analysis.
-This leads us to the more general question - how much weight should be given to heterogeneity in the tag data compared to that in the transcript data? - which is difficult to answer objectively.
-
-```{r combined-heat, fig.cap="Distribution of cells in the combined clusters (rows) or the tag-only clusters (columns), where the color intensity is proportional to the log-number of cells with that combination of cluster labels."}
-correspondence <- table(Both=sce$cluster, TagOnly=altExp(sce)$cluster)
-pheatmap(log10(correspondence+10), cluster_cols=FALSE, cluster_rows=FALSE,
-    color=colorRampPalette(c("white", "blue"))(101))
+```{r, echo=FALSE}
+chosen.cluster <- 18
 ```
 
-A more sophisticated approach to combined analysis
+We demonstrate this approach using `findMarkers()` to test for differences in tag abundance between clusters (Chapter \@ref(marker-detection)).
+For example, if PD-1 was a functional readout for something - say, T cell exhaustion [@pauken2015overcoming] - we might be interested in its upregulation in cluster `r chosen.cluster`.
+Methods from Chapter \@ref(multi-sample-comparisons) can be similarly used to test for differences between conditions.
+
+```{r heat-pd-1, fig.cap=sprintf("Heatmap of log-fold changes in tag abundances in cluster %s compared to all other clusters identified from transcript data in the PBMC data set.", chosen.cluster)}
+markers <- findMarkers(altExp(sce), sce$cluster)
+
+of.interest <- 18
+pheatmap(as.matrix(markers[[of.interest]][,-c(1:3)]), 
+    breaks=seq(-3, 3, length.out=101))
+```
+
+```{r, echo=FALSE, results="hide"}
+stopifnot(identical(chosen.cluster, of.interest))
+stopifnot(unlist(markers[[of.interest]]["PD-1",][-c(1:3)]) > 1)
+```
+
+The main appeal of this approach is that it avoids data snooping (Section \@ref(from-data-snooping)) as the clusters are defined without knowledge of the tags.
+This improves the statistical rigor of the subsequent differential testing on the tag abundances (though only to some extent; other problems are still present, such as the lack of true replication in between-cluster comparisons). 
+From a practical perspective, this approach yields fewer clusters and reduces the amount of work involved in manual annotation, especially if there are multiple functional states (e.g., stressed, apoptotic, stimulated) for each cell type.
+However, it is fundamentally limited to per-tag inferences; identification of subpopulations with interesting combinations of tag abundances instead requires high-dimensional analyses like clustering.
 
 ## Session Info {-}
 
