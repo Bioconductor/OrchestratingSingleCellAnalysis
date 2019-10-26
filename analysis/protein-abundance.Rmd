@@ -221,7 +221,7 @@ Moreover, each tag is often chosen to capture some orthogonal biological signal,
 This suggests we should directly apply downstream procedures like clustering and visualization on the log-normalized abundance matrix for the tags (Figure \@ref(fig:tsne-tags)).
 
 ```{r tsne-tags, fig.cap="$t$-SNE plot generated from the log-normalized abundance of each tag in the PBMC dataset. Each point is a cell and is labelled according to its assigned cluster."}
-# Set d=NA for no PCA.
+# Set d=NA so that the function does not perform PCA.
 g <- buildSNNGraph(altExp(sce), d=NA) 
 clusters <- igraph::cluster_walktrap(g)$membership
 
@@ -315,9 +315,94 @@ plotExpression(altExp(sce.cd8), x=I(sce.cd8$subcluster),
     features=c("CD3", "CD8a"))
 ```
 
+### By combined clustering
+
+Alternatively, we can combine the information from both sets of features into a single data structure for use in downstream analyses.
+This is logistically convenient as the combined structure is compatible with routine analysis workflows for transcript-only data.
+To illustrate, we first perform some standard steps on the transcript count matrix:
+
+```{r}
+sce.com <- logNormCounts(sce)
+dec.com <- modelGeneVar(sce.com)
+top.com <- getTopHVGs(dec.com, prop=0.1)
+```
+
+The simplest version of this idea involves literally combining the log-normalized abundance matrix for the tags with the log-expression matrix (or its compacted form, the matrix of PCs) to obtain a single matrix for use in downstream procedures.
+This requires some reweighting to balance the contribution of the transcript and tag data to the total variance in the combined matrix, especially given that the former has around 100-fold more features than the latter.
+We see that the number of clusters is slightly higher than that from the tag data alone, consistent with the introduction of additional heterogeneity when the two feature sets are combined.
+
+```{r}
+# TODO: push this into a function somewhere.
+library(DelayedMatrixStats)
+transcript.data <- logcounts(sce.com)[top.com,,drop=FALSE]
+transcript.var <- sum(rowVars(DelayedArray(transcript.data)))
+tag.data <- logcounts(altExp(sce.com))
+tag.var <- sum(rowVars(DelayedArray(tag.data)))
+
+reweight <- sqrt(transcript.var/tag.var)
+combined <- rbind(transcript.data, tag.data*reweight)
+
+# 'buildSNNGraph' conveniently performs the PCA for us if requested. We use
+# more PCs in 'd' to capture more variance in both sets of features. Note that
+# this uses IRLBA by default so we need to set the seed.
+set.seed(100010)
+g.com <- buildSNNGraph(combined, d=50) 
+clusters.com <- igraph::cluster_walktrap(g.com)$membership
+table(clusters.com)
+```
+
+```{r, echo=FALSE}
+stopifnot(length(unique(clusters.com)) > length(unique(altExp(sce)$cluster)))
+```
+
+A more sophisticated variant of this idea uses the UMAP algorithm [@mcInnes2018umap] to integrate information from the two sets of features.
+Very loosely speaking, we can imagine this as an intersection of the nearest neighbor graphs formed from each set, which effectively encourages the formation of communities of cells that are close in both feature spaces.
+Here, we perform two rounds of UMAP; one round retains high dimensionality for a faithful representation of the data during clustering, while the other performs dimensionality reduction for a pretty visualization.
+This yields an extremely fine-grained clustering in Figure \@ref(fig:combined-umap), which is attributable to the stringency of intersection operations for defining the local neighborhood. 
+
+```{r combined-umap, fig.cap="UMAP plot obtained by combining transcript and tag data in the PBMC dataset. Each point represents a cell and is colored according to its assigned cluster."}
+set.seed(1001010)
+sce.com <- runPCA(sce.com, subset_row=top.com, ncomponents=25)
+transcript.data2 <- reducedDim(sce.com, "PCA")
+tag.data2 <- t(logcounts(altExp(sce.com)))
+
+# Combining without dimensionality reduction, for clustering:
+combined2 <- cbind(transcript.data2, tag.data2)
+metric <- list(
+    euclidean=seq_len(ncol(transcript.data2)),
+    euclidean=seq_len(ncol(tag.data2))
+)
+
+library(uwot)
+set.seed(0101110)
+umap.com <- umap(combined2, metric=metric, n_components=ncol(combined2))
+g.com2 <- buildSNNGraph(umap.com, transposed=TRUE, d=NA)
+clusters.com2 <- igraph::cluster_walktrap(g.com2)$membership
+
+# Combining again with dimensionality reduction, for visualization:
+set.seed(0101110)
+umap.vis <- umap(combined2, metric=metric)
+
+reducedDim(sce.com, "combinedUMAP") <- umap.vis
+sce.com$cluster <- clusters.com2
+plotReducedDim(sce.com, "combinedUMAP", 
+    colour_by="cluster", text_by="cluster")
+```
+
+An even more sophisticated approach uses factor analysis to identify common and unique factors of variation in each feature set.
+The set of factors can then be used as low-dimensional coordinates for each cell in downstream analyses, though a number of additional statistics are also computed that may be useful, e.g., the contribution of each feature to each factor.
+
+```{r}
+# Waiting for Godot - I mean, MOFA2...
+```
+
+These combined strategies are convenient but do not consider (or implicitly make assumptions about) the importance of heterogeneity in the tag data relative to the transcript data.
+For example, the UMAP approach takes equal contributions from both sets of features to the intersection, which may not be appropriate if the biology of interest is concentrated in only one set.
+More generally, this relates to the potential for uninteresting noise in one set to interfere with biological signal in the other set, a concern that is largely avoided during subclustering.
+
 ### By differential testing 
 
-In more interesting applications, protein targets are chosen that reflect some functional activity rather than cell type.
+In more interesting applications of this technology, protein targets are chosen that reflect some functional activity rather than cell type.
 (Because, frankly, the latter is not particularly hard to infer from transcript data in most cases.)
 A particularly elegant example is the use of antibodies targeting influenza peptide-MHCII complexes in T cells, albeit for mass cytometry [@fehlings2018multiplex].
 If the aim is to test for differences in the functional readout, a natural analysis strategy is to use the transcript data for clustering (Figure \@ref(tsne-naive)) and perform differential testing between clusters or conditions for the relevant tags.
@@ -326,6 +411,8 @@ If the aim is to test for differences in the functional readout, a natural analy
 sce <- logNormCounts(sce)
 dec <- modelGeneVar(sce)
 top <- getTopHVGs(dec, prop=0.1)
+
+set.seed(1001010)
 sce <- runPCA(sce, subset_row=top, ncomponents=25)
 
 g <- buildSNNGraph(sce, use.dimred="PCA")
@@ -338,7 +425,7 @@ plotTSNE(sce, colour_by="cluster", text_by="cluster")
 ```
 
 ```{r, echo=FALSE}
-chosen.cluster <- 18
+chosen.cluster <- 16
 ```
 
 We demonstrate this approach using `findMarkers()` to test for differences in tag abundance between clusters (Chapter \@ref(marker-detection)).
@@ -348,14 +435,14 @@ Methods from Chapter \@ref(multi-sample-comparisons) can be similarly used to te
 ```{r heat-pd-1, fig.cap=sprintf("Heatmap of log-fold changes in tag abundances in cluster %s compared to all other clusters identified from transcript data in the PBMC data set.", chosen.cluster)}
 markers <- findMarkers(altExp(sce), sce$cluster)
 
-of.interest <- 18
-pheatmap(as.matrix(markers[[of.interest]][,-c(1:3)]), 
+of.interest <- markers[[16]]
+pheatmap(as.matrix(of.interest[,-c(1:3)]), 
     breaks=seq(-3, 3, length.out=101))
 ```
 
 ```{r, echo=FALSE, results="hide"}
-stopifnot(identical(chosen.cluster, of.interest))
-stopifnot(unlist(markers[[of.interest]]["PD-1",][-c(1:3)]) > 1)
+stopifnot(identical(markers[[chosen.cluster]], of.interest))
+stopifnot(unlist(of.interest["PD-1",][-c(1:3)]) > 1)
 ```
 
 The main appeal of this approach is that it avoids data snooping (Section \@ref(from-data-snooping)) as the clusters are defined without knowledge of the tags.
