@@ -394,6 +394,11 @@ Discerning readers will notice the use of `which()`, which conveniently removes 
 sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
 ```
 
+It is worth pointing out that, at this point, we do not attempt to remove the ambient contamination from each library.
+Accurate quantification of the contamination rate in each cell is difficult as it generally requires some prior biological knowledge about genes that are expected to have mutually exclusive expression profiles _and_ are highly abundant in the ambient solution [@young2018soupx].
+Fortunately, ambient contamination usually has little effect on the downstream conclusions for routine analyses; cell type identities are usually easy enough to determine from the affected genes, notwithstanding a (mostly harmless) low background level of expression for marker genes that should be unique to a cell type.
+However, more susceptible analyses may require specific remedies like those discussed in Section \@ref(ambient-problems).
+
 ### Relationship with other QC metrics
 
 While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells.

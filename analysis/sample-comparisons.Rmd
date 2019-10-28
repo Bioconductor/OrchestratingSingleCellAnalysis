@@ -478,7 +478,7 @@ The moral of the story is that DA and DE analyses are simply two different persp
 For any comprehensive characterization of differences between populations, it is usually necessary to consider both analyses.
 Indeed, they complement each other almost by definition, e.g., clustering parameters that reduce DE will increase DA and vice versa.
 
-## Avoiding problems with ambient RNA
+## Avoiding problems with ambient RNA {#ambient-problems}
 
 ### Motivation
 
@@ -561,7 +561,7 @@ stopifnot(identical(rownames(ambient), rownames(summed.neural)))
 stopifnot(identical(as.integer(colnames(ambient)), summed.neural$sample))
 ```
 
-Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx] and subtract it to remove the effects of ambient contamination.
+Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx].
 In our case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination rate in each sample.
 
 ```{r}
@@ -611,7 +611,7 @@ subtracted[is.hbb,]
 
 Another tempting approach is to use interaction models to implicitly subtract the ambient effect during GLM fitting.
 The assumption would be that, for genuine DEGs, the log-fold change within cells is larger in magnitude than those in the ambient solution (where the effect would be diluted by contributions from cell types where the gene is not DE).
-However, this is not always the case - a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to a rather awkward conclusion.
+However, this is not always the case; a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to the rather awkward conclusion that the WT neural crest cells are expressing hemoglobin beyond that explained by ambient contamination.
 
 ```{r}
 # Re-using keep.neural to simplify comparison.
@@ -629,6 +629,7 @@ topTags(res.ambient, n=10)
 # Checking that the hemoglobins are back!
 tab <- topTags(res.ambient)$table
 stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
+stopifnot(abs(tab["Hbb-y","logFC"]) < abs(topTags(res.neural)$table["Hbb-y", "logFC"]))
 ```
 
 <!--
@@ -689,5 +690,3 @@ head(final, 10)
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-
