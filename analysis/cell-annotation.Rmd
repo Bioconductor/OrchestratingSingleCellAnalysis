@@ -278,8 +278,7 @@ extractCached("workflows/bach-mammary", "clustering", "sce.mam")
 ```
 
 ```{r}
-markers.mam <- findMarkers(sce.mam, sce.mam$cluster,
-    direction="up", lfc=1)
+markers.mam <- findMarkers(sce.mam, sce.mam$cluster, direction="up", lfc=1)
 ```
 
 ```{r, echo=FALSE}
@@ -321,8 +320,8 @@ Indeed, a closer examination of the marker list indicates that this cluster upre
 ```{r, echo=FALSE}
 # Checking that the above statements are correct.
 stopifnot(c("GO:0035148", "GO:0022408", "GO:0019432") %in% head(rownames(go.useful), 20))
-chosen <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
-stopifnot(all(as.matrix(chosen)>0))
+milk <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
+stopifnot(all(as.matrix(milk)>0))
 ```
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
@@ -349,6 +348,52 @@ Gene set testing of marker lists is a reliable approach for determining if pathw
 As the top marker genes are simply DEGs, we can directly apply well-established procedures for testing gene enrichment in DEG lists (see [here](https://bioconductor.org/packages/release/BiocViews.html#___GeneSetEnrichment) for relevant packages).
 This contrasts with the `r Biocpkg("AUCell")` approach where scores are not easily comparable across cells.
 The downside is that all conclusions are made relative to the other clusters, making it more difficult to determine cell identity if an "outgroup" is not present in the same study.
+
+## Computing gene set activities
+
+For the sake of completeness, we should mention that we can also quantify gene set activity on a per-cell level and test for differences in activity.
+This inverts the standard gene set testing procedure by combining information across genes first and then testing for differences afterwards.
+To avoid the pitfalls mentioned previously for the AUCs, we simply compute the average of the log-expression values across all genes in the set for each cell.
+This is less sensitive to the behavior of other genes in that cell (aside from composition biases, as discussed in Chapter \@ref(normalization)).
+
+```{r}
+aggregated <- sumCountsAcrossFeatures(sce.mam, by.go,
+    exprs_values="logcounts", average=TRUE)
+dim(aggregated) # rows are gene sets, columns are cells
+aggregated[1:10,1:5]
+```
+
+We can then identify "differential gene set activity" between clusters by looking for significant differences in the per-set averages of the relevant cells.
+For example, we observe that cluster `r chosen.text` has the highest average expression for the triacylglycerol biosynthesis GO term (Figure \@ref(fig:lipid-synth-violin)), consistent with the proposed identity of those cells.
+
+```{r lipid-synth-violin, fig.cap="Distribution of average log-normalized expression for genes involved in triacylglycerol biosynthesis, for all cells in each cluster of the mammary gland dataset."}
+plotColData(sce.mam, y=I(aggregated["GO:0019432",]), x="cluster")
+```
+
+```{r, echo=FALSE}
+maxed <- vapply(split(aggregated["GO:0019432",], sce.mam$cluster), median, 0)
+stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
+```
+
+The obvious disadvantage of this approach is that not all genes in the set may exhibit the same pattern of differences.
+Non-DE genes will add noise to the per-set average, "diluting" the strength of any differences compared to an analysis that focuses directly on the DE genes (Figure \@ref(thrsp-violin)).
+At worst, a gene set may contain subsets of DE genes that change in opposite directions, cancelling out any differences in the per-set average.
+This is not uncommon for gene sets that contain both positive and negative regulators of a particular biological process or pathway.
+
+```{r thrsp-violin, fig.cap="Distribution of log-normalized expression values for _Thrsp_ across all cells in each cluster of the mammary gland dataset."}
+# Choose the top-ranking gene in GO:0019432.
+plotExpression(sce.mam, "Thrsp", x="cluster")
+```
+
+```{r, echo=FALSE}
+maxed <- vapply(split(logcounts(sce.mam)["Thrsp",], sce.mam$cluster), median, 0)
+stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
+```
+
+We could attempt to use the per-set averages to identify gene sets of interest via differential testing across all possible sets, e.g., with `findMarkers()`.
+However, the highest ranking gene sets in this approach tend to be very small and uninteresting because - by definition - the pitfalls mentioned above are avoided when there is only one gene in the set.
+This is compounded by the fact that the log-fold changes in the per-set averages are difficult to interpret.
+For these reasons, we generally reserve the use of this gene set summary statistic for visualization rather than any real statistical analysis.
 
 ## Session Info {-}
 
