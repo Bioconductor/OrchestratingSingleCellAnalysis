@@ -1,0 +1,72 @@
+---
+output:
+  html_document
+bibliography: ../ref.bib
+---
+
+# Analyzing repertoire sequencing data
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble()
+```
+
+```{r, fig.cap="This page is under construction. Enjoy these platelets at work instead.", echo=FALSE}
+knitr::include_graphics("https://honeysanime.com/wp-content/uploads/2018/10/Hataraku-Saibou-Cells-at-Work-Wallpaper-5.jpg")
+```
+
+## Motivation
+
+An organism's immune repertoire is defined as the set of T and B cell subtypes that contain genetic diversity in the T cell receptor (TCR) components or immunoglobin chains, respectively.
+This diversity is important for ensuring that the adaptive immune system can respond effectively to a wide range of antigens.
+We can profile the immune repertoire by simply sequencing the relevant transcripts [@georgiou2014promise;@rosati2017overview], which can be combined with previously mentioned technologies [@zheng2017massively] to achieve single-cell resolution.
+This data can then be used to characterize an individual's immune response based on the expansion of T or B cell clones, i.e., multiple cells with the same sequences for each TCR component or immunoglobulin chain.
+
+By itself, single-cell repertoire sequencing data can be readily analyzed using tools from the [ImmCantation suite](https://immcantation.readthedocs.io/en/stable/).
+In particular, the `r CRANpkg("alakazam")` package provides functions to perform common analyses to quantify clonal diversity, reconstruct lineages, examine amino acid properties, etc.
+However, in most experiments, we also obtain standard RNA sequencing data for each cell; the challenge lies in how we can integrate these two datasets together in the same analysis.
+This is not entirely trivial as each cell may have zero, one or multiple sequences for any given repertoire component, whereas we only obtain a single expression profile for that cell.
+
+We would like to define a single data structure that captures both the expression profile and repertoire state for each cell.
+This ensures synchronization during operations like subsetting (as previously discussed for the `SingleCellExperiment` class) and reduces book-keeping errors throughout the course of an interactive analysis.
+We achieve this using the `RepertoireComponent` class from the `r Githubpkg("LTLA/RepertoireComponent")` package, which allows us to accommodate repertoire sequencing data into existing Bioconductor classes while retaining compatibility with ImmCantation functions.
+We demonstrate using a publicly available 10X Genomics dataset using mouse PBMCs:
+
+```{r}
+base.url <- "http://cf.10xgenomics.com/samples/cell-vdj/3.0.0"
+
+# Downloading expression data.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+exprs.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_5gex",
+    "vdj_v1_mm_c57bl6_pbmc_5gex_filtered_feature_bc_matrix.tar.gz"))
+untar(exprs.data, exdir=tempdir())
+
+library(DropletUtils)
+sce <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
+
+# Downloading TCR data.
+tcr.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_t",
+    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
+tcr <- read.csv(tcr.data)
+
+# Downloading TCR data.
+tcr.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_t",
+    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
+tcr <- read.csv(tcr.data)
+
+# Downloading immunoglobulin data.
+ig.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_b",
+    "vdj_v1_mm_c57bl6_pbmc_b_filtered_contig_annotations.csv"))
+ig <- read.csv(ig.data)
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
