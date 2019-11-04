@@ -15,9 +15,9 @@ In order to use these packages from CRAN and Bioconductor, and start programming
 
 ## Learning R Online {#getting-started-with-r}
 
-To learn more about programming with R, we highly recommend checking out the online courses offered by [Datacamp](https://www.datacamp.com/), which includes both introductory and advanced courses within the [R track](https://www.datacamp.com/courses/tech:r). Datacamp is all online with many free courses, with videos and a code editor/console that promotes an interactive learning experience. What we like about Datacamp is that it is more focused on topics and programming paradigms that center around data science, which is especially helpful for getting started with R. 
+To learn more about programming with R, we highly recommend checking out online courses offered by groups such as [Codecademy](https://www.codecademy.com), specifically the [Learn R series](https://www.codecademy.com/learn/learn-r). Codecademy is completely web-based, with a code editor/console that promotes an interactive learning experience. This makes it easy to get started without worrying about installing any software.
 
-Beyond just Datacamp, a mainstay resource for learning R is the [R for Data Science](https://r4ds.had.co.nz/) book. This book illustrates R programming through the exploration of various data science concepts - transformation, visualization, exploration, and more. 
+Beyond just Codecademy, a foundational textbook resource for learning R is the [R for Data Science](https://r4ds.had.co.nz/) book. This book illustrates R programming through the exploration of various data science concepts - transformation, visualization, exploration, and more. While it primarily focuses on the [tidyverse](https://www.tidyverse.org/) ecosystem of packages, the concepts are translatable to any programming style.
 
 
 ## Running R Locally
