@@ -22,6 +22,11 @@ sce.bone <- HCAData('ica_bone_marrow')
 sce.bone$Donor <- sub("_.*", "", sce.bone$Barcode)
 ```
 
+```{r testsubsample, eval=FALSE, echo=FALSE, include=FALSE}
+set.seed(1234)
+sce.bone <- sce.bone[, sample(ncol(sce.bone), 1000)]
+```
+
 ### Gene annotation
 
 We use symbols in place of IDs for easier interpretation later.
@@ -181,12 +186,63 @@ scrambled <- sample(ncol(sce.bone))
 plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 ```
 
-## Miscellaneous
 
-ROB TO FIX.
 
-```{r annotation, eval=FALSE}
-## Annotation ----------------------------------------------
+## Downstream Analysis
+
+### Marker Heatmaps
+
+Visualizing the top markers is useful for the annotation of clusters. The top markers per cluster can be visualized as a heatmap at the single-cell level to ascertain expression variance of the discovered markers.
+
+```{r cluster-expression-heatmap-sc}
+## Grab top global markers per cluster; remove mito/RP* family genes
+top_markers <- lapply(as.list(markers.bone), function(x) {
+    rownames(x)[1:3]
+})
+top_markers <- sort(unique(unlist(top_markers)))
+top_markers <- top_markers[!grepl('MT-|^RP', top_markers)]
+
+## Draw heatmap - single-cell level
+set.seed(1234)
+dat <- sce.bone[, sample(ncol(sce.bone), 500)]
+
+plotHeatmap(dat,
+            features = top_markers,
+            symmetric = TRUE, zlim = c(-5, 5), center = TRUE,
+            order_columns_by = "cluster",
+            show_colnames = FALSE)
+```
+
+To reduce plotting time and ease interpretation, the top markers per cluster can also be visualized at the cluster level by aggregating ("pseudobulking") by cluster.
+
+```{r cluster-expression-heatmap-agg}
+## Aggregate data to cluster level; average norm. gene expression
+sce.agg <- aggregateAcrossCells(sce.bone,
+                                ids = sce.bone$cluster,
+                                subset_row = top_markers,
+                                use_exprs_values = 'logcounts',
+                                average = TRUE)
+
+
+## Draw heatmap - aggregated by cluster level
+plotHeatmap(sce.agg,
+            features = top_markers,
+            symmetric = TRUE, zlim = c(-2, 2), center = TRUE,
+            scale = 'row',
+            color = scico::scico(n = 101, palette = 'cork'),
+            colour_columns_by = 'cluster',
+            clustering_method = 'ward.D2',
+            cluster_distance_cols = 'correlation',
+            cluster_distance_rows = 'correlation',            
+            show_colnames = TRUE)
+```
+
+
+## Gene set Enrichment Analysis
+
+To interpret differential expression (DE) results, gene set enrichment analysis (GSEA) can be performed to annotate DE results. The first step is to acquire a mapping of ENTREZID to gene symbol.
+
+```{r annotation-mapping}
 ## Get mappings of ENTREZID to Symbol
 library(org.Hs.eg.db)
 keys_entrez <- keys(org.Hs.eg.db, 'ENTREZID')
@@ -195,8 +251,13 @@ mapping_es <- AnnotationDbi::select(org.Hs.eg.db,
                                     columns = c('ENTREZID', 'SYMBOL'),
                                     keytype = 'ENTREZID')
 mapping_es$ENTREZID <- as.integer(mapping_es$ENTREZID)
+```
+
+The next is to parse the gene sets (here we use a "tidy" representation of MSigDB gene sets) and remap them.
+
+```{r annotation-pathways}
 ## Get pathways of interest - convert to list with symbol
-## devtools::install_github('stephenturner/msigdf')
+## devtools::install_github('stephenturner/msigdf') # "tidy" MSigDB genesets
 library(msigdf)
 library(dplyr)
 mdb <- dplyr::inner_join(msigdf.human, mapping_es,
@@ -208,23 +269,55 @@ pathways <- purrr::map(mdb$data, function(x) {
     as.character(x$SYMBOL)
 })
 names(pathways) <- mdb$geneset
-## Get stats based on markers search - compare clusters 3 vs 2
-stats <- markers_any[[3]]$logFC.2
-names(stats) <- rownames(markers_any[[3]])
-## Run fast gene set enrichment analysis (see plot at bottom)
-library(fgsea)
-fgseaRes <- fgsea(pathways = pathways, 
-                  stats = stats,
-                  minSize = 15,
-                  maxSize = 500,
-                  nperm = 10000)
 ```
+
+Finally, the DE results from the `findMarkers()` function are used to test for differential gene set enrichment using the `fgsea` package.
+
+```{r annotation-fgsea}
+## Get stats based on markers search
+stats <- markers.bone[[1]]$logFC.2
+names(stats) <- rownames(markers.bone[[1]])
+
+## Run fast gene set enrichment analysis
+## Returns a data.table object
+library(fgsea)
+gse <- fgsea(pathways = pathways, 
+             stats = stats,
+             minSize = 15,
+             maxSize = 500,
+             nperm = 5000)
+```
+
+The enrichment scores of the top up and down pathways can then be plotted as a table:
+
+```{r annotation-viz-fgsea-table}
+## Get top pathways based on p-value
+topPathwaysUp <- gse[gse$NES > 0][order(gse$pval)[1:2], ]$pathway
+topPathwaysDown <- gse[gse$NES < 0][order(gse$pval)[1:2], ]$pathway
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+
+plotGseaTable(pathways[topPathways], stats,
+              gse, 
+              gseaParam = 0.5)
+```
+
+Or select pathways can also be plotted as a more traditional running score plot:
+
+```{r annotation-viz-fgsea-es}
+## Traditional GSEA plot
+plotEnrichment(pathways[[topPathways[1]]],
+               stats)
+```
+
+### Trajectory analysis
+
+Slingshot relies on providing a set of clusters on which to construct a trajectory.
 
 ```{r trajectory, eval=FALSE}
 ## Trajectory Analysis -------------------------------------
 library(slingshot)
-slc <- slingshot(sce[, sce$clusters %in% c(3, 5, 9)],
-                 clusterLabels = 'clusters',
+slc <- slingshot(sce.bone[, sce.bone$cluster %in% c(1, 2, 3)],
+                 clusterLabels = 'cluster',
                  reducedDim = 'UMAP')
 ```
 
@@ -234,7 +327,7 @@ slc <- slingshot(sce[, sce$clusters %in% c(3, 5, 9)],
 ## iSEE(sce) ## not run; opens a web browser GUI
 ```
 
-## Visualizations
+The calculated principal curve can then be visualized on the UMAP space.
 
 ```{r viz-trajectory, eval=FALSE}
 ## Trajectory analysis -------------------------------------
@@ -244,76 +337,6 @@ colors <- colorRampPalette(brewer.pal(11, 'Spectral')[-6])(100)
 plotcol <- colors[cut(slc$slingPseudotime_1, breaks = 100)]
 plot(reducedDims(slc)$UMAP, col = plotcol, pch=16, asp = 1)
 lines(SlingshotDataSet(slc), lwd = 2, col = 'black')
-```
-
-```{r viz-umap, eval=FALSE}
-## UMAP based plots ----------------------------------------
-## UMAP (no colours)
-plotUMAP(sce)
-## Pre vs post batch correction
-tmp <- runPCA(sce,
-              BSPARAM = BiocSingular::IrlbaParam(),
-              BPPARAM = BiocParallel::MulticoreParam())
-tmp <- runUMAP(tmp,
-               BNPARAM = BiocNeighbors::AnnoyParam(),
-               BPPARAM = BiocParallel::MulticoreParam(),
-               ## unnecessary options, only used to make a pretty graph
-               min_dist = 0.5, repulsion_strength = 0.25,
-               spread = 0.7,
-               n_neighbors = 15)
-p0 <- plotUMAP(tmp, colour_by = 'Donor')
-p1 <- plotUMAP(sce, colour_by = 'Donor')
-patchwork::wrap_plots(p0, p1, nrow = 2)
-## Gene expression on UMAP plots
-p2 <- plotUMAP(sce, colour_by = 'CD3E')
-p3 <- plotUMAP(sce, colour_by = 'CD79A')
-p4 <- plotUMAP(sce, colour_by = 'LYZ')
-p5 <- plotUMAP(sce, colour_by = 'NKG7')
-patchwork::wrap_plots(p2, p3, p4, p5, nrow = 2)
-## Clusters on UMAP
-plotUMAP(sce, colour_by = 'clusters', text_by = 'clusters')
-```
-
-```{r viz-gene-exp, eval=FALSE}
-## Gene expression plots -----------------------------------
-## Heatmap: Top global markers per cluster
-top_markers <- lapply(markers, function(x) {
-    rownames(x)[1:20]
-})
-top_markers <- sort(unique(unlist(top_markers)))
-top_markers <- top_markers[!grepl('MT-|^RP', top_markers)]
-set.seed(1234)
-plotHeatmap(sce[, sample(ncol(sce), 5000)],
-            features = top_markers,
-            color = viridis::viridis(101, option = 'A'),
-##            symmetric = TRUE, zlim = c(-5, 5),
-            colour_columns_by = 'clusters',
-            clustering_method = 'ward.D2',
-            show_colnames = FALSE,
-            fontsize_row = 6
-            )
-## Volcano plot
-marker_tbl_3 <- as.data.frame(markers_any[[3]])
-marker_tbl_3 %>%
-    ggplot(aes(x = logFC.2, y = -log10(FDR))) +
-    geom_point() +
-    geom_vline(xintercept = c(-log(1.5), log(1.5)), linetype = 'dashed') +
-    theme_classic() +
-    coord_cartesian(xlim = c(-2, 2), expand = FALSE)
-```
-
-```{r viz-gsea, eval=FALSE}
-## Gene set enrichment -------------------------------------
-## Plot multiple pathways enrichment plots
-topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=10), pathway]
-topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=10), pathway]
-topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
-plotGseaTable(pathways[topPathways], stats,
-              fgseaRes, 
-              gseaParam = 0.5)
-## Traditional GSEA plot
-plotEnrichment(pathways[["GSE29618_MONOCYTE_VS_PDC_UP"]],
-               stats)
 ```
 
 
