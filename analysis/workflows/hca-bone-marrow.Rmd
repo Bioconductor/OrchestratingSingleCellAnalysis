@@ -7,147 +7,242 @@ chapterPreamble(use_cache = TRUE)
 
 ## Introduction
 
-To make it as easy as possible to get started, here we simply provide a script that walks through a typical, basic scRNA-seq analysis in code, with prose as comments (`#`), and all visualization held until the end of the script. 
+Here, we use an example dataset from the [Human Cell Atlas immune cell profiling project on bone marrow](https://preview.data.humancellatlas.org), which contains scRNA-seq data for 380,000 cells generated using the 10X Genomics technology.
+This is a fairly big dataset that represents a good use case for the techniques in Chapter \@ref(dealing-with-big-data).
 
-Here, we use an example dataset from the [*Human Cell Atlas* immune cell profiling project on bone marrow](https://preview.data.humancellatlas.org). This dataset is loaded via the *HCAData* package, which provides a ready to use *SingleCellExperiment* object. 
+## Analysis code
 
-Note that the *HCAData* bone marrow dataset is comprised of 8 donors, so we have added an integration step to ameliorate batch effects caused by different donors. However, for use cases where integration is not necessary (e.g. no expected batch effects), we note in the code what to skip and relevant arguments to replace.
+### Data loading
 
-Lastly, note that some arguments are added for the sake of reducing computational runtime and can be modified or removed. These include parallelization via `BPPARAM`, and different algorithms for SVD and nearest-neighbor via `BSPARAM` and `BNPARAM`. See the "Adaptations for Large-scale Data" chapter for more information on these arguments.
+This dataset is loaded via the `r Biocpkg("HCAData")` package, which provides a ready-to-use `SingleCellExperiment` object. 
 
-
-## Code
-
-```{r}
-## Setup ---------------------------------------------------
-## not run - uncomment these lines to install necessary pkgs
-## install.packages('BiocManager')
-## BiocManager::install(version = 'devel') # devel=3.10
-## BiocManager::install(c(
-##   'HCAData',                       # dataset
-##   'scater', 'scran', 'batchelor',  # processing + DE + batch correction
-##   'igraph',                        # clustering
-##   'slingshot',                     # Trajectory
-##   'iSEE'                           # interactive viz
-## ))
-```
-
-```{r}
-## Import data into R --------------------------------------
-## For reading in data directly from CellRanger output
-## use the lines below and replace with proper paths to data
-## append any cell metadata as needed to colData()
-## library(DropletUtils)
-## sce <- read10xCounts('/path/to/cellranger/outs/')
-## For this quick-start: Human Cell Atlas (HCA) data
+```{r loading}
 library(HCAData)
-sce <- HCAData('ica_bone_marrow')
-## subsample for better brevity of compilation
-set.seed(1234)
-sce <- sce[, sample(ncol(sce), 10000)]
-## Split out donor based on barcode
-Donor <- lapply(sce$Barcode, strsplit, '_')
-Donor <- unlist(lapply(Donor, function(x) { x[[1]][1] }))
-sce$Donor <- Donor
-## Convert DelayedArray to regular matrix
-counts(sce) <- as.matrix(counts(sce))
+sce.bone <- HCAData('ica_bone_marrow')
+sce.bone$Donor <- sub("_.*", "", sce.bone$Barcode)
 ```
+
+```{r testsubsample, eval=FALSE, echo=FALSE, include=FALSE}
+set.seed(1234)
+sce.bone <- sce.bone[, sample(ncol(sce.bone), 1000)]
+```
+
+### Gene annotation
+
+We use symbols in place of IDs for easier interpretation later.
+
+```{r gene-annotation}
+library(EnsDb.Hsapiens.v86)
+rowData(sce.bone)$Chr <- mapIds(EnsDb.Hsapiens.v86, keys=rownames(sce.bone),
+    column="SEQNAME", keytype="GENEID")
+
+library(scater)
+rownames(sce.bone) <- uniquifyFeatureNames(rowData(sce.bone)$ID,
+    names = rowData(sce.bone)$Symbol)
+```
+
+### Quality control
+
+Cell calling was not performed (see [here](https://s3.amazonaws.com/preview-ica-expression-data/Brief+ICA+Read+Me.pdf)) so we will perform QC using all metrics and block on the donor of origin during outlier detection.
+We perform the calculation across multiple cores to speed things up.
 
 ```{r quality-control}
-## Quality Control -----------------------------------------
-library(scater)
-sce <- calculateQCMetrics(sce,
-                          BPPARAM = BiocParallel::MulticoreParam())
-## remove "bad" cells by total counts/features per cell
-filt <- sce$total_counts > 500 & sce$total_features_by_counts > 100
-sce <- sce[, filt]
-## to ease computation, remove low frequency genes from `sce`
-num_reads <- 1                  # minimum 1 read
-num_cells <- 0.025 * ncol(sce)   # in at least 2.5% of all cells
-keep <- rowSums(counts(sce) >= num_reads) >= num_cells
-sce <- sce[keep, ]
-## for readability, use Symbols in lieu of IDs as rownames
-uniq_feats <- uniquifyFeatureNames(ID = rowData(sce)$ID,
-                                   names = rowData(sce)$Symbol)
-rownames(sce) <- uniq_feats
+library(BiocParallel)
+sce.bone <- addPerCellQC(sce.bone, subsets=list(
+    Mito=which(rowData(sce.bone)$Chr=="MT")),
+    BPPARAM=MulticoreParam())
+unfiltered <- sce.bone
+
+qc <- quickPerCellQC(colData(sce.bone), batch=sce.bone$Donor,
+    percent_subset="subsets_Mito_percent")
+sce.bone <- sce.bone[,!qc$discard]
 ```
+
+### Normalization
+
+For a minor speed-up, we piggy-back off the already-computed library sizes to avoid having to re-compute them as size factors.
 
 ```{r normalization}
-## Normalization -------------------------------------------
-sce <- normalize(sce)
+sce.bone <- logNormCounts(sce.bone, size_factors=sce.bone$sum)
 ```
 
-```{r feature-selection}
-## Feature Selection ---------------------------------------
+### Variance modelling
+
+Blocking on the donor to mitigate batch effects during HVG selection.
+
+```{r variance-modelling}
 library(scran)
-fit <- trendVar(sce, use.spikes = FALSE)
-dec <- decomposeVar(sce, fit)
-hvg <- rownames(dec)[dec$bio > 0] # save gene names
+dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor,
+    BPPARAM=MulticoreParam())
+top.bone <- getTopHVGs(dec.bone, n=2000)
 ```
+
+### Data integration
+
+Here we use multiple cores, randomized SVD and approximate nearest-neighbor detection to speed up this step.
 
 ```{r integration}
-## Integration ---------------------------------------------
-## only perform this section if there is a batch effect
 library(batchelor)
-set.seed(1234)
-mnn <- fastMNN(sce, batch = sce$Donor,
-               subset.row = hvg,
-               BSPARAM = BiocSingular::IrlbaParam(deferred = TRUE),
-               BNPARAM = BiocNeighbors::AnnoyParam(),
-               BPPARAM = BiocParallel::MulticoreParam())
-reducedDim(sce, 'MNN') <- reducedDim(mnn, 'corrected')
+library(BiocNeighbors)
+
+set.seed(1010001)
+merged.bone <- fastMNN(sce.bone, batch = sce.bone$Donor, subset.row = top.bone,
+     BSPARAM=BiocSingular::RandomParam(deferred = TRUE),
+     BNPARAM=AnnoyParam(),
+     BPPARAM=MulticoreParam())
+
+reducedDim(sce.bone, 'MNN') <- reducedDim(merged.bone, 'corrected')
 ```
 
-```{r dimred}
-## Dimensionality Reduction --------------------------------
-## note on `use_dimred` arg: specifies which precomputed
-## dimension reduction to use in `sce`; if there is none,
-## it will first calculate and save PCA to `sce` then UMAP
-set.seed(1234)
-sce <- runUMAP(sce,
-               use_dimred = 'MNN', # omit if `fastMNN()` not run
-               BNPARAM = BiocNeighbors::AnnoyParam(),
-               BPPARAM = BiocParallel::MulticoreParam(),
-               ## unnecessary options, only used to make a pretty graph
-               min_dist = 0.5, repulsion_strength = 0.25,
-               spread = 0.7,
-               n_neighbors = 15)
+### Dimensionality reduction
+
+We set `external_neighbors=TRUE` to replace the internal NN search in the UMAP implementation with our parallelized approximate search.
+
+```{r dimensionality-reduction}
+set.seed(01010100)
+sce.bone <- runUMAP(sce.bone, dimred="MNN",
+    external_neighbors=TRUE, 
+    BNPARAM=AnnoyParam(),
+    BPPARAM=MulticoreParam())
 ```
+
+### Clustering
+
+Graph-based clustering generates an excessively large intermediate graph, so we will switch to $k$-means instead.
+Some parameter fiddling is required to improve convergence with such a large number of points.
 
 ```{r clustering}
-## Clustering ----------------------------------------------
-library(igraph)
-## replace `use.dimred` with 'PCA' if no integration was performed
-## this will be automatically added via `runUMAP` above
-set.seed(1234)
-g <- buildSNNGraph(sce, use.dimred = 'MNN',
-                   k = 30,  # higher = bigger clusters
-                   BNPARAM = BiocNeighbors::AnnoyParam(),
-                   BPPARAM = BiocParallel::MulticoreParam())
-clusters <- as.factor(igraph::cluster_louvain(g)$membership)
-sce$clusters <- clusters
+set.seed(1000)
+kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
+    centers=25, iter.max=1000, algorithm="MacQueen") 
+sce.bone$cluster <- factor(kout.bone$cluster)
 ```
+
+### Differential expression
+
+We identify marker genes for each cluster while blocking on the donor.
 
 ```{r differential-expression}
-## Differential Expression ---------------------------------
-## pval.type = 'all' : only get globally unique markers
-markers <- findMarkers(sce, clusters = sce$clusters,
-                       block = sce$Donor, # use to get within-donor DE
-                       direction = 'up', lfc = 1.5,
-                       pval.type = "all", # get cluster-unique markers
-                       subset.row = hvg,
-                       BPPARAM = BiocParallel::MulticoreParam())
-## pval.type = 'any' : get all potential markers of any direction/comparison
-markers_any <- findMarkers(sce, clusters = sce$clusters,
-                           block = sce$Donor, # use to get within-donor DE
-                           direction = 'any', lfc = 0,
-                           pval.type = "any", # get all potential markers
-                           subset.row = hvg,
-                           BPPARAM = BiocParallel::MulticoreParam())
+markers.bone <- findMarkers(sce.bone, sce.bone$cluster,
+    block = sce.bone$Donor, 
+    direction = 'up', lfc = 1,
+    BPPARAM = MulticoreParam())
 ```
 
-```{r annotation}
-## Annotation ----------------------------------------------
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+unfiltered$discard <- qc$discard
+gridExtra::grid.arrange(
+    plotColData(unfiltered, x="Donor", y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, x="Donor", y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, x="Donor", y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.bone))
+```
+
+### Variance modelling
+
+```{r, fig.asp=2, fig.height=10}
+par(mfrow=c(4,2))
+blocked.stats <- dec.bone$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+### Data integration
+
+```{r}
+metadata(merged.bone)$merge.info$lost.var
+```
+
+### Clustering
+
+```{r}
+table(Cluster=sce.bone$cluster, Donor=sce.bone$Donor)
+```
+
+```{r}
+plotUMAP(sce.bone, colour_by="cluster")
+
+# TODO: add scrambling option in scater's plotting functions.
+scrambled <- sample(ncol(sce.bone))
+plotUMAP(sce.bone[,scrambled], colour_by="Donor")
+```
+
+
+
+## Downstream Analysis
+
+### Marker Heatmaps
+
+Visualizing the top markers is useful for the annotation of clusters. The top markers per cluster can be visualized as a heatmap at the single-cell level to ascertain expression variance of the discovered markers.
+
+```{r cluster-expression-heatmap-sc}
+## Grab top global markers per cluster; remove mito/RP* family genes
+top_markers <- lapply(as.list(markers.bone), function(x) {
+    rownames(x)[1:3]
+})
+top_markers <- sort(unique(unlist(top_markers)))
+top_markers <- top_markers[!grepl('MT-|^RP', top_markers)]
+
+## Draw heatmap - single-cell level
+set.seed(1234)
+dat <- sce.bone[, sample(ncol(sce.bone), 500)]
+
+plotHeatmap(dat,
+            features = top_markers,
+            symmetric = TRUE, zlim = c(-5, 5), center = TRUE,
+            order_columns_by = "cluster",
+            show_colnames = FALSE)
+```
+
+To reduce plotting time and ease interpretation, the top markers per cluster can also be visualized at the cluster level by aggregating ("pseudobulking") by cluster.
+
+```{r cluster-expression-heatmap-agg}
+## Aggregate data to cluster level; average norm. gene expression
+sce.agg <- aggregateAcrossCells(sce.bone,
+                                ids = sce.bone$cluster,
+                                subset_row = top_markers,
+                                use_exprs_values = 'logcounts',
+                                average = TRUE)
+
+
+## Draw heatmap - aggregated by cluster level
+plotHeatmap(sce.agg,
+            features = top_markers,
+            symmetric = TRUE, zlim = c(-2, 2), center = TRUE,
+            scale = 'row',
+            color = scico::scico(n = 101, palette = 'cork'),
+            colour_columns_by = 'cluster',
+            clustering_method = 'ward.D2',
+            cluster_distance_cols = 'correlation',
+            cluster_distance_rows = 'correlation',            
+            show_colnames = TRUE)
+```
+
+
+## Gene set Enrichment Analysis
+
+To interpret differential expression (DE) results, gene set enrichment analysis (GSEA) can be performed to annotate DE results. The first step is to acquire a mapping of ENTREZID to gene symbol.
+
+```{r annotation-mapping}
 ## Get mappings of ENTREZID to Symbol
 library(org.Hs.eg.db)
 keys_entrez <- keys(org.Hs.eg.db, 'ENTREZID')
@@ -156,8 +251,13 @@ mapping_es <- AnnotationDbi::select(org.Hs.eg.db,
                                     columns = c('ENTREZID', 'SYMBOL'),
                                     keytype = 'ENTREZID')
 mapping_es$ENTREZID <- as.integer(mapping_es$ENTREZID)
+```
+
+The next is to parse the gene sets (here we use a "tidy" representation of MSigDB gene sets) and remap them.
+
+```{r annotation-pathways}
 ## Get pathways of interest - convert to list with symbol
-## devtools::install_github('stephenturner/msigdf')
+## devtools::install_github('stephenturner/msigdf') # "tidy" MSigDB genesets
 library(msigdf)
 library(dplyr)
 mdb <- dplyr::inner_join(msigdf.human, mapping_es,
@@ -169,23 +269,55 @@ pathways <- purrr::map(mdb$data, function(x) {
     as.character(x$SYMBOL)
 })
 names(pathways) <- mdb$geneset
-## Get stats based on markers search - compare clusters 3 vs 2
-stats <- markers_any[[3]]$logFC.2
-names(stats) <- rownames(markers_any[[3]])
-## Run fast gene set enrichment analysis (see plot at bottom)
-library(fgsea)
-fgseaRes <- fgsea(pathways = pathways, 
-                  stats = stats,
-                  minSize = 15,
-                  maxSize = 500,
-                  nperm = 10000)
 ```
 
-```{r trajectory}
+Finally, the DE results from the `findMarkers()` function are used to test for differential gene set enrichment using the `fgsea` package.
+
+```{r annotation-fgsea}
+## Get stats based on markers search
+stats <- markers.bone[[1]]$logFC.2
+names(stats) <- rownames(markers.bone[[1]])
+
+## Run fast gene set enrichment analysis
+## Returns a data.table object
+library(fgsea)
+gse <- fgsea(pathways = pathways, 
+             stats = stats,
+             minSize = 15,
+             maxSize = 500,
+             nperm = 5000)
+```
+
+The enrichment scores of the top up and down pathways can then be plotted as a table:
+
+```{r annotation-viz-fgsea-table}
+## Get top pathways based on p-value
+topPathwaysUp <- gse[gse$NES > 0][order(gse$pval)[1:2], ]$pathway
+topPathwaysDown <- gse[gse$NES < 0][order(gse$pval)[1:2], ]$pathway
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+
+plotGseaTable(pathways[topPathways], stats,
+              gse, 
+              gseaParam = 0.5)
+```
+
+Or select pathways can also be plotted as a more traditional running score plot:
+
+```{r annotation-viz-fgsea-es}
+## Traditional GSEA plot
+plotEnrichment(pathways[[topPathways[1]]],
+               stats)
+```
+
+### Trajectory analysis
+
+Slingshot relies on providing a set of clusters on which to construct a trajectory.
+
+```{r trajectory, eval=FALSE}
 ## Trajectory Analysis -------------------------------------
 library(slingshot)
-slc <- slingshot(sce[, sce$clusters %in% c(3, 5, 9)],
-                 clusterLabels = 'clusters',
+slc <- slingshot(sce.bone[, sce.bone$cluster %in% c(1, 2, 3)],
+                 clusterLabels = 'cluster',
                  reducedDim = 'UMAP')
 ```
 
@@ -195,9 +327,9 @@ slc <- slingshot(sce[, sce$clusters %in% c(3, 5, 9)],
 ## iSEE(sce) ## not run; opens a web browser GUI
 ```
 
-## Visualizations
+The calculated principal curve can then be visualized on the UMAP space.
 
-```{r viz-trajectory}
+```{r viz-trajectory, eval=FALSE}
 ## Trajectory analysis -------------------------------------
 ## Slingshot trajectory plot
 library(RColorBrewer)
@@ -205,76 +337,6 @@ colors <- colorRampPalette(brewer.pal(11, 'Spectral')[-6])(100)
 plotcol <- colors[cut(slc$slingPseudotime_1, breaks = 100)]
 plot(reducedDims(slc)$UMAP, col = plotcol, pch=16, asp = 1)
 lines(SlingshotDataSet(slc), lwd = 2, col = 'black')
-```
-
-```{r viz-umap}
-## UMAP based plots ----------------------------------------
-## UMAP (no colours)
-plotUMAP(sce)
-## Pre vs post batch correction
-tmp <- runPCA(sce,
-              BSPARAM = BiocSingular::IrlbaParam(),
-              BPPARAM = BiocParallel::MulticoreParam())
-tmp <- runUMAP(tmp,
-               BNPARAM = BiocNeighbors::AnnoyParam(),
-               BPPARAM = BiocParallel::MulticoreParam(),
-               ## unnecessary options, only used to make a pretty graph
-               min_dist = 0.5, repulsion_strength = 0.25,
-               spread = 0.7,
-               n_neighbors = 15)
-p0 <- plotUMAP(tmp, colour_by = 'Donor')
-p1 <- plotUMAP(sce, colour_by = 'Donor')
-patchwork::wrap_plots(p0, p1, nrow = 2)
-## Gene expression on UMAP plots
-p2 <- plotUMAP(sce, colour_by = 'CD3E')
-p3 <- plotUMAP(sce, colour_by = 'CD79A')
-p4 <- plotUMAP(sce, colour_by = 'LYZ')
-p5 <- plotUMAP(sce, colour_by = 'NKG7')
-patchwork::wrap_plots(p2, p3, p4, p5, nrow = 2)
-## Clusters on UMAP
-plotUMAP(sce, colour_by = 'clusters', text_by = 'clusters')
-```
-
-```{r viz-gene-exp}
-## Gene expression plots -----------------------------------
-## Heatmap: Top global markers per cluster
-top_markers <- lapply(markers, function(x) {
-    rownames(x)[1:20]
-})
-top_markers <- sort(unique(unlist(top_markers)))
-top_markers <- top_markers[!grepl('MT-|^RP', top_markers)]
-set.seed(1234)
-plotHeatmap(sce[, sample(ncol(sce), 5000)],
-            features = top_markers,
-            color = viridis::viridis(101, option = 'A'),
-##            symmetric = TRUE, zlim = c(-5, 5),
-            colour_columns_by = 'clusters',
-            clustering_method = 'ward.D2',
-            show_colnames = FALSE,
-            fontsize_row = 6
-            )
-## Volcano plot
-marker_tbl_3 <- as.data.frame(markers_any[[3]])
-marker_tbl_3 %>%
-    ggplot(aes(x = logFC.2, y = -log10(FDR))) +
-    geom_point() +
-    geom_vline(xintercept = c(-log(1.5), log(1.5)), linetype = 'dashed') +
-    theme_classic() +
-    coord_cartesian(xlim = c(-2, 2), expand = FALSE)
-```
-
-```{r viz-gsea}
-## Gene set enrichment -------------------------------------
-## Plot multiple pathways enrichment plots
-topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=10), pathway]
-topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=10), pathway]
-topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
-plotGseaTable(pathways[topPathways], stats,
-              fgseaRes, 
-              gseaParam = 0.5)
-## Traditional GSEA plot
-plotEnrichment(pathways[["GSE29618_MONOCYTE_VS_PDC_UP"]],
-               stats)
 ```
 
 
