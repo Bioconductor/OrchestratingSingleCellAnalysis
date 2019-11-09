@@ -173,7 +173,7 @@ chosen.macro <- 12
 ```
 
 ```{r}
-markers <- findMarkers(sce.pbmc, clusters=sce.pbmc$cluster, 
+markers <- findMarkers(sce.pbmc, groups=sce.pbmc$cluster, 
     pval.type="some", direction="up")
 ```
 
