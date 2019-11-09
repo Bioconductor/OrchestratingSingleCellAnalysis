@@ -214,12 +214,14 @@ We can then repeat our graph operations on this new cluster-level graph.
 For example, we could obtain clusters of clusters, or we could simply create a new cluster-based layout for visualization (Figure \@ref(fig:cluster-graph)).
 This is analogous to the "graph abstraction" approach described by @wolf2017graph.
 
-```{r cluster-graph, fig.cap="Force-directed layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
-cluster.gr <- igraph::graph_from_adjacency_matrix(ratio, 
+```{r cluster-graph, fig.cap="Force-based layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
+cluster.gr <- igraph::graph_from_adjacency_matrix(log2(ratio+1), 
     mode="upper", weighted=TRUE, diag=FALSE)
 
+# Increasing the weight to increase the visibility of the lines.
 set.seed(11001010)
-plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*20)
+plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*5,
+    layout=layout_with_lgl)
 ```
 
 Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` commands were prefixed with `igraph::`.
