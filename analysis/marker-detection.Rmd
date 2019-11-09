@@ -4,7 +4,7 @@ output:
 bibliography: ../ref.bib
 ---
 
-# Marker gene detection
+# Marker gene detection {#marker-detection}
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
