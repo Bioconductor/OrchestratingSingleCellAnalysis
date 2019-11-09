@@ -4,7 +4,10 @@
 \alias{chapterPreamble}
 \title{Execute chapter preamble code}
 \usage{
-chapterPreamble()
+chapterPreamble(use_cache = FALSE)
+}
+\arguments{
+\item{use_cache}{knitr setting for whether to cache code chunks}
 }
 \description{
 Execute code to set up knitr compilation flags, HTML content, load required packages, etc. at the start of every chapter.
