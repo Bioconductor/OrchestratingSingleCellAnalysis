@@ -221,7 +221,7 @@ cluster.gr <- igraph::graph_from_adjacency_matrix(log2(ratio+1),
 # Increasing the weight to increase the visibility of the lines.
 set.seed(11001010)
 plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*5,
-    layout=layout_with_lgl)
+    layout=igraph::layout_with_lgl)
 ```
 
 Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` commands were prefixed with `igraph::`.
