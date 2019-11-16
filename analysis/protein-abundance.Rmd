@@ -255,30 +255,34 @@ Of course, this provides little information beyond what we could have obtained f
 In the simplest approach to integration, we take cells in each of the ADT-derived clusters and perform subclustering using the transcript data.
 This is an _in silico_ equivalent to an experiment that performs FACS to isolate cell types followed by scRNA-seq for further characterization.
 We exploit the fact that the ADT abundances are cleaner (larger counts, stronger signal) for more robust identification of broad cell types, and use the gene expression data to identify more subtle changes in the rest of the transcriptome. 
-We demonstrate below by looping over all of the ADT-derived clusters and subclustering on gene expression:
+We demonstrate below by looping over all of the ADT-derived clusters and subclustering on gene expression (Figure \@ref(subcluster-stats)).
 
-```{r}
+```{r subcluster-stats, fig.cap="Number of subclusters identified from the gene expression data within each ADT-derived parent cluster."}
 set.seed(101010)
-all.sce <- all.markers <- list()
-for (i in as.character(unique(clusters.adt))) {
-    chosen <- clusters.adt==i
-    x <- sce[,chosen]
-    x <- logNormCounts(x)
+all.sce <- quickSubCluster(sce, clusters.adt,
+    prepFUN=function(x) {
+        dec <- modelGeneVar(x)
+        top <- getTopHVGs(dec, prop=0.1)
+        x <- runPCA(x, subset_row=top, ncomponents=25)
+    },
+    clusterFUN=function(x) {
+        g.trans <- buildSNNGraph(x, use.dimred="PCA")
+        igraph::cluster_walktrap(g.trans)$membership
+    }
+)
 
-    dec <- modelGeneVar(x)
-    top <- getTopHVGs(dec, prop=0.1)
-    x <- runPCA(x, subset_row=top, ncomponents=25)
+# Summarizing the number of subclusters in each tag-derived parent cluster,
+# compared to the number of cells in that parent cluster.
+ncells <- vapply(all.sce, ncol, 0L)
+nsubclusters <- vapply(all.sce, FUN=function(x) length(unique(x$subcluster)), 0L)
+plot(ncells, nsubclusters, xlab="Number of cells", type="n",
+    ylab="Number of subclusters", log="xy")
+text(ncells, nsubclusters, names(all.sce))
+```
 
-    g.trans <- buildSNNGraph(x, use.dimred="PCA")
-    x$subcluster <- igraph::cluster_walktrap(g.trans)$membership
-    x$subcluster <- paste0("SUB_", x$subcluster) # avoid confusion with parents.
-
-    all.sce[[i]] <- x
-    all.markers[[i]] <- findMarkers(x, x$subcluster, direction="up")
-}
-
-# Checking out how many subclusters are in each tag-derived cluster.
-lengths(all.markers)
+```{r, echo=FALSE}
+# Checking that there is a strong positive correlation.
+stopifnot(cor(log(ncells), log(nsubclusters))> 0.5)
 ```
 
 ```{r, echo=FALSE}
@@ -302,9 +306,11 @@ stopifnot(identical(of.interest, chosen.cluster))
 stopifnot(averaged["CD3",of.interest] > 10)
 stopifnot(averaged["CD8a",of.interest] > 10)
 
-stopifnot(length(all.markers[[chosen.cluster]])==2L)
-stopifnot("ENSG00000100450" %in% rownames(all.markers[[chosen.cluster]][[1]])[1:10])
-stopifnot("ENSG00000113088" %in% rownames(all.markers[[chosen.cluster]][[2]])[1:10])
+cur.sce <- all.sce[[chosen.cluster]]
+cur.markers <- findMarkers(cur.sce, cur.sce$subcluster, direction="up")
+stopifnot(length(cur.markers)==2L)
+stopifnot("ENSG00000100450" %in% rownames(cur.markers[[1]])[1:10])
+stopifnot("ENSG00000113088" %in% rownames(cur.markers[[2]])[1:10])
 ```
 
 The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as previously discussed in Section \@ref(subclustering).
