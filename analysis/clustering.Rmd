@@ -534,23 +534,30 @@ stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
 
 For subclustering analyses, it is helpful to define a customized function that calls our desired algorithms to obtain a clustering from a given `SingleCellExperiment`.
 This function can then be applied multiple times on different subsets without having to repeatedly copy and modify the code for each subset.
+For example, `quickSubCluster()` loops over all subsets and executes this user-specified function to generate a list of `SingleCellExperiment` objects containing the subclustering results.
 (Of course, the downside is that this assumes that a similar analysis is appropriate for each subset.
 If different subsets require extensive reparametrization, copying the code may actually be more straightforward.)
 
 ```{r}
-mySubClusteringFunction <- function(input) {
-    dec <- modelGeneVar(input)
-    input <- denoisePCA(input, technical=dec,
-        subset.row=getTopHVGs(dec, prop=0.1),
-        BSPARAM=BiocSingular::IrlbaParam())
-    g <- buildSNNGraph(input, use.dimred="PCA", k=20)
-    input$cluster <- igraph::cluster_walktrap(g)$membership
-    input
-}
+set.seed(1000010)
+subcluster.out <- quickSubCluster(sce.pbmc, groups=clust.full,
+    prepFUN=function(x) { # Preparing the subsetted SCE for clustering.
+        dec <- modelGeneVar(x)
+        input <- denoisePCA(x, technical=dec,
+            subset.row=getTopHVGs(dec, prop=0.1),
+            BSPARAM=BiocSingular::IrlbaParam())
+    },
+    clusterFUN=function(x) { # Performing the subclustering in the subset.
+        g <- buildSNNGraph(x, use.dimred="PCA", k=20)
+        igraph::cluster_walktrap(g)$membership
+    }
+)
 
-sce.sub.1 <- mySubClusteringFunction(sce.pbmc[,clust.full==1])
-sce.sub.2 <- mySubClusteringFunction(sce.pbmc[,clust.full==2])
-# etc.
+# One SingleCellExperiment object per parent cluster:
+names(subcluster.out)
+
+# Looking at the subclustering for one example:
+table(subcluster.out[[1]]$subcluster)
 ```
 
 Subclustering is a general and conceptually straightforward procedure for increasing resolution. 
