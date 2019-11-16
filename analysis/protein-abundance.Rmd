@@ -34,7 +34,7 @@ In this chapter, we will describe some strategies for integrated analysis of ADT
 We will demonstrate using a PBMC dataset from 10X Genomics that contains quantified abundances for a number of interesting surface proteins.
 
 ```{r}
-# Caching it locally with BiocFileCache to avoid repeating it.
+# Caching it locally with BiocFileCache to avoid repeating the download.
 library(BiocFileCache)
 bfc <- BiocFileCache(ask=FALSE)
 stuff <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com",
@@ -223,13 +223,13 @@ This suggests we should directly apply downstream procedures like clustering and
 
 ```{r tsne-tags, fig.cap="$t$-SNE plot generated from the log-normalized abundance of each ADT in the PBMC dataset. Each point is a cell and is labelled according to its assigned cluster."}
 # Set d=NA so that the function does not perform PCA.
-g <- buildSNNGraph(altExp(sce), d=NA) 
-clusters <- igraph::cluster_walktrap(g)$membership
+g.adt <- buildSNNGraph(altExp(sce), d=NA) 
+clusters.adt <- igraph::cluster_walktrap(g.adt)$membership
 
 # Generating a t-SNE plot.
 set.seed(1010010)
 altExp(sce) <- runTSNE(altExp(sce))
-altExp(sce)$cluster <- factor(clusters)
+altExp(sce)$cluster <- factor(clusters.adt)
 plotTSNE(altExp(sce), colour_by="cluster", text_by="cluster", text_col="red")
 ```
 
@@ -238,7 +238,7 @@ For this experiment, we can easily identify B cells (CD19^+^), various subsets o
 More detailed examination of the distribution of abundances within each cluster is easily performed with `plotExpression()` where strong bimodality may indicate that finer clustering is required to resolve cell subtypes.
 
 ```{r heat-tags, fig.cap="Heatmap of the average log-normalized abundance of each ADT in each cluster of the PBMC dataset. Colors represent the log~2~-fold change from the grand average across all clusters."}
-averaged <- sumCountsAcrossCells(altExp(sce), clusters,
+averaged <- sumCountsAcrossCells(altExp(sce), clusters.adt,
     exprs_values="logcounts", average=TRUE)
 
 library(pheatmap)
@@ -260,8 +260,8 @@ We demonstrate below by looping over all of the ADT-derived clusters and subclus
 ```{r}
 set.seed(101010)
 all.sce <- all.markers <- list()
-for (i in as.character(unique(clusters))) {
-    chosen <- clusters==i
+for (i in as.character(unique(clusters.adt))) {
+    chosen <- clusters.adt==i
     x <- sce[,chosen]
     x <- logNormCounts(x)
 
@@ -324,9 +324,10 @@ This is logistically convenient as the combined structure is compatible with rou
 To illustrate, we first perform some standard steps on the transcript count matrix:
 
 ```{r}
-sce.com <- logNormCounts(sce)
-dec.com <- modelGeneVar(sce.com)
-top.com <- getTopHVGs(dec.com, prop=0.1)
+sce.main <- logNormCounts(sce)
+dec.main <- modelGeneVar(sce.main)
+top.main <- getTopHVGs(dec.main, prop=0.1)
+sce.main <- runPCA(sce.main, subset_row=top.main, ncomponents=25)
 ```
 
 The simplest version of this idea involves literally combining the log-normalized abundance matrix for the ADTs with the log-expression matrix (or its compacted form, the matrix of PCs) to obtain a single matrix for use in downstream procedures.
@@ -336,9 +337,9 @@ We see that the number of clusters is slightly higher than that from the ADT dat
 ```{r}
 # TODO: push this into a function somewhere.
 library(DelayedMatrixStats)
-transcript.data <- logcounts(sce.com)[top.com,,drop=FALSE]
+transcript.data <- logcounts(sce.main)[top.main,,drop=FALSE]
 transcript.var <- sum(rowVars(DelayedArray(transcript.data)))
-tag.data <- logcounts(altExp(sce.com))
+tag.data <- logcounts(altExp(sce.main))
 tag.var <- sum(rowVars(DelayedArray(tag.data)))
 
 reweight <- sqrt(transcript.var/tag.var)
@@ -354,6 +355,7 @@ table(clusters.com)
 ```
 
 ```{r, echo=FALSE}
+# Checking that resolution is indeed higher.
 stopifnot(length(unique(clusters.com)) > length(unique(altExp(sce)$cluster)))
 ```
 
