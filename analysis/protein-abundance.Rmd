@@ -359,38 +359,40 @@ table(clusters.com)
 stopifnot(length(unique(clusters.com)) > length(unique(altExp(sce)$cluster)))
 ```
 
-A more sophisticated variant of this idea uses the UMAP algorithm [@mcInnes2018umap] to integrate information from the two sets of features.
+A more sophisticated approach uses the UMAP algorithm [@mcInnes2018umap] to integrate information from the two sets of features.
 Very loosely speaking, we can imagine this as an intersection of the nearest neighbor graphs formed from each set, which effectively encourages the formation of communities of cells that are close in both feature spaces.
 Here, we perform two rounds of UMAP; one round retains high dimensionality for a faithful representation of the data during clustering, while the other performs dimensionality reduction for a pretty visualization.
-This yields an extremely fine-grained clustering in Figure \@ref(fig:combined-umap), which is attributable to the stringency of intersection operations for defining the local neighborhood. 
+This yields an extremely fine-grained clustering in Figure \@ref(fig:combined-umap), which is attributable to the stringency of intersection operations for defining the local neighborhood.
 
 ```{r combined-umap, fig.cap="UMAP plot obtained by combining transcript and ADT data in the PBMC dataset. Each point represents a cell and is colored according to its assigned cluster."}
+# See https://umap-learn.readthedocs.io/en/latest/clustering.html
+# for the choice of umap parameters.
 set.seed(1001010)
-sce.com <- runPCA(sce.com, subset_row=top.com, ncomponents=25)
-transcript.data2 <- reducedDim(sce.com, "PCA")
-tag.data2 <- t(logcounts(altExp(sce.com)))
-
-# Combining without dimensionality reduction, for clustering:
-combined2 <- cbind(transcript.data2, tag.data2)
-metric <- list(
-    euclidean=seq_len(ncol(transcript.data2)),
-    euclidean=seq_len(ncol(tag.data2))
+combined2 <- runMultiUMAP(
+    list(reducedDim(sce.main, "PCA"), 
+        t(logcounts(altExp(sce.main)))),
+    n_components=20, n_neighbors=30, min_dist=0
 )
 
-library(uwot)
-set.seed(0101110)
-umap.com <- umap(combined2, metric=metric, n_components=ncol(combined2))
-g.com2 <- buildSNNGraph(umap.com, transposed=TRUE, d=NA)
+g.com2 <- buildSNNGraph(combined2, d=NA, transposed=TRUE)
 clusters.com2 <- igraph::cluster_walktrap(g.com2)$membership
+table(clusters.com2)
 
-# Combining again with dimensionality reduction, for visualization:
+# Combining again for visualization:
 set.seed(0101110)
-umap.vis <- umap(combined2, metric=metric)
-
-reducedDim(sce.com, "combinedUMAP") <- umap.vis
-sce.com$cluster <- clusters.com2
-plotReducedDim(sce.com, "combinedUMAP", 
+reducedDim(sce.main, "combinedUMAP") <- runMultiUMAP(
+    list(reducedDim(sce.main, "PCA"), 
+        t(logcounts(altExp(sce.main))))
+)
+sce.main$cluster <- clusters.com2
+plotReducedDim(sce.main, "combinedUMAP", 
     colour_by="cluster", text_by="cluster")
+```
+
+```{r, echo=FALSE}
+# Checking that resolution is indeed higher.
+stopifnot(length(unique(clusters.com2)) > length(unique(clusters.com)))
+stopifnot(length(unique(clusters.com2)) > length(unique(clusters.adt)))
 ```
 
 An even more sophisticated approach uses factor analysis to identify common and unique factors of variation in each feature set.
