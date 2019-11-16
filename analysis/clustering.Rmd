@@ -125,6 +125,11 @@ clust.50 <- igraph::cluster_walktrap(g.50)$membership
 table(clust.50)
 ```
 
+```{r, echo=FALSE}
+stopifnot(length(unique(clust)) < length(unique(clust.5)))
+stopifnot(length(unique(clust)) > length(unique(clust.50)))
+```
+
 The graph itself can be visualized using a force-directed layout (Figure \@ref(fig:pbmc-force)).
 This yields a dimensionality reduction result that is closely related to $t$-SNE and UMAP, though which of these is the most aesthetically pleasing is left to the eye of the beholder.
 
@@ -159,13 +164,30 @@ clust.eigen <- igraph::cluster_leading_eigen(g)$membership
 ```
 
 It is then straightforward to compare two clustering strategies to see how they differ.
-For example, the results below suggest that Louvain is similar to Walktrap;
-fast-greedy yields coarser clusters; and Infomap provides higher resolution.
+For example, Figure \@ref(fig:walktrap-v-others) suggests that Infomap yields finer clusters than Walktrap while fast-greedy yields coarser clusters.
 
-```{r}
-table(Louvain=clust.louvain, Walktrap=clust)
-table(Infomap=clust.infomap, Walktrap=clust)
-table(Fast=clust.fast, Walktrap=clust)
+```{r walktrap-v-others, fig.asp=2, fig.cap="Number of cells assigned to combinations of cluster labels with different community detection algorithms in the PBMC dataset. Each entry of each heatmap represents a pair of labels, coloured proportionally to the log-number of cells with those labels."}
+library(pheatmap)
+
+# Using a large pseudo-count for a smoother color transition
+# between 0 and 1 cell in each 'tab'.
+tab <- table(paste("Infomap", clust.infomap), 
+    paste("Walktrap", clust))
+ivw <- pheatmap(log10(tab+10), main="Infomap vs Walktrap",
+    color=viridis::viridis(100), silent=TRUE)
+
+tab <- table(paste("Fast", clust.fast), 
+    paste("Walktrap", clust))
+fvw <- pheatmap(log10(tab+10), main="Fast-greedy vs Walktrap",
+    color=viridis::viridis(100), silent=TRUE)
+
+gridExtra::grid.arrange(ivw[[4]], fvw[[4]])
+```
+
+```{r, echo=FALSE}
+# Checking my comments above.
+stopifnot(length(unique(clust.fast)) < length(unique(clust)))
+stopifnot(length(unique(clust.infomap)) > length(unique(clust)))
 ```
 
 Some community detection algorithms operate by agglomeration and thus can be used to construct a hierarchical dendrogram based on the pattern of merges between clusters.
@@ -195,10 +217,10 @@ We use the ratio instead of the difference as the former is less dependent on th
 
 ```{r}
 ratio <- clusterModularity(g, clust, as.ratio=TRUE)
-ratio
+dim(ratio)
 ```
 
-In each matrix, each row/column corresponds to a cluster, and each entry of the matrix contains the ratio of the observed to total weight of edges between cells in the respective clusters.
+In this matrix, each row/column corresponds to a cluster and each entry contains the ratio of the observed to total weight of edges between cells in the respective clusters.
 A dataset containing well-separated clusters should contain most of the observed total weight on the diagonal entries, i.e., most edges occur between cells in the same cluster.
 Indeed, concentration of the weight on the diagonal of (Figure \@ref(fig:cluster-mod)) indicates that most of the clusters are well-separated, while some modest off-diagonal entries represent closely related clusters with more inter-connecting edges.
 
@@ -210,9 +232,9 @@ pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
 
 One useful approach is to use the `ratio` matrix to form another graph where the nodes are clusters rather than cells.
 Edges between nodes are weighted according to the ratio of observed to expected edge weights between cells in those clusters.
-We can then repeat our graph operations on this new cluster-level graph.
+We can then repeat our graph operations on this new cluster-level graph to explore the relationships between clusters.
 For example, we could obtain clusters of clusters, or we could simply create a new cluster-based layout for visualization (Figure \@ref(fig:cluster-graph)).
-This is analogous to the "graph abstraction" approach described by @wolf2017graph.
+This is analogous to the "graph abstraction" approach described by @wolf2017graph, which can be used to identify trajectories in the data based on high-weight paths between clusters.
 
 ```{r cluster-graph, fig.cap="Force-based layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
 cluster.gr <- igraph::graph_from_adjacency_matrix(log2(ratio+1), 
