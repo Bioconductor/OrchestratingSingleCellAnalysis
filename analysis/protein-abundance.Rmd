@@ -255,7 +255,7 @@ Of course, this provides little information beyond what we could have obtained f
 In the simplest approach to integration, we take cells in each of the ADT-derived clusters and perform subclustering using the transcript data.
 This is an _in silico_ equivalent to an experiment that performs FACS to isolate cell types followed by scRNA-seq for further characterization.
 We exploit the fact that the ADT abundances are cleaner (larger counts, stronger signal) for more robust identification of broad cell types, and use the gene expression data to identify more subtle changes in the rest of the transcriptome. 
-We demonstrate below by looping over all of the ADT-derived clusters and subclustering on gene expression (Figure \@ref(subcluster-stats)).
+We demonstrate below by looping over all of the ADT-derived clusters and subclustering on gene expression (Figure \@ref(fig:subcluster-stats)).
 
 ```{r subcluster-stats, fig.cap="Number of subclusters identified from the gene expression data within each ADT-derived parent cluster."}
 set.seed(101010)
@@ -417,7 +417,7 @@ More generally, this relates to the potential for uninteresting noise in one set
 In more interesting applications of this technology, protein targets are chosen that reflect some functional activity rather than cell type.
 (Because, frankly, the latter is not particularly hard to infer from transcript data in most cases.)
 A particularly elegant example is the use of antibodies targeting influenza peptide-MHCII complexes in T cells, albeit for mass cytometry [@fehlings2018multiplex].
-If the aim is to test for differences in the functional readout, a natural analysis strategy is to use the transcript data for clustering (Figure \@ref(tsne-naive)) and perform differential testing between clusters or conditions for the relevant ADTs.
+If the aim is to test for differences in the functional readout, a natural analysis strategy is to use the transcript data for clustering (Figure \@ref(fig:tsne-naive)) and perform differential testing between clusters or conditions for the relevant ADTs.
 
 ```{r tsne-naive, fig.cap="$t$-SNE plot of the PBMC dataset based on the transcript data. Each point is a cell and is colored according to the assigned cluster."}
 sce <- logNormCounts(sce)
