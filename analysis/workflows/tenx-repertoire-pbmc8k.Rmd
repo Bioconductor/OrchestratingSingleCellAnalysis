@@ -1,0 +1,175 @@
+# Mouse PBMC 10X dataset (repertoire)
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
+```
+
+## Introduction
+
+Here, we describe a brief analysis of the mouse peripheral blood mononuclear cell (PBMC) dataset from 10X Genomics [@zheng2017massively].
+The data are publicly available from the [10X Genomics website](https://support.10xgenomics.com/single-cell-vdj/datasets/3.0.0/vdj_v1_mm_c57bl6_pbmc_5gex), from which we download the filtered gene/barcode count matrices.
+Note that most of the repertoire-related steps will be discussed in Chapter \@ref(repertoire-seq), this workflow mostly provides the baseline analysis for the expression data.
+
+## Analysis code
+
+### Data loading
+
+```{r loading}
+base.url <- "http://cf.10xgenomics.com/samples/cell-vdj/3.0.0"
+
+# Downloading expression data.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+exprs.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_5gex",
+    "vdj_v1_mm_c57bl6_pbmc_5gex_filtered_feature_bc_matrix.tar.gz"))
+untar(exprs.data, exdir=tempdir())
+
+library(DropletUtils)
+sce.pbmc <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
+
+# Downloading TCR data.
+tcr.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_t",
+    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
+tcr <- read.csv(tcr.data)
+
+# Downloading immunoglobulin data.
+ig.data <- bfcrpath(bfc, file.path(base.url,
+    "vdj_v1_mm_c57bl6_pbmc_b",
+    "vdj_v1_mm_c57bl6_pbmc_b_filtered_contig_annotations.csv"))
+ig <- read.csv(ig.data)
+```
+
+```{r construction}
+library(S4Vectors)
+sce.pbmc$TCR <- split(DataFrame(tcr), factor(tcr$barcode, sce.pbmc$Barcode))
+sce.pbmc$IG <- split(DataFrame(ig), factor(ig$barcode, sce.pbmc$Barcode))
+```
+
+### Quality control
+
+```{r}
+unfiltered <- sce.pbmc
+```
+
+They report 8500 cells in their gene expression data, which is a strangely round number that suggests that they didn't actually do proper QC (and in fact, they forced _CellRanger_ to report that number).
+So, we will perform some additional QC instead.
+
+```{r quality-control}
+library(scater)
+is.mito <- grep("^mt-", rowData(sce.pbmc)$Symbol)
+stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=is.mito))
+qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent")
+sce.pbmc <- sce.pbmc[,!qc$discard]
+```
+
+### Normalization
+
+```{r normalization}
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
+sce.pbmc <- logNormCounts(sce.pbmc)
+```
+
+### Variance modelling
+
+```{r variance-modelling}
+set.seed(1001)
+dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+top.pbmc <- getTopHVGs(dec.pbmc, prop=0.1)
+```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+set.seed(10000)
+sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.pbmc, technical=dec.pbmc)
+
+set.seed(100000)
+sce.pbmc <- runTSNE(sce.pbmc, dimred="PCA")
+
+set.seed(1000000)
+sce.pbmc <- runUMAP(sce.pbmc, dimred="PCA")
+```
+
+### Clustering
+
+```{r clustering}
+g <- buildSNNGraph(sce.pbmc, k=10, use.dimred = 'PCA')
+clust <- igraph::cluster_walktrap(g)$membership
+sce.pbmc$cluster <- factor(clust)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
+    colour_by="discard") + scale_x_log10()
+```
+
+```{r}
+colSums(as.matrix(qc))
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.pbmc))
+```
+
+```{r}
+plot(librarySizeFactors(sce.pbmc), sizeFactors(sce.pbmc), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
+### Variance modelling
+
+```{r}
+plot(dec.pbmc$mean, dec.pbmc$total, pch=16, cex=0.5,
+    xlab="Mean of log-expression", ylab="Variance of log-expression")
+curfit <- metadata(dec.pbmc)
+curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+```
+
+### Dimensionality reduction
+
+```{r}
+ncol(reducedDim(sce.pbmc, "PCA"))
+```
+
+### Clustering
+
+```{r}
+table(sce.pbmc$cluster)
+```
+
+```{r}
+plotTSNE(sce.pbmc, colour_by="cluster", text_by="cluster", text_col="red")
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
