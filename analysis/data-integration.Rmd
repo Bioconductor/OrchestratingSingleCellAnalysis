@@ -315,26 +315,63 @@ Specifically, it protects us against cases where the correction method simply ag
 Ideally, we should see a many-to-1 mapping where the across-batch clustering is nested inside the within-batch clusterings.
 This indicates that any within-batch structure was preserved after correction while acknowledging that greater resolution is possible with more cells.
 In practice, more discrepancies can be expected even when the correction is perfect, due to the existence of closely related clusters that were arbitrarily separated in the within-batch clustering.
-As a general rule, we can be satisfied with the correction if the vast majority of entries of the `table()`s below are zero, though this may depend on whether specific clusters of interest are gained or lost.
+As a general rule, we can be satisfied with the correction if the vast majority of entries in Figure \@ref(fig:heat-after-mnn) are zero, though this may depend on whether specific clusters of interest are gained or lost.
 
-```{r}
-# For the first batch.
-table(New=clusters.mnn[rescaled$batch==1], Old=pbmc3k$cluster)
+```{r heat-after-mnn, fig.asp=1.8, fig.cap="Comparison between the within-batch clusters and the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the number of cells with each pair of labels (before and after correction)."}
+library(pheatmap)
+
+# For the first batch (adding +10 for a smoother color transition
+# from zero to non-zero counts for any given matrix entry).
+tab <- table(paste("after", clusters.mnn[rescaled$batch==1]),
+    paste("before", pbmc3k$cluster))
+heat3k <- pheatmap(log10(tab+10), cluster_row=FALSE, cluster_col=FALSE,
+    main="PBMC 3K comparison", silent=TRUE)
 
 # For the second batch.
-table(New=clusters.mnn[rescaled$batch==2], Old=pbmc4k$cluster)
+tab <- table(paste("after", clusters.mnn[rescaled$batch==2]),
+    paste("before", pbmc4k$cluster))
+heat4k <- pheatmap(log10(tab+10), cluster_row=FALSE, cluster_col=FALSE,
+    main="PBMC 4K comparison", silent=TRUE)
+
+gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
 ```
 
-We can summarize the agreement between clusterings by computing the Rand index.
+Another evaluation approach is to compute the coassignment probabilities (Section \@ref(cluster-bootstrapping)), i.e., the probability that cells from two within-batch clusters are clustered together in the across-batch clustering. 
+High probabilities off the diagonal in Figure \@ref(coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
+We would generally expect low off-diagonal probabilities for most pairs of clusters, though this may not be reasonably possible if the within-batch clusters were poorly separated in the first place.
+
+```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilites for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
+# For the first batch.
+tab <- coassignProb(pbmc3k$cluster, clusters.mnn[rescaled$batch==1])
+heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
+    col=rev(viridis::magma(100)), main="PBMC 3K probabilities", silent=TRUE)
+
+# For the second batch.
+tab <- coassignProb(pbmc4k$cluster, clusters.mnn[rescaled$batch==2])
+heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
+    col=rev(viridis::magma(100)), main="PBMC 4K probabilities", silent=TRUE)
+
+gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
+```
+
+Finally, we can summarize the agreement between clusterings by computing the Rand index.
 This provides a simple metric that we can use to assess the preservation of variation by different correction methods.
-Larger Rand indices are more desirable, though this must be balanced against the ability of each method to actually remove the batch effect.
+Larger rand indices (i.e., closer to 1) are more desirable, though this must be balanced against the ability of each method to actually remove the batch effect.
 
 ```{r}
 library(fossil)
-rand.index(as.integer(clusters.mnn[rescaled$batch==1]),
+ri3k <- rand.index(as.integer(clusters.mnn[rescaled$batch==1]),
     as.integer(pbmc3k$cluster))
-rand.index(as.integer(clusters.resc[rescaled$batch==1]),
-    as.integer(pbmc3k$cluster))
+ri3k
+ri4k <- rand.index(as.integer(clusters.mnn[rescaled$batch==2]),
+    as.integer(pbmc4k$cluster))
+ri4k
+```
+
+```{r, echo=FALSE}
+# Checking that it works.
+stopifnot(ri3k > 0.9)
+stopifnot(ri4k > 0.9)
 ```
 
 ## Using the corrected values {#using-corrected-values}
