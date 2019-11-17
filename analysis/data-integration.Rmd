@@ -287,7 +287,7 @@ The presence of visual clusters containing cells from both batches provides a co
 ```{r tsne-pbmc-corrected, fig.cap="$t$-SNE plot of the PBMC datasets after MNN correction. Each point is a cell that is colored according to its batch of origin."}
 library(scater)
 set.seed(0010101010)
-mnn.out <- runTSNE(mnn.out, use_dimred="corrected")
+mnn.out <- runTSNE(mnn.out, dimred="corrected")
 
 mnn.out$batch <- factor(mnn.out$batch)
 plotTSNE(mnn.out, colour_by="batch")
