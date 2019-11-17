@@ -507,7 +507,7 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
-## Evaluating cluster stability
+## Evaluating cluster stability {#cluster-bootstrapping}
 
 A desirable property of a given clustering is that it is stable to perturbations to the input data [@luxburg2010clustering].
 Stable clusters are logistically convenient as small changes to upstream processing will not change the conclusions;
