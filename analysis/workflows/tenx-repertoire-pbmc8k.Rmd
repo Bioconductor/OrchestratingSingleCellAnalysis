@@ -16,36 +16,16 @@ Note that most of the repertoire-related steps will be discussed in Chapter \@re
 ### Data loading
 
 ```{r loading}
-base.url <- "http://cf.10xgenomics.com/samples/cell-vdj/3.0.0"
-
-# Downloading expression data.
 library(BiocFileCache)
 bfc <- BiocFileCache(ask=FALSE)
-exprs.data <- bfcrpath(bfc, file.path(base.url,
+exprs.data <- bfcrpath(bfc, file.path(
+    "http://cf.10xgenomics.com/samples/cell-vdj/3.0.0",
     "vdj_v1_mm_c57bl6_pbmc_5gex",
     "vdj_v1_mm_c57bl6_pbmc_5gex_filtered_feature_bc_matrix.tar.gz"))
 untar(exprs.data, exdir=tempdir())
 
 library(DropletUtils)
 sce.pbmc <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
-
-# Downloading TCR data.
-tcr.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_t",
-    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
-tcr <- read.csv(tcr.data)
-
-# Downloading immunoglobulin data.
-ig.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_b",
-    "vdj_v1_mm_c57bl6_pbmc_b_filtered_contig_annotations.csv"))
-ig <- read.csv(ig.data)
-```
-
-```{r construction}
-library(S4Vectors)
-sce.pbmc$TCR <- split(DataFrame(tcr), factor(tcr$barcode, sce.pbmc$Barcode))
-sce.pbmc$IG <- split(DataFrame(ig), factor(ig$barcode, sce.pbmc$Barcode))
 ```
 
 ### Quality control
