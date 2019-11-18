@@ -4,7 +4,7 @@ output:
 bibliography: ../ref.bib
 ---
 
-# Analyzing repertoire sequencing data
+# Analyzing repertoire sequencing data {#repertoire-seq}
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -29,40 +29,111 @@ This is not entirely trivial as each cell may have zero, one or multiple sequenc
 
 We would like to define a single data structure that captures both the expression profile and repertoire state for each cell.
 This ensures synchronization during operations like subsetting (as previously discussed for the `SingleCellExperiment` class) and reduces book-keeping errors throughout the course of an interactive analysis.
-We achieve this using the `RepertoireComponent` class from the `r Githubpkg("LTLA/RepertoireComponent")` package, which allows us to accommodate repertoire sequencing data into existing Bioconductor classes while retaining compatibility with ImmCantation functions.
-We demonstrate using a publicly available 10X Genomics dataset using mouse PBMCs:
+We achieve this using the `SplitDataFrame` class from the `r Biocpkg("S4Vectors")` package, which allows us to accommodate repertoire sequencing data into existing Bioconductor classes while retaining compatibility with ImmCantation functions.
+We demonstrate on a publicly available 10X Genomics dataset using mouse PBMCs:
+
+```{r, echo=FALSE, results="asis"}
+extractCached("workflows/tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
+```
 
 ```{r}
-base.url <- "http://cf.10xgenomics.com/samples/cell-vdj/3.0.0"
+sce.pbmc
+```
 
-# Downloading expression data.
+## Analyzing the T cell receptor data
+
+### Data processing
+
+First, we obtain the filtered TCR contig annotations for the same set of cells.
+Each row of the resulting data frame contains information about a single TCR component sequence in one cell, broken down into the alleles of the V(D)J genes making up that component (`v_gene`, `d_gene`, `j_gene`) where possible. 
+The number of reads and UMIs supporting the set of allele assignments for a cell is also shown, though only the UMI count should be used for quantifying expression of a particular TCR sequence.
+Each cell is assigned to a clonotype (`raw_clonotype_id`) based on the combination of the $\alpha$-chain (TRA) and $\beta$-chain (TRB) sequences in that cell.
+
+```{r}
 library(BiocFileCache)
 bfc <- BiocFileCache(ask=FALSE)
-exprs.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_5gex",
-    "vdj_v1_mm_c57bl6_pbmc_5gex_filtered_feature_bc_matrix.tar.gz"))
-untar(exprs.data, exdir=tempdir())
+tcr.data <- bfcrpath(bfc, file.path(
+    "http://cf.10xgenomics.com/samples/cell-vdj/3.1.0",
+    "vdj_v1_hs_pbmc3/vdj_v1_hs_pbmc3_t_filtered_contig_annotations.csv"))
+tcr <- read.csv(tcr.data, stringsAsFactors=FALSE)
+head(tcr)
+```
 
-library(DropletUtils)
-sce <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
+The challenge in incorporating all of these data structures into a single object lies in the fact that each cell may have zero, one or many TCR/immunoglobulin sequences.
+This precludes direct storage of repertoire information in the `colData()` of the `SingleCellExperiment`, which expects a 1:1 mapping from each cell to each repertoire sequence.
+Instead, we store the repertoire data as a `SplitDataFrameList` object where each cell corresponds to a variable-row `DataFrame` containing information for zero-to-many sequences.
+This is easily done using the `DataFrame()` constructor and the `split()` function, as shown below:
 
-# Downloading TCR data.
-tcr.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_t",
-    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
-tcr <- read.csv(tcr.data)
+```{r}
+tra <- tcr[tcr$chain=="TRA",]
+trb <- tcr[tcr$chain=="TRB",]
+sce.pbmc$TRA <- split(DataFrame(tra), factor(tra$barcode, sce.pbmc$Barcode))
+sce.pbmc$TRB <- split(DataFrame(trb), factor(trb$barcode, sce.pbmc$Barcode))
 
-# Downloading TCR data.
-tcr.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_t",
-    "vdj_v1_mm_c57bl6_pbmc_t_filtered_contig_annotations.csv"))
-tcr <- read.csv(tcr.data)
+# Putting cluster information at the top level, for convenience.
+sce.pbmc$cluster <- altExp(sce.pbmc)$cluster
+```
 
-# Downloading immunoglobulin data.
-ig.data <- bfcrpath(bfc, file.path(base.url,
-    "vdj_v1_mm_c57bl6_pbmc_b",
-    "vdj_v1_mm_c57bl6_pbmc_b_filtered_contig_annotations.csv"))
-ig <- read.csv(ig.data)
+### Basic diagnostics
+
+We start by generating some basic cell-level diagnostics.
+For each cluster, we determine the proportion of cells that have at least one sequence of a TCR component (Figure \@ref(fig:tcr-prop-cluster-all)).
+Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and expression in other cell types.
+
+```{r tcr-prop-cluster-all, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the $\alpha$ or $\beta$ TCR chains."}
+ncells <- table(sce.pbmc$cluster)
+ncells
+
+tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 0])
+trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 0])
+barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+```
+
+We can refine this to only consider the productive sequences, i.e., contigs that are likely to produce a functional protein (Figure \@ref(fig:tcr-prop-cluster-prod)).
+This is achieved by subsetting the `SplitDataFrameList` with a `LogicalList` object, the latter of which specifies the rows of each per-cell `DataFrame` corresponding to productive sequences.
+
+```{r tcr-prop-cluster-prod, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the $\alpha$ or $\beta$ TCR chains."}
+is.prod.A <- sce.pbmc$TRA[,"productive"]=="True"
+is.prod.B <- sce.pbmc$TRB[,"productive"]=="True"
+tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA[is.prod.A]) > 0])
+trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB[is.prod.B]) > 0])
+barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+```
+
+In contrast, using a conventional logical or integer vector to subset the `SplitDataFrameList` will subset the cells themselves (rather than the rows for each cell, as shown above).
+For example, we can use this approach to count the number of cells in each cluster that have multiple sequences for a component (Figure \@ref(tcr-prop-cluster-multi)).
+
+```{r tcr-prop-cluster-multi, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the $\alpha$ or $\beta$ TCR chains."}
+tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
+trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
+barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+```
+
+### Quantifying clonal expansion
+
+Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
+Cells with the same T cell clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for T cell activation and proliferation upon stimulation by the corresponding antigen.
+Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes.
+We use the `extractDataFrame()` function to recover a `data.frame` from the `SplitDataFrameList` and combine it with cell-level annotation (namely, the cluster assignments) to use with the `countClones()` function from `r CRANpkg("alakazam")`.
+
+```{r}
+# TODO: move this somewhere else.
+extractDataFrame <- function(splitted, ...) {
+    thing <- data.frame(...)
+    thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
+    cbind(as.data.frame(unlist(splitted)), thing)
+}
+df.A <- extractDataFrame(sce.pbmc$TRA, cluster=sce.pbmc$cluster)
+
+# Using 'raw_consensus_id' instead of 'raw_clonotype_id'; the latter has
+# duplicates due to multiple entries for different sequences in the same cell.
+library(alakazam)
+by.clone <- countClones(df.A, group="cluster", clone="raw_consensus_id")
+by.clone <- by.clone[!is.na(by.clone$cluster) & by.clone$CLONE!="None",]
+by.clone
+
+# Counting the number of clone frequency in each cluster:
+table(by.clone$cluster, by.clone$SEQ_COUNT > 1)
 ```
 
 ## Session Info {-}
