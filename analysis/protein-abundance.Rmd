@@ -123,17 +123,20 @@ As in Chapter \@ref(normalization), we assume that these are scaling biases and 
 To this end, we again have several strategies that we can choose from to calculate the size factor for each cell:
 
 1. The simplest approach is to normalize on the total ADT counts, effectively the library size for the ADTs.
-This is closely related to the common approach of taking the geometric mean of all counts as the size factors [@stoeckius2017simultaneous], with the only difference being that the total count effectively uses the arithmetic mean instead.
 Like in Section \@ref(library-size-normalization), these "ADT library size factors" are adequate for clustering but will introduce composition biases that interfere with interpretation of the fold-changes between clusters.
+Indeed, composition biases are arguably more severe in ADT data than gene expression data as (i) the nature of the selection of protein targets enriches for features that are more likely to be differentially abundant across the population, and (ii) any increases in protein abundance manifests as a large increase to the library size.
 
     ```{r}
     sf.lib <- librarySizeFactors(altExp(sce))
     summary(sf.lib)
+    ```
 
-    # Alternatively using the geometric mean.
-    # TODO: move into the DropletUtils package.
-    sf.geo <- exp(colMeans(log1p(counts(altExp(sce)))))
-    sf.geo <- sf.geo/mean(sf.geo)
+    If we interpret the total count as the arithmetic mean of counts in each cell, we might instead consider the related approach of taking the geometric mean of all counts as the size factor for each cell [@stoeckius2017simultaneous].
+    The geometric mean is a reasonable estimator of the scaling biases for large counts, and it mitigates the effects of composition biases by dampening the effects of one or two highly abundant proteins.
+    While more robust than the ADT library size factors, these geometric mean-based factors are still not entirely correct and will progressively become less accurate as protein abundance increases.
+
+    ```{r}
+    sf.geo <- librarySizeFactors(altExp(sce), geometric=TRUE)
     summary(sf.geo)
     ```
 
@@ -145,15 +148,13 @@ We can then compute size factors to equalize the coverage of these contaminating
 This is loosely based on a similar approach for normalization of ChIP-seq data based on background enrichment [@lun2016csaw].
 
     If possible, we would prefer to obtain an estimate of the ambient profile from the barcodes that were identified as empty droplets (Section \@ref(qc-droplet)).
-    In this case, though, this information has already been discarded from the provided dataset, so we instead use a proxy profile constructed from the average of all cells under the assumption that all cell types are equally likely to contribute to the ambient profile.
+    In this case, though, this information has already been discarded from the provided dataset; instead, we use a proxy profile constructed from the average of all cells, under the assumption that all cell types are equally likely to contribute to the ambient profile.
     We define size factors using a `r Biocpkg("DESeq")`-like approach based on the median of the ratio of each cell's counts to the ambient profile.
 
     ```{r}
-    library(DelayedMatrixStats)
-    # TODO: move into the DropletUtils package.
+    # Replace 'ambient' with actual ambient profile, if available.
     ambient <- rowMeans(counts(altExp(sce)))
-    sf.amb <- colMedians(counts(altExp(sce))/ambient)
-    sf.amb <- sf.amb/mean(sf.amb)
+    sf.amb <- medianSizeFactors(altExp(sce), reference=ambient)
     summary(sf.amb)
     ```
 
