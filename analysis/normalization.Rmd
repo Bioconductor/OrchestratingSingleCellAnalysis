@@ -42,10 +42,9 @@ sce.zeisel
 ## Library size normalization
 
 Library size normalization is the simplest strategy for performing scaling normalization.
-We define the library size as the total sum of counts across all genes for each cell.
-The "library size factor" for each cell is then directly proportional to its library size, where the proportionality constant is defined such that the mean size factor across all cells is equal to 1.
-This ensures that the normalized expression values are on the same scale as the original counts, which is useful for interpretation
- - especially when dealing with transformed data (see Section \@ref(normalization-transformation)).
+We define the library size as the total sum of counts across all genes for each cell, the expected value of which is assumed to scale with any cell-specific biases.
+The "library size factor" for each cell is then directly proportional to its library size where the proportionality constant is defined such that the mean size factor across all cells is equal to 1.
+This definition ensures that the normalized expression values are on the same scale as the original counts, which is useful for interpretation - especially when dealing with transformed data (see Section \@ref(normalization-transformation)).
 
 ```{r}
 library(scater)
@@ -62,9 +61,8 @@ hist(log10(lib.sf.zeisel), xlab="Log10[Size factor]", col='grey80')
 
 Strictly speaking, the use of library size factors assumes that there is no "imbalance" in the differentially expressed (DE) genes between any pair of cells.
 That is, any upregulation for a subset of genes is cancelled out by the same magnitude of downregulation in a different subset of genes.
-This ensures that the library size is an unbiased estimate of the relative cell-specific bias.
-(Otherwise, the estimate would be compromised by composition biases, as discussed in @robinson2010scaling.)
-This may not be true in scRNA-seq applications, which means that library size normalization may not yield accurate normalized expression values for downstream analyses.
+This ensures that the library size is an unbiased estimate of the relative cell-specific bias by avoiding composition effects [@robinson2010scaling].
+However, balanced DE is not generally present in scRNA-seq applications, which means that library size normalization may not yield accurate normalized expression values for downstream analyses.
 
 In practice, normalization accuracy is not a major consideration for exploratory scRNA-seq data analyses.
 Composition biases do not usually affect the separation of clusters, only the magnitude - and to a lesser extent, direction - of the log-fold changes between clusters or cell types.
@@ -211,8 +209,7 @@ Spike-in normalization will preserve these differences such that any changes in 
 Regardless of whether we care about total RNA content, it is critical that the spike-in transcripts are normalized using the spike-in size factors.
 Size factors computed from the counts for endogenous genes should not be applied to the spike-in transcripts, precisely because the former captures differences in total RNA content that are not experienced by the latter.
 Attempting to normalize the spike-in counts with the gene-based size factors will lead to over-normalization and incorrect quantification.
-Thus, whenever spike-in data is present, we must compute a separate set of size factors for the spike-in set.
-This is discussed below for the Zeisel dataset.
+Thus, if normalized spike-in data is required, we must compute a separate set of size factors for the spike-in transcripts; this is automatically performed by functions such as `modelGeneVarWithSpikes()`.
 
 ## Applying the size factors
 
