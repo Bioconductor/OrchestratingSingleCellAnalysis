@@ -80,60 +80,143 @@ We start by generating some basic cell-level diagnostics.
 For each cluster, we determine the proportion of cells that have at least one sequence of a TCR component (Figure \@ref(fig:tcr-prop-cluster-all)).
 Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and expression in other cell types.
 
-```{r tcr-prop-cluster-all, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the $\alpha$ or $\beta$ TCR chains."}
+```{r tcr-prop-cluster-all, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the TCR $\\alpha$ or $\\beta$-chains."}
 ncells <- table(sce.pbmc$cluster)
 ncells
 
-tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 0])
-trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 0])
-barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+tra.counts.any <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 0])
+trb.counts.any <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 0])
+barplot(rbind(TRA=tra.counts.any/ncells, TRB=trb.counts.any/ncells), 
+    beside=TRUE)
 ```
 
 We can refine this to only consider the productive sequences, i.e., contigs that are likely to produce a functional protein (Figure \@ref(fig:tcr-prop-cluster-prod)).
 This is achieved by subsetting the `SplitDataFrameList` with a `LogicalList` object, the latter of which specifies the rows of each per-cell `DataFrame` corresponding to productive sequences.
 
-```{r tcr-prop-cluster-prod, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the $\alpha$ or $\beta$ TCR chains."}
-is.prod.A <- sce.pbmc$TRA[,"productive"]=="True"
+```{r tcr-prop-cluster-prod, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the TCR $\\alpha$ or $\\beta$-chains."}
+is.prod.A <- sce.pbmc$TRA[,"productive"]=="True" # LogicalList
+has.prod.A <- lengths(sce.pbmc$TRA[is.prod.A]) > 0
+tra.counts.prod <- table(sce.pbmc$cluster[has.prod.A])
+
 is.prod.B <- sce.pbmc$TRB[,"productive"]=="True"
-tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA[is.prod.A]) > 0])
-trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB[is.prod.B]) > 0])
-barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+has.prod.B <- lengths(sce.pbmc$TRB[is.prod.B]) > 0
+trb.counts.prod <- table(sce.pbmc$cluster[has.prod.B])
+
+barplot(rbind(TRA=tra.counts.prod/ncells, TRB=trb.counts.prod/ncells),
+    legend=TRUE, beside=TRUE, ylim=c(0, 1.2))
 ```
 
 In contrast, using a conventional logical or integer vector to subset the `SplitDataFrameList` will subset the cells themselves (rather than the rows for each cell, as shown above).
 For example, we can use this approach to count the number of cells in each cluster that have multiple sequences for a component (Figure \@ref(tcr-prop-cluster-multi)).
 
-```{r tcr-prop-cluster-multi, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the $\alpha$ or $\beta$ TCR chains."}
-tra.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
-trb.counts <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
-barplot(rbind(TRA=tra.counts/ncells, TRB=trb.counts/ncells), beside=TRUE)
+```{r tcr-prop-cluster-multi, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the TCR $\\alpha$ or $\\beta$-chains."}
+tra.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
+trb.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
+barplot(rbind(TRA=tra.counts.multi/ncells, TRB=trb.counts.multi/ncells), 
+    legend=TRUE, beside=TRUE)
 ```
 
 ### Quantifying clonal expansion
 
+#### Within a dataset 
+
 Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
 Cells with the same T cell clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for T cell activation and proliferation upon stimulation by the corresponding antigen.
-Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes.
-We use the `extractDataFrame()` function to recover a `data.frame` from the `SplitDataFrameList` and combine it with cell-level annotation (namely, the cluster assignments) to use with the `countClones()` function from `r CRANpkg("alakazam")`.
+Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes in each cluster, as shown below for the $\alpha$-chain.
+(We do not exclude clonotypes containing cells in different clusters, which can arise for various genuine biological reasons, e.g., differences in the microenvironment.) 
+
+```{r, fig.cap="Proportion of cells in each cluster that have multiple clonotypes, based on the TCR $\\alpha$ or $\\beta$-chains."}
+clone.id.A <- unlist(unique(sce.pbmc$TRA[,"raw_clonotype_id"]))
+expanded.id.A <- setdiff(clone.id.A[duplicated(clone.id.A)], "None")
+length(expanded.id.A) # number of expanded clonotypes for TRA
+
+clone.id.B <- unlist(unique(sce.pbmc$TRB[,"raw_clonotype_id"]))
+expanded.id.B <- setdiff(clone.id.B[duplicated(clone.id.B)], "None")
+length(expanded.id.B) # number of expanded clonotypes for TRB
+
+is.clone.A <- any(sce.pbmc$TRA[,"raw_clonotype_id"] %in% expanded.id.A)
+tra.counts.clonal <- table(sce.pbmc$cluster[is.clone.A])
+is.clone.B <- any(sce.pbmc$TRB[,"raw_clonotype_id"] %in% expanded.id.B)
+trb.counts.clonal <- table(sce.pbmc$cluster[is.clone.B])
+
+barplot(rbind(TRA=tra.counts.clonal/ncells, TRB=trb.counts.clonal/ncells), 
+    legend=TRUE, beside=TRUE)
+```
+
+We can use this information to determine whether a particular T cell cluster is enriched for expanding clonotypes.
+The example below uses Fisher's exact test to identify a significant increase in the proportion of expanded clonotypes in a cluster of putative CD8^+^ T cells compared to another cluster of CD4^+^ T cells (Figure \@ref(fig:expanded-t-clusters)).
+This provides some relative measure of the average immune activity of each cluster though, of course, further subclustering may reveal finer subpopulations with more or less activity than the average of the parent cluster.
+
+```{r expanded-t-clusters, fig.wide=TRUE, fig.asp=1, fig.cap="Distribution of log-abundance values for each antibody-derived tag in the PBMC dataset, across all cells in either T cell cluster (top and bottom panels)."}
+# Identifying the clusters:
+tclust.1 <- "2"
+tclust.2 <- "6"
+
+mat <- cbind(Expanded=tra.counts.clonal,
+    Unexpanded=tra.counts.any - tra.counts.clonal)[c(tclust.1, tclust.2),]
+mat 
+
+stats <- fisher.test(mat)
+stats
+
+# Checking the identities of the relevant clusters. Note that 'cluster' is also
+# present as a colData entry in 'altExp(sce.pbmc)', which is why the
+# 'other_fields="cluster"' argument works correctty.
+of.interest <- sce.pbmc$cluster %in% c(tclust.1, tclust.2)
+
+library(scater)
+plotExpression(altExp(sce.pbmc)[,of.interest], 
+    features=rownames(altExp(sce.pbmc)),
+    other_fields="cluster") + facet_wrap(~cluster, ncol=1)
+```
+
+```{r, echo=FALSE}
+# Checking identities of all relevant entities.
+stopifnot(all(mat[,2] > 100))
+stopifnot(any(mat[,1] > 100))
+stopifnot(stats$p.value <= 0.01)
+
+ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), sce.pbmc$cluster,
+    exprs_values="logcounts", average=TRUE)
+stopifnot(diff(ave.markers["CD8a", c(tclust.1, tclust.2)]) < -4)
+stopifnot(diff(ave.markers["CD4", c(tclust.1, tclust.2)]) > 5)
+```
+
+#### Across multiple samples
+
+A much more interesting analysis is possible when there are multiple samples and treatment conditions, where the aim is to determine which clusters contain T cell clonotypes that expand in response to treatment.
+In much the same vein as the analysis in Chapter \@ref(multi-sample-comparisons), we can obtain a cluster-by-sample count matrix by simply `cbind()`ing together the `tra.counts.clonal` vector from each sample.
+To demonstrate, we will pretend that our cells are derived from 4 samples that have been merged together for common clustering (Chapter \@ref(integrating-datasets)).
 
 ```{r}
-# TODO: move this somewhere else.
-extractDataFrame <- function(splitted, ...) {
-    thing <- data.frame(...)
-    thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
-    cbind(as.data.frame(unlist(splitted)), thing)
+pretend.samples <- sample(letters[1:4], ncol(sce.pbmc), replace=TRUE)
+
+# Creating a count matrix.
+clone.counts <- any.counts <- list()
+for (i in sort(unique(pretend.samples))) {
+    current.sample <- sce.pbmc[,i==pretend.samples]
+    clone.id.A <- unlist(unique(current.sample$TRA[,"raw_clonotype_id"]))
+    expanded.id.A <- setdiff(clone.id.A[duplicated(clone.id.A)], "None")
+    is.clone.A <- any(current.sample$TRA[,"raw_clonotype_id"] %in% expanded.id.A)
+    clone.counts[[i]] <- table(current.sample$cluster[is.clone.A])
+    any.counts[[i]] <- table(current.sample$cluster[lengths(current.sample$TRA) > 0])
 }
-df.A <- extractDataFrame(sce.pbmc$TRA, cluster=sce.pbmc$cluster)
 
-# Using 'raw_consensus_id' instead of 'raw_clonotype_id'; the latter has
-# duplicates due to multiple entries for different sequences in the same cell.
-library(alakazam)
-by.clone <- countClones(df.A, group="cluster", clone="raw_consensus_id")
-by.clone <- by.clone[!is.na(by.clone$cluster) & by.clone$CLONE!="None",]
-by.clone
+clone.counts <- do.call(cbind, clone.counts)
+any.counts <- do.call(cbind, any.counts)
+```
 
-# Counting the number of clone frequency in each cluster:
-table(by.clone$cluster, by.clone$SEQ_COUNT > 1)
+We then test for condition-specific differences in the proportion of clonotypes that are expanded.
+A natural approach would be to apply a beta-binomial model to each cluster, using the expanded and TCR-containing counts as input; for the time being, though, we will just perform a simple Wilcoxon ranked sum test.
+We test on proportions to accommodate biological differences in T cell abundance between samples well as technical differences in, say, sequencing depth that might affect the success rate of TCR calls on a sample-by-sample basis.
+
+```{r}
+prop <- clone.counts/any.counts
+
+# Pretending that the first two samples are cases,
+# and the second two samples are controls.
+wilcox.test(prop[tclust.1,1:2], prop[tclust.1,3:4])
+wilcox.test(prop[tclust.2,1:2], prop[tclust.2,3:4])
 ```
 
 ## Session Info {-}
