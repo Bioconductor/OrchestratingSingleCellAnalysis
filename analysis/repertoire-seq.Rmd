@@ -40,7 +40,7 @@ extractCached("workflows/tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
 sce.pbmc
 ```
 
-## Analyzing the T cell receptor data
+## Analyzing the T cell receptor repertoire
 
 ### Data processing
 
@@ -118,8 +118,6 @@ barplot(rbind(TRA=tra.counts.multi/ncells, TRB=trb.counts.multi/ncells),
 
 ### Quantifying clonal expansion
 
-#### Within a dataset 
-
 Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
 Cells with the same T cell clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for T cell activation and proliferation upon stimulation by the corresponding antigen.
 Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes in each cluster, as shown below for the $\alpha$-chain.
@@ -182,7 +180,82 @@ stopifnot(diff(ave.markers["CD8a", c(tclust.1, tclust.2)]) < -4)
 stopifnot(diff(ave.markers["CD4", c(tclust.1, tclust.2)]) > 5)
 ```
 
-#### Across multiple samples
+### Quantifying gene expression and properties
+
+We may also be interested in the expression of specific TCR genes, which can provide some insight into the type of antigens being targeted [@shugay2018vdjdb].
+We again use Fisher's exact test to test if our two T cell clusters of interest differ in the proportion of TCR sequences containing each gene.
+This yields a number of significant differences that may or may not be interesting, I don't know.
+As usual, composition effects apply here.
+
+```{r}
+# This should DEFINITELY use countGenes().
+gene.id.A <- sce.pbmc$TRA[,"v_gene"]
+expanded.cluster <- rep(sce.pbmc$cluster, lengths(gene.id.A))
+gene.tab.A <- table(unlist(gene.id.A), expanded.cluster)
+
+# Testing for differences between our clusters.
+collected <- list()
+totals <- colSums(gene.tab.A)
+for (i in rownames(gene.tab.A)) {
+    mat <- cbind(
+        Gene=gene.tab.A[i,],
+        Other=totals - gene.tab.A[i,])[c(tclust.1, tclust.2),]
+    stats <- fisher.test(mat)
+    collected[[i]] <- DataFrame(OR=stats$estimate, p.value=stats$p.value,
+        row.names=i)
+}
+
+collected <- do.call(rbind, collected)
+collected$FDR <- p.adjust(collected$p.value, method="BH")
+collected <- collected[order(collected$p.value),]
+head(collected)
+```
+
+The same philosophy can be applied to detect significant differences in biophysical properties.
+I have no idea what to say about this.
+I can only assume that gravy refers to hydrophobicity, and not the sauce.
+(One 300g can of gravy gives me a quarter of my daily fat, according to Google.
+And half my sodium as well. What a bargain!)
+And maybe basic TCRs will prefer to bind acidic pepties?
+Now we just have to find all those acidic antigens out there - how hard can it be?
+What kind of pathogen uses acidic residues, anyway?
+Prolines, now that's a sign of class.
+
+```{r}
+# TODO: move this somewhere else.
+extractDataFrame <- function(splitted, ...) {
+    thing <- data.frame(...)
+    thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
+    cbind(as.data.frame(unlist(splitted)), thing)
+}
+df.A <- extractDataFrame(sce.pbmc$TRA, cluster=sce.pbmc$cluster)
+
+library(alakazam)
+aap <- aminoAcidProperties(df.A, seq="cdr3")
+properties <- grep("_AA_", colnames(aap))
+head(aap[,properties])
+
+collected <- list()
+for (i in properties) {
+    prop <- colnames(aap)[i]
+    current <- split(aap[,prop], aap$cluster)
+    left <- current[[tclust.1]]
+    right <- current[[tclust.2]]
+    stats <- wilcox.test(left, right)
+    collected[[prop]] <- DataFrame(Delta=median(left, na.rm=TRUE) - 
+        median(right, na.rm=TRUE), p.value=stats$p.value,
+        row.names=prop)
+}
+
+collected <- do.call(rbind, collected)
+collected
+```
+
+## Analyzing the immunoglobulin repertoire
+
+Immunoglobulins are good.
+
+## Multi-sample analyses
 
 A much more interesting analysis is possible when there are multiple samples and treatment conditions, where the aim is to determine which clusters contain T cell clonotypes that expand in response to treatment.
 In much the same vein as the analysis in Chapter \@ref(multi-sample-comparisons), we can obtain a cluster-by-sample count matrix by simply `cbind()`ing together the `tra.counts.clonal` vector from each sample.
