@@ -286,7 +286,7 @@ We refer readers to the `r Biocpkg("edgeR")` user's guide for more details.
 setdiff(unique(summed$celltype.mapped), names(summaries))
 ```
 
-## Differential abundance between conditions
+## Differential abundance between conditions {#differential-abundance}
 
 ### Overview
 
