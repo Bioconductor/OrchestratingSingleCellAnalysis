@@ -323,7 +323,7 @@ The obvious cost is that more noise is also captured, which can reduce the resol
 The use of more genes also introduces more computational work in each downstream step.
 This strategy is thus best suited to very heterogeneous populations containing many different cell types (possibly across many datasets that are to be merged, as in Chapter \@ref(integrating-datasets)) where there is a justified fear of ignoring marker genes for low-abundance subpopulations under a competitive top $X$ approach.
 
-### Based on _a priori_ genes of interest
+## Selecting _a priori_ genes of interest
 
 A blunt yet effective feature selection strategy is to use pre-defined sets of interesting genes.
 The aim is to focus on specific aspects of biological heterogeneity that may be masked by other factors when using unsupervised methods for HVG selection.
@@ -362,7 +362,6 @@ Thus, this kind of focused analysis should be complementary to (rather than a re
 
 Alternatively, we can also invert this reasoning to remove genes that are unlikely to be of interest prior to downstream analyses, thus avoiding unwanted variation that interferes with downstream interpretation.
 Common candidates for removal include ribosomal protein genes or mitochondrial genes; for immune cell subsets, we might also be inclined to remove immunoglobulin genes and T cell receptor genes, where clonal expression introduces (possibly irrelevant) population structure.
-In practice, we tend to err on the side of caution and abstain from preemptive filtering on biological function until these genes are demonstrably problematic in downstream analyses.
 
 ```{r}
 # Identifying ribosomal proteins:
@@ -390,6 +389,8 @@ tcr.set <- anno$GENEID[anno$TXBIOTYPE %in% c("TR_V_gene", "TR_V_pseudogene")]
 tcr.discard <- rowData(sce.pbmc)$ID %in% tcr.set
 sum(tcr.discard)
 ```
+
+In practice, we tend to err on the side of caution and abstain from preemptive filtering on biological function until these genes are demonstrably problematic in downstream analyses.
 
 ## Putting it all together
 
