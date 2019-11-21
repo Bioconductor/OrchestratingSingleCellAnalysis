@@ -420,7 +420,8 @@ However, these are probably minor given that the marker gene procedure is not pa
 Rather, it is preferable to perform DE analyses using the uncorrected expression values with blocking on the batch, as discussed in Section \@ref(marker-batch).
 This strategy is based on the expectation that any genuine DE between clusters should still be present in a within-batch comparison where batch effects are absent.
 It penalizes genes that exhibit inconsistent DE across batches, thus protecting against misleading conclusions when a population in one batch is aligned to a similar-but-not-identical population in another batch.
-We demonstrate this approach using a blocked $t$-test to detect markers in the PBMC dataset, where the presence of the same pattern across clusters within each batch (Figure \@ref(fig:pbmc-marker-blocked)) is reassuring.
+We demonstrate this approach below using a blocked $t$-test to detect markers in the PBMC dataset, where the presence of the same pattern across clusters within each batch (Figure \@ref(fig:pbmc-marker-blocked)) is reassuring.
+If integration is performed across multiple conditions, it is even more important to use the uncorrected expression values for downstream analyses - see Section \@ref(sacrificing-differences) for a discussion.
 
 ```{r pbmc-marker-blocked, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distributions of RPSA uncorrected log-expression values within each cluster in each batch of the merged PBMC dataset."}
 m.out <- findMarkers(uncorrected, clusters.mnn, block=uncorrected$batch,
