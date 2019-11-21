@@ -63,10 +63,10 @@ sce.bone <- sce.bone[,!qc$discard]
 For a minor speed-up, we piggy-back off the already-computed library sizes to avoid having to re-compute them as size factors.
 
 ```{r normalization}
-sce.bone <- logNormCounts(sce.bone, size_factors=sce.bone$sum)
+sce.bone <- logNormCounts(sce.bone, size_factors = sce.bone$sum)
 ```
 
-### Variance modelling
+### Variance modeling
 
 Blocking on the donor to mitigate batch effects during HVG selection.
 
@@ -186,56 +186,141 @@ scrambled <- sample(ncol(sce.bone))
 plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 ```
 
-
-
 ## Downstream Analysis
 
 ### Marker Heatmaps
 
-Visualizing the top markers is useful for the annotation of clusters. The top markers per cluster can be visualized as a heatmap at the single-cell level to ascertain expression variance of the discovered markers.
+Visualizing the top markers is useful for the annotation of clusters. The top markers per cluster can be visualized as a heatmap at the single-cell level to ascertain expression variance of the discovered markers. Here we show a downsampled version of the data to fit onto a heatmap.
 
 ```{r cluster-expression-heatmap-sc}
-## Grab top global markers per cluster; remove mito/RP* family genes
-top_markers <- lapply(as.list(markers.bone), function(x) {
-    rownames(x)[1:3]
-})
-top_markers <- sort(unique(unlist(top_markers)))
-top_markers <- top_markers[!grepl('MT-|^RP', top_markers)]
+## Grab top markers based on previous findMarkers() output
+top.markers <- lapply(markers.bone, function(x) {
+    rownames(x)[1:5]
+}) 
+top.markers <- unique(unlist(top.markers))
+top.markers <- top.markers[!grepl('^RP[SL0-9]|^MT-', top.markers)]
 
 ## Draw heatmap - single-cell level
 set.seed(1234)
-dat <- sce.bone[, sample(ncol(sce.bone), 500)]
+dat <- sce.bone[, sample(ncol(sce.bone), 2000)]
 
 plotHeatmap(dat,
-            features = top_markers,
-            symmetric = TRUE, zlim = c(-5, 5), center = TRUE,
+            features = top.markers,
+            symmetric = TRUE, zlim = c(-3, 3), center = TRUE,
+            scale = 'row',
+            color = scico::scico(n = 21, palette = 'berlin'),
             order_columns_by = "cluster",
             show_colnames = FALSE)
 ```
 
-To reduce plotting time and ease interpretation, the top markers per cluster can also be visualized at the cluster level by aggregating ("pseudobulking") by cluster.
+The top markers per cluster can also be visualized at the cluster level by aggregating ("pseudobulking") per cluster.
 
 ```{r cluster-expression-heatmap-agg}
 ## Aggregate data to cluster level; average norm. gene expression
 sce.agg <- aggregateAcrossCells(sce.bone,
                                 ids = sce.bone$cluster,
-                                subset_row = top_markers,
+                                subset_row = top.markers,
                                 use_exprs_values = 'logcounts',
                                 average = TRUE)
 
 
 ## Draw heatmap - aggregated by cluster level
 plotHeatmap(sce.agg,
-            features = top_markers,
-            symmetric = TRUE, zlim = c(-2, 2), center = TRUE,
+            features = top.markers,
+            symmetric = TRUE, zlim = c(-4, 4), center = TRUE,
             scale = 'row',
-            color = scico::scico(n = 101, palette = 'cork'),
-            colour_columns_by = 'cluster',
+            color = scico::scico(n = 21, palette = 'cork'),
             clustering_method = 'ward.D2',
             cluster_distance_cols = 'correlation',
             cluster_distance_rows = 'correlation',            
             show_colnames = TRUE)
 ```
+
+
+## Reference-Based Cell Type Classification
+
+Here we perform automated cell type classification using a reference dataset to aid in further annotating the dataset. 
+
+Below, we perform cell type classification first at the cluster level, and append the main classification result to the `sce.bone` object.
+
+<!-- ```{r} -->
+<!-- ## Perform pairwise DE comparisons to select best paired markers -->
+<!-- out <- pairwiseTTests(logcounts(sce.bone), sce.bone$cluster, direction = 'up') -->
+<!-- paired.markers <- getTopMarkers(out$statistics, out$pairs, n = 10) -->
+<!-- ``` -->
+
+```{r singler-cluster}
+library(SingleR)
+
+## Load reference dataset
+hpc <- HumanPrimaryCellAtlasData()
+
+## Annotate cells at the cluster level
+anno.cluster <- SingleR(sce.bone, ref = hpc,
+                        labels = hpc$label.main,
+                        method = 'cluster',
+                        clusters = sce.bone$cluster,
+                        BNPARAM = BiocNeighbors::AnnoyParam(),
+                        BPPARAM = BiocParallel::MulticoreParam())
+
+## Append cluster classifications to sce
+sce.bone$anno.cluster <- anno.cluster[sce.bone$cluster, ]$labels
+```
+
+The enrichment of a given cell type's signature per cluster can be visualized on a heatmap.
+
+```{r singler-cluster-heatmap}
+## Show scores per cluster
+plotScoreHeatmap(anno.cluster, show.labels = TRUE, show_colnames = TRUE)
+```
+
+Classification can also be performed at the single-cell level, and is subsequently appended to the `sce.bone` object as well. 
+
+```{r singler-single}
+## Annotate cells at the single-cell level
+anno.single <- SingleR(sce.bone, ref = hpc,
+                       labels = hpc$label.main,
+                       method = 'single',
+                       BNPARAM = BiocNeighbors::AnnoyParam(),
+                       BPPARAM = BiocParallel::MulticoreParam())
+
+
+## Append single-cell classifications to sce
+sce.bone$anno.single <- anno.single$labels
+```
+
+The classification scores can similarly be visualized at the single-cell level as well.
+
+```{r singler-single-heatmap}
+## Show scores per single-cell label using downsampled 
+set.seed(1234)
+anno.single.downsampled <- anno.single[sample(nrow(anno.single), 5000), ]
+plotScoreHeatmap(anno.single.downsampled, show.labels = TRUE)
+```
+
+These classifications can thus be visualized on subsequent plots such as reduced dimension representations (UMAP, t-SNE) and for downstream analysis.
+
+
+```{r UMAP-singler-cluster, caption = 'UMAP with cluster labels and coloured by SingleR cluster annotations based on the provided reference dataset.'}
+## Plot UMAP with cluster labels and coloured by SingleR cluster annotations
+plotUMAP(sce.bone, colour_by = 'anno.cluster', text_by = 'cluster')
+```
+
+```{r UMAP-singler-single, caption = 'UMAP coloured by SingleR single-cell annotations based on the provided reference dataset.'}
+## Plot UMAP with single-cell labels and coloured by SingleR cluster annotations
+plotUMAP(sce.bone, colour_by = 'anno.single', text_by = 'cluster')
+```
+
+
+<!-- ```{r saveRDS, include=FALSE} -->
+<!-- ## TEMP FIX -->
+<!-- saveRDS(sce.bone, 'sce.bone.rds') -->
+<!-- saveRDS(markers.bone, 'markers.bone.rds') -->
+
+<!-- sce.bone <- readRDS('sce.bone.rds') -->
+<!-- markers.bone <- readRDS('markers.bone.rds') -->
+<!-- ``` -->
+
 
 
 ## Gene set Enrichment Analysis
@@ -271,12 +356,13 @@ pathways <- purrr::map(mdb$data, function(x) {
 names(pathways) <- mdb$geneset
 ```
 
-Finally, the DE results from the `findMarkers()` function are used to test for differential gene set enrichment using the `fgsea` package.
+Finally, the DE results from the `findMarkers()` function are used to test for differential gene set enrichment using the `fgsea` package. Here we compare cluster 3 against cluster 15, which are at opposite ends of a UMAP group.
 
 ```{r annotation-fgsea}
 ## Get stats based on markers search
-stats <- markers.bone[[1]]$logFC.2
-names(stats) <- rownames(markers.bone[[1]])
+## Compare cluster 3 (Dendritic cells) and 15 (HSCs)
+stats <- markers.bone[[3]]$logFC.15
+names(stats) <- rownames(markers.bone[[3]])
 
 ## Run fast gene set enrichment analysis
 ## Returns a data.table object
@@ -291,11 +377,12 @@ gse <- fgsea(pathways = pathways,
 The enrichment scores of the top up and down pathways can then be plotted as a table:
 
 ```{r annotation-viz-fgsea-table}
-## Get top pathways based on p-value
-topPathwaysUp <- gse[gse$NES > 0][order(gse$pval)[1:2], ]$pathway
-topPathwaysDown <- gse[gse$NES < 0][order(gse$pval)[1:2], ]$pathway
-topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+## Get top up and down pathways based on NES
+gse.up <- gse[order(gse$NES, decreasing = TRUE)[1:2], ]$pathway
+gse.dn <- gse[order(gse$NES)[1:2], ]$pathway
+topPathways <- c(gse.up, rev(gse.dn))
 
+## Plot the GSEA table
 plotGseaTable(pathways[topPathways], stats,
               gse, 
               gseaParam = 0.5)
@@ -309,28 +396,30 @@ plotEnrichment(pathways[[topPathways[1]]],
                stats)
 ```
 
+
 ### Trajectory analysis
 
 Slingshot relies on providing a set of clusters on which to construct a trajectory.
 
-```{r trajectory, eval=FALSE}
-## Trajectory Analysis -------------------------------------
+```{r trajectory}
 library(slingshot)
-slc <- slingshot(sce.bone[, sce.bone$cluster %in% c(1, 2, 3)],
+
+## Clusters to attempt trajectory on:
+slc.clusters <- c(15, 22, 11, 7, 1, 3)
+
+## Subsample dataset for speed
+slc.dat <- sce.bone[, sce.bone$cluster %in% slc.clusters]
+slc.subdat <- slc.dat[, sample(ncol(slc.dat), 20000)]
+
+## Run slingshot
+slc <- slingshot(slc.subdat,
                  clusterLabels = 'cluster',
                  reducedDim = 'UMAP')
 ```
 
-```{r}
-## Interactive Exploration ---------------------------------
-## library(iSEE)
-## iSEE(sce) ## not run; opens a web browser GUI
-```
-
 The calculated principal curve can then be visualized on the UMAP space.
 
-```{r viz-trajectory, eval=FALSE}
-## Trajectory analysis -------------------------------------
+```{r viz-trajectory}
 ## Slingshot trajectory plot
 library(RColorBrewer)
 colors <- colorRampPalette(brewer.pal(11, 'Spectral')[-6])(100)
