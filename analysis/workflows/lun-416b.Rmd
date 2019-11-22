@@ -236,8 +236,9 @@ head(marker.set, 10)
 ```{r, echo=FALSE, results="hide"}
 # Crashing if cluster 1 is not what we think it is; 
 # thus, avoid mismatch between text and results.
-stopifnot(all(sapply(marker.set["Myh11",-(1:3)], sign)==1))
-stopifnot(all(sapply(marker.set["Mcm2",-(1:3)], sign)==-1))
+lfc <- getMarkerEffects(marker.set)
+stopifnot(all(sign(lfc["Myh11",])==1))
+stopifnot(all(sign(lfc["Mcm2",])==-1))
 ```
 
 We visualize the expression profiles of the top candidates in the heatmap below to verify that the DE signature is robust.

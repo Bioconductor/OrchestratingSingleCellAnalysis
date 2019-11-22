@@ -190,10 +190,9 @@ head(marker.set[,1:8], 10) # only first 8 columns, for brevity
 stopifnot(identical(marker.set, markers[[chosen.inter.cluster]]))
 
 # Checking the cluster is what we wanted.
-gad1 <- sapply(marker.set["Gad1",-(1:3)], sign)
-stopifnot(all(gad1==1))
-gad2 <- sapply(marker.set["Gad2",-(1:3)], sign)
-stopifnot(all(gad2==1))
+lfc <- getMarkerEffects(marker.set)
+stopifnot(all(sign(lfc["Gad1",])==1))
+stopifnot(all(sign(lfc["Gad2",])==1))
 ```
 
 The heatmap below indicates that most of the top markers are strongly DE in cells of cluster `r chosen.inter.cluster` compared to some or all of the other clusters.
@@ -209,8 +208,7 @@ An alternative visualization approach is to plot the log-fold changes to all oth
 This is more concise and is useful in situations involving many clusters that contain different numbers of cells.
 
 ```{r, fig.asp=1.5}
-logFCs <- as.matrix(marker.set[1:50,-(1:3)])
-colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+logFCs <- getMarkerEffects(marker.set[1:50,])
 
 library(pheatmap)
 max.lfc <- max(abs(range(logFCs)))
