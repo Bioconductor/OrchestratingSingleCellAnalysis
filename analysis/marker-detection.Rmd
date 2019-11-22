@@ -431,6 +431,32 @@ These methods also make stronger assumptions about the data (e.g., equal varianc
 From a practical perspective, they require more work to set up and take more time to run.
 Nonetheless, some custom methods (e.g., `r Biocpkg("MAST")`) may provide a useful point of difference from the simpler tests, in which case they can be converted into a marker detection scheme as described above.
 
+### Combining multiple marker statistics
+
+On occasion, we might want to combine marker statistics from several testing regimes into a single `DataFrame`.
+This allows us to easily inspect multiple statistics at once to verify that a particular gene is a strong candidate marker.
+For example, a large AUC from the WMW test indicates that the expression distributions are well-separated between clusters, while the log-fold change reported with the $t$-test provides a more interpretable measure of the magnitude of the change in expression.
+We use the `multiMarkerStats()` to merge the results of separate `findMarkers()` calls into one `DataFrame` per cluster, with statistics interleaved to facilitate a direct comparison between different test regimes.
+
+```{r}
+combined <- multiMarkerStats(
+    t=findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up"),
+    wilcox=findMarkers(sce.pbmc, test="wilcox", 
+        sce.pbmc$cluster, direction="up"),
+    binom=findMarkers(sce.pbmc, test="binom", 
+        sce.pbmc$cluster, direction="up")
+)
+
+# Interleaved marker statistics from both tests for each cluster.
+colnames(combined[["1"]])
+head(combined[["1"]][,1:9])
+```
+
+In addition, `multiMarkerStats()` will compute a number of new statistics by combining the per-regime statistics.
+The combined `Top` value is obtained by simply taking the largest `Top` value across all tests for a given gene, while the reported `p.value` is obtained by taking the largest $p$-value.
+Ranking on either metric focuses on genes with robust differences that are highly ranked and detected by each of the individual testing regimes.
+Of course, this might be considered an overly conservative approach in practice, so it is entirely permissible to re-rank the `DataFrame` according to the `Top` or `p.value` for an individual regime (effectively limiting the use of the other regimes' statistics to diagnostics only).
+
 ## Handling blocking factors {#marker-batch}
 
 ### Using the `block=` argument
