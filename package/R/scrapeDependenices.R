@@ -13,7 +13,11 @@
 #' @author Aaron Lun
 #'
 #' @examples
-#' \dontrun{cat(paste0("    ", scrapeDependencies("analysis/")), sep=",\n")}
+#' if (file.exists("analysis")) {
+#'     scraped <- scrapeDependencies("analysis/")
+#'     others <- c("GO.db")
+#'     cat(paste0("    ", c(scraped, others)), sep=",\n")
+#' }
 #' @export
 scrapeDependencies <- function(dir) {
     all.rmds <- list.files(dir, recursive=TRUE, full.names=TRUE, pattern="\\.Rmd$")
