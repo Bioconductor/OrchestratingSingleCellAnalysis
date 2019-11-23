@@ -20,7 +20,11 @@ The output of this should be added to the \code{Suggests} field of \pkg{OSCAUtil
 to make it easier to simply install all dependencies required for the book.
 }
 \examples{
-\dontrun{cat(paste0("    ", scrapeDependencies("analysis/")), sep=",\\n")}
+if (file.exists("analysis")) {
+    scraped <- scrapeDependencies("analysis/")
+    others <- c("GO.db")
+    cat(paste0("    ", c(scraped, others)), sep=",\\n")
+}
 }
 \author{
 Aaron Lun
