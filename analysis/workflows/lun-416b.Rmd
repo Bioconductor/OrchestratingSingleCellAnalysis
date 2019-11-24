@@ -88,7 +88,7 @@ gridExtra::grid.arrange(
 )
 ```
 
-We can also examine the number of cells removed for each reason.
+We also examine the number of cells removed for each reason.
 
 ```{r}
 colSums(as.matrix(qc))
@@ -111,7 +111,7 @@ summary(sizeFactors(sce.416b))
 We see that the induced cells have size factors that are systematically shifted from the uninduced cells,
 consistent with the presence of a composition bias (Figure \@ref(fig:unref-416b-norm)).
 
-```{r unref-416b-norm, fig.cap="Relatoinship between the library size factors and the deconvolution size factors in the 416B dataset. Each cell is colored according to its oncogene induction status."}
+```{r unref-416b-norm, fig.cap="Relationship between the library size factors and the deconvolution size factors in the 416B dataset. Each cell is colored according to its oncogene induction status."}
 plot(librarySizeFactors(sce.416b), sizeFactors(sce.416b), pch=16,
     xlab="Library size factors", ylab="Deconvolution factors", 
     col=c("black", "red")[grepl("induced", sce.416b$phenotype)+1],
