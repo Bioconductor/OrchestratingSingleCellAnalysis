@@ -26,6 +26,9 @@ For this session, all we will need loaded is the *SingleCellExperiment* package:
 
 ```{r message=FALSE}
 library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(uwot)
 ```
 
 
@@ -82,8 +85,8 @@ What makes the `assay` slot especially powerful is that it can hold _multiple_ r
 Note that here, we overwrite our previous `sce` upon reassigning the results to `sce` - this is because these functions _return_ a *SingleCellExperiment* object. Some functions - especially those outside of single-cell oriented Bioconductor packages - do not, in which case you will need to append your results to the `sce` object (see below).
 
 ```{r, message=FALSE}
-sce <- scran::computeSumFactors(sce)
-sce <- scater::normalize(sce)
+sce <- computeSumFactors(sce)
+sce <- logNormCounts(sce)
 ```
 
 Viewing the object again, we see that these functions added some new entries:
