@@ -59,29 +59,29 @@ interesting <- markers.pbmc[[chosen]]
 colnames(interesting)
 ```
 
-Of particular interest is the `Top` field, which contains the highest rank for each gene across all pairwise comparisons involving cluster `r chosen`.
-The set of genes with `Top` values of 1 contains the gene with the lowest $p$-value from each comparison.
+Of particular interest is the `Top` field.
+The set of genes with `Top` $\le X$ is the union of the top $X$ genes (ranked by $p$-value) from each pairwise comparison involving cluster `r chosen`.
+For example, the set of all genes with `Top` values of 1 contains the gene with the lowest $p$-value from each comparison.
 Similarly, the set of genes with `Top` values less than or equal to 10 contains the top 10 genes from each comparison.
-Each `DataFrame` produced by `findMarkers()` will order genes based on the `Top` value.
+The `Top` field represents `findMarkers()`'s approach to consolidating multiple pairwise comparisons into a single ranking for each cluster; each `DataFrame` produced by `findMarkers()` will order genes based on the `Top` value by default.
 
 ```{r}
-interesting[1:10,1:3]
+interesting[1:10,1:4]
 ```
 
 ```{r, echo=FALSE}
 # This had better be TRUE!
 platelets <- markers.pbmc[[chosen]]
-stopifnot(all(unlist(platelets["PF4",-(1:3)]) > 0))
+stopifnot(all(getMarkerEffects(platelets["PF4",]) > 0))
 ```
 
-We use the `Top` value to identify a set of genes that is guaranteed to distinguish cluster `r chosen` from any other cluster.
+We use the `Top` field to identify a set of genes that is guaranteed to distinguish cluster `r chosen` from any other cluster.
 Here, we examine the top 6 genes from each pairwise comparison (Figure \@ref(fig:heat-basic-pbmc)).
 Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (_PF4_) and pro-platelet basic protein (_PPBP_).
 
 ```{r heat-basic-pbmc, fig.asp=2, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
 best.set <- interesting[interesting$Top <= 6,]
-logFCs <- as.matrix(best.set[,-(1:3)])
-colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+logFCs <- getMarkerEffects(best.set)
 
 library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
@@ -91,6 +91,11 @@ pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 # This had better be TRUE!
 stopifnot(all(c("PPBP", "PF4") %in% rownames(logFCs)))
 ```
+
+Each `DataFrame` also contains several other statistics that may be of interest.
+The `summary.logFC` field provides a convenient summary of the direction and effect size for each gene, and is defined here as the log-fold change from the comparison with the lowest $p$-value.
+The `p.value` field contains the combined $p$-value that is obtained by applying Simes' method to the pairwise $p$-values for each gene and represents the evidence against the joint null hypothesis, i.e., that the gene is not DE between cluster `r chosen` and any other cluster.
+Examination of these statistics permits a quick evaluation of the suitability of a candidate marker; if both of these metrics are poor (small log-fold change, large $p$-value), the gene can most likely be dismissed.
 
 We intentionally use pairwise comparisons between clusters rather than comparing each cluster to the average of all other cells.
 The latter approach is sensitive to the population composition, potentially resulting in substantially different sets of markers when cell type abundances change in different contexts.
@@ -107,7 +112,7 @@ This is achieved by setting `direction="up"` in the `findMarkers()` call.
 ```{r}
 markers.pbmc.up <- findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up")
 interesting.up <- markers.pbmc.up[[chosen]]
-interesting.up[1:10,1:3]
+interesting.up[1:10,1:4]
 ```
 
 The $t$-test also allows us to specify a non-zero log-fold change as the null hypothesis.
@@ -119,15 +124,14 @@ We perform this by setting `lfc=` in our `findMarkers()` call - when combined wi
 markers.pbmc.up2 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
     direction="up", lfc=1)
 interesting.up2 <- markers.pbmc.up2[[chosen]]
-interesting.up2[1:10,1:3]
+interesting.up2[1:10,1:4]
 ```
 
 These two settings yield a more focused set of candidate marker genes that are upregulated in cluster `r chosen` (Figure \@ref(fig:heat-focused-pbmc)).
 
 ```{r heat-focused-pbmc, fig.cap=sprintf("Heatmap of log-fold changes for cluster %s over all other clusters. Colours are capped at -5 and 5 to preserve dynamic range.", chosen)}
 best.set <- interesting.up2[interesting.up2$Top <= 5,]
-logFCs <- as.matrix(best.set[,-(1:3)])
-colnames(logFCs) <- sub("logFC.", "", colnames(logFCs))
+logFCs <- getMarkerEffects(best.set)
 
 library(pheatmap)
 pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
@@ -152,7 +156,7 @@ A gene will only achieve a low combined $p$-value if it is strongly DE in all co
 markers.pbmc.up3 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
     pval.type="all", direction="up")
 interesting.up3 <- markers.pbmc.up3[[chosen]]
-interesting.up3[1:10,1:2]
+interesting.up3[1:10,1:3]
 ```
 
 This strategy will only report genes that are highly specific to the cluster of interest.
@@ -174,8 +178,12 @@ The downside is that taking this compromise position sacrifices the theoretical 
 markers.pbmc.up4 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
     pval.type="some", direction="up")
 interesting.up4 <- markers.pbmc.up4[[chosen]]
-interesting.up4[1:10,1:2]
+interesting.up4[1:10,1:3]
 ```
+
+In both cases, a different method is used to compute the summary effect size compared to `pval.type="any"`.
+For `pval.type="all"`, the summary log-fold change is defined as that corresponding to the pairwise comparison with the largest $p$-value, while for `pval.type="some"`, it is defined as the log-fold change for the comparison with the middle-most $p$-value.
+This reflects the calculation of the combined $p$-value and avoids focusing on genes with strong changes in only one comparison.
 
 ## Alternative testing regimes
 
@@ -204,7 +212,7 @@ If we want more focused sets, we can also change `pval.type=` as previously desc
 
 ```{r}
 interesting.wmw <- markers.pbmc.wmw[[chosen]]
-interesting.wmw[1:10,1:3]
+interesting.wmw[1:10,1:4]
 ```
 
 The `DataFrame` contains the AUCs from comparing cluster `r chosen` to every other cluster (Figure \@ref(fig:heat-wmw-pbmc)).
@@ -214,8 +222,7 @@ We would typically expect AUCs of 0.7-0.8 for a strongly upregulated candidate m
 
 ```{r heat-wmw-pbmc, fig.cap=sprintf("Heatmap of AUCs for cluster %s compared to all other clusters.", chosen)}
 best.set <- interesting.wmw[interesting.wmw$Top <= 5,]
-AUCs <- as.matrix(best.set[,-(1:3)])
-colnames(AUCs) <- sub("AUC.", "", colnames(AUCs))
+AUCs <- getMarkerEffects(best.set, prefix="AUC")
 
 library(pheatmap)
 pheatmap(AUCs, breaks=seq(0, 1, length.out=21),
@@ -411,7 +418,7 @@ combined <- combineMarkers(all.results, all.pairs, pval.field="P.Value")
 # Inspecting results for our cluster of interest again.
 interesting.voom <- combined[[paste0("cluster", chosen)]] 
 colnames(interesting.voom)
-head(interesting.voom[,1:3])
+head(interesting.voom[,1:4])
 ```
 
 By default, we do not use custom DE methods to perform marker detection, for several reasons.
@@ -420,6 +427,32 @@ However, this is unnecessary when there are large numbers of "replicate" cells i
 These methods also make stronger assumptions about the data (e.g., equal variances for linear models, the distribution of variances during empirical Bayes) that are more likely to be violated in noisy scRNA-seq contexts.
 From a practical perspective, they require more work to set up and take more time to run.
 Nonetheless, some custom methods (e.g., `r Biocpkg("MAST")`) may provide a useful point of difference from the simpler tests, in which case they can be converted into a marker detection scheme as described above.
+
+### Combining multiple marker statistics
+
+On occasion, we might want to combine marker statistics from several testing regimes into a single `DataFrame`.
+This allows us to easily inspect multiple statistics at once to verify that a particular gene is a strong candidate marker.
+For example, a large AUC from the WMW test indicates that the expression distributions are well-separated between clusters, while the log-fold change reported with the $t$-test provides a more interpretable measure of the magnitude of the change in expression.
+We use the `multiMarkerStats()` to merge the results of separate `findMarkers()` calls into one `DataFrame` per cluster, with statistics interleaved to facilitate a direct comparison between different test regimes.
+
+```{r}
+combined <- multiMarkerStats(
+    t=findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up"),
+    wilcox=findMarkers(sce.pbmc, test="wilcox", 
+        sce.pbmc$cluster, direction="up"),
+    binom=findMarkers(sce.pbmc, test="binom", 
+        sce.pbmc$cluster, direction="up")
+)
+
+# Interleaved marker statistics from both tests for each cluster.
+colnames(combined[["1"]])
+head(combined[["1"]][,1:9])
+```
+
+In addition, `multiMarkerStats()` will compute a number of new statistics by combining the per-regime statistics.
+The combined `Top` value is obtained by simply taking the largest `Top` value across all tests for a given gene, while the reported `p.value` is obtained by taking the largest $p$-value.
+Ranking on either metric focuses on genes with robust differences that are highly ranked and detected by each of the individual testing regimes.
+Of course, this might be considered an overly conservative approach in practice, so it is entirely permissible to re-rank the `DataFrame` according to the `Top` or `p.value` for an individual regime (effectively limiting the use of the other regimes' statistics to diagnostics only).
 
 ## Handling blocking factors {#marker-batch}
 
@@ -445,7 +478,7 @@ This approach favours genes that exhibit consistent DE in the same direction in 
 
 ```{r}
 demo <- m.out[["1"]] 
-demo[demo$Top <= 5,1:3]
+demo[demo$Top <= 5,1:4]
 ```
 
 The `block=` argument works with all tests shown above and is robust to difference in the log-fold changes or variance between batches.
@@ -468,7 +501,7 @@ design <- design[,-1,drop=FALSE]
 m.alt <- findMarkers(sce.416b, sce.416b$cluster, 
     design=design, direction="up")
 demo <- m.alt[["1"]]
-demo[demo$Top <= 5,1:3]
+demo[demo$Top <= 5,1:4]
 ```
 
 The use of a linear model makes some strong assumptions, necessitating some caution when interpreting the results.

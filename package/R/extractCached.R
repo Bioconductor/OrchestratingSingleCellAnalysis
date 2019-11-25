@@ -11,9 +11,9 @@
 #' Note that the object does not have to be generated or even referenced in \code{chunk},
 #' provided it was generated in a previous chunk.
 #'
-#' The Rmarkdown file is also subject to several constraints.
+#' The Rmarkdown file is also subject to several constraints:
 #' \itemize{
-#' \item All chunks that can be referenced by \code{chunk} are named.
+#' \item All chunks that might be referenced by the \code{chunk} argument are named.
 #' \item All named chunks are executed, i.e., no \code{eval=FALSE}.
 #' \item All relevant code occurs within triple backticks, i.e., any inline code should be read-only.
 #' \item All triple backticks occur at the start of the line, i.e., no code nested in list elements.
@@ -22,10 +22,13 @@
 #' }
 #' 
 #' Unnamed chunks are allowed but cannot be referenced and will not be shown in the output of this function.
-#' This should not be used for code that might affects varaiables in the named chunks.
+#' This should not be used for code that might affect variables in the named chunks,
+#' i.e., code in unnamed chunks should be \dQuote{read-only} with respect to variables in the named chunks.
+#'
+#' Chunks with names starting with \code{unref-} are considered to be the same as unnamed chunks and will not be referenced.
 #'
 #' @return Variables with names \code{objects} are created in the global environment.
-#' A markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
+#' An markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
 #' based on the code in the named chunks of the Rmarkdown file.
 #' 
 #' @author Aaron Lun
@@ -57,8 +60,10 @@ extractCached <- function(prefix, chunk, objects) {
         } 
 
         curname <- sub(named.pattern, "\\1", all.lines[opens[i]])
-        current.chunk <- available[seq_len(end[1]-1L)]
-        chunks[[curname]] <- current.chunk
+        if (!grepl("^unref-", curname)) {
+            current.chunk <- available[seq_len(end[1]-1L)]
+            chunks[[curname]] <- current.chunk
+        }
     }
 
     m <- match(chunk, names(chunks))

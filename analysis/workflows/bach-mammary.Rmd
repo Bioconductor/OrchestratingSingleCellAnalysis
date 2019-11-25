@@ -1,4 +1,4 @@
-# Mammary gland dataset
+# Mammary gland 10X dataset
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -10,16 +10,12 @@ chapterPreamble(use_cache = TRUE)
 This performs an analysis of the @bach2017differentiation 10X Genomics dataset,
 from which we will consider a single sample of epithelial cells from the mouse mammary gland during gestation.
 
-## Analysis code
-
-### Data loading
+## Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.mam <- BachMammaryData(samples="G_1")
 ```
-
-### Gene annotation
 
 ```{r gene-annotation}
 library(scater)
@@ -32,7 +28,7 @@ rowData(sce.mam)$SEQNAME <- mapIds(ens.mm.v97, keys=rowData(sce.mam)$Ensembl,
     keytype="GENEID", column="SEQNAME")
 ```
 
-### Quality control
+## Quality control
 
 ```{r}
 unfiltered <- sce.mam
@@ -45,49 +41,7 @@ qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent")
 sce.mam <- sce.mam[,!qc$discard]
 ```
 
-### Normalization 
-
-```{r normalization}
-library(scran)
-set.seed(101000110)
-clusters <- quickCluster(sce.mam)
-sce.mam <- computeSumFactors(sce.mam, clusters=clusters)
-sce.mam <- logNormCounts(sce.mam)
-```
-
-### Variance modelling
-
-We use a Poisson-based technical trend to capture more genuine biological variation in the biological component.
-
-```{r variance-modelling}
-set.seed(00010101)
-dec.mam <- modelGeneVarByPoisson(sce.mam)
-top.mam <- getTopHVGs(dec.mam, prop=0.1)
-```
-
-### Dimensionality reduction
-
-```{r dimensionality-reduction}
-library(BiocSingular)
-set.seed(101010011)
-sce.mam <- denoisePCA(sce.mam, technical=dec.mam, subset.row=top.mam)
-sce.mam <- runTSNE(sce.mam, dimred="PCA")
-```
-
-### Clustering 
-
-We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` later).
-
-```{r clustering}
-snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
-sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
-```
-
-## Results
-
-### Quality control statistics
-
-```{r, fig.wide=TRUE}
+```{r unref-bach-qc-dist, fig.wide=TRUE, fig.cap="Distribution of each QC metric across cells in the Bach mammary gland dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
 colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 
@@ -102,7 +56,7 @@ gridExtra::grid.arrange(
 )
 ```
 
-```{r}
+```{r unref-bach-qc-comp, fig.cap="Percentage of mitochondrial reads in each cell in the Bach mammary gland dataset compared to its total count. Each point represents a cell and is colored according to whether that cell was discarded."}
 plotColData(unfiltered, x="sum", y="subsets_Mito_percent", 
     colour_by="discard") + scale_x_log10()
 ```
@@ -111,39 +65,69 @@ plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
 colSums(as.matrix(qc))
 ```
 
-### Normalization
+## Normalization 
+
+```{r normalization}
+library(scran)
+set.seed(101000110)
+clusters <- quickCluster(sce.mam)
+sce.mam <- computeSumFactors(sce.mam, clusters=clusters)
+sce.mam <- logNormCounts(sce.mam)
+```
 
 ```{r}
 summary(sizeFactors(sce.mam))
 ```
 
-```{r}
+```{r unref-bach-norm, fig.cap="Relationship between the library size factors and the deconvolution size factors in the Bach mammary gland dataset."}
 plot(librarySizeFactors(sce.mam), sizeFactors(sce.mam), pch=16,
-    xlab="Library size factors", ylab="Deconvolution factors", log="xy")     
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
 ```
 
-### Variance modelling
+## Variance modelling
 
-```{r}
+We use a Poisson-based technical trend to capture more genuine biological variation in the biological component.
+
+```{r variance-modelling}
+set.seed(00010101)
+dec.mam <- modelGeneVarByPoisson(sce.mam)
+top.mam <- getTopHVGs(dec.mam, prop=0.1)
+```
+
+```{r, unref-bach-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to simulated Poisson counts."}
 plot(dec.mam$mean, dec.mam$total, pch=16, cex=0.5,
     xlab="Mean of log-expression", ylab="Variance of log-expression")
 curfit <- metadata(dec.mam)
 curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
 ```
 
-### Dimensionality reduction
+## Dimensionality reduction
+
+```{r dimensionality-reduction}
+library(BiocSingular)
+set.seed(101010011)
+sce.mam <- denoisePCA(sce.mam, technical=dec.mam, subset.row=top.mam)
+sce.mam <- runTSNE(sce.mam, dimred="PCA")
+```
 
 ```{r}
 ncol(reducedDim(sce.mam, "PCA"))
 ```
 
-### Clustering
+## Clustering 
+
+We use a higher `k` to obtain coarser clusters (for use in `doubletCluster()` later).
+
+```{r clustering}
+snn.gr <- buildSNNGraph(sce.mam, use.dimred="PCA", k=25)
+sce.mam$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
 
 ```{r}
 table(sce.mam$cluster)
 ```
 
-```{r}
+```{r unref-bach-tsne, fig.cap="Obligatory $t$-SNE plot of the Bach mammary gland dataset, where each point represents a cell and is colored according to the assigned cluster."}
 plotTSNE(sce.mam, colour_by="cluster")
 ```
 

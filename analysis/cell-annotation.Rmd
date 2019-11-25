@@ -320,7 +320,7 @@ Indeed, a closer examination of the marker list indicates that this cluster upre
 ```{r, echo=FALSE}
 # Checking that the above statements are correct.
 stopifnot(c("GO:0035148", "GO:0022408", "GO:0019432") %in% head(rownames(go.useful), 20))
-milk <- cur.markers[c("Csn2", "Csn3"), -c(1:3)]
+milk <- getMarkerEffects(cur.markers[c("Csn2", "Csn3"),])
 stopifnot(all(as.matrix(milk)>0))
 ```
 
@@ -341,7 +341,7 @@ by.go <- split(tab[,1], tab[,2])
 
 # Identify genes associated with an interesting term.
 adhesion <- unique(by.go[["GO:0022408"]])
-head(cur.markers[rownames(cur.markers) %in% adhesion,1:3], 10)
+head(cur.markers[rownames(cur.markers) %in% adhesion,1:4], 10)
 ```
 
 Gene set testing of marker lists is a reliable approach for determining if pathways are up- or down-regulated between clusters.
