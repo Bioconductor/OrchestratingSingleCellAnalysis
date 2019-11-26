@@ -119,29 +119,21 @@ extractCached(WFUN("segerstolpe-pancreas"), "variance-modelling",
 sce.seger
 ```
 
-We perform the usual routine to obtain re-normalized values and a set of HVGs. 
+We perform the usual routine to obtain re-normalized values and a set of HVGs.
+Here, we put all the objects into a list to avoid having to explicitly type their names separately.
 
 ```{r}
-universe <- Reduce(intersect, list(rownames(sce.grun), rownames(sce.muraro),
-    rownames(sce.lawlor), rownames(sce.seger)))
+all.sce <- list(Grun=sce.grun, Muraro=sce.muraro, 
+    Lawlor=sce.lawlor, Seger=sce.seger)
+all.dec <- list(Grun=dec.grun, Muraro=dec.muraro, 
+    Lawlor=dec.lawlor, Seger=dec.seger)
 
-# Could use a loop here... but I like typing.
-sce.grun2 <- sce.grun[universe,]
-dec.grun2 <- dec.grun[universe,]
-sce.muraro2 <- sce.muraro[universe,]
-dec.muraro2 <- dec.muraro[universe,]
-sce.lawlor2 <- sce.lawlor[universe,]
-dec.lawlor2 <- dec.lawlor[universe,]
-sce.seger2 <- sce.seger[universe,]
-dec.seger2 <- dec.seger[universe,]
+universe <- Reduce(intersect, lapply(all.sce, rownames))
+all.sce <- lapply(all.sce, "[", i=universe,)
+all.dec <- lapply(all.dec, "[", i=universe,)
 
-normed.pancreas <- multiBatchNorm(sce.grun2, sce.muraro2, sce.lawlor2, sce.seger2)
-sce.grun2 <- normed.pancreas[[1]]
-sce.muraro2 <- normed.pancreas[[2]]
-sce.lawlor2 <- normed.pancreas[[3]]
-sce.seger2 <- normed.pancreas[[4]]
-
-combined.pan <- combineVar(dec.grun2, dec.muraro2, dec.lawlor2, dec.seger2)
+normed.pancreas <- do.call(multiBatchNorm, all.sce)
+combined.pan <- do.call(combineVar, all.dec)
 chosen.genes <- rownames(combined.pan)[combined.pan$bio > 0]
 ```
 
@@ -150,20 +142,19 @@ There are few clusters that are specific to the Segerstolpe dataset, and if we w
 
 ```{r tsne-pancreas-mnn-many, fig.asp=0.5, fig.cap="$t$-SNE plots of the four pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the batch of origin (left) or the assigned cluster (right). The cluster label is shown at the median location across all cells in the cluster."}
 set.seed(1011110)
-mnn.pancreas <- fastMNN(Grun=sce.grun2, Muraro=sce.muraro2, 
-    Lawlor=sce.lawlor2, Seger=sce.seger2, subset.row=chosen.genes)
+mnn.pancreas <- fastMNN(normed.pancreas)
 
-# Bumping up 'k' to get broader clusters,
-# 'smooth over' any remaining batch effect.
+# Bumping up 'k' to get broader clusters for this demonstration. 
 snn.gr <- buildSNNGraph(mnn.pancreas, use.dimred="corrected", k=20)
 clusters <- igraph::cluster_walktrap(snn.gr)$membership
+clusters <- factor(clusters)
 tab <- table(Cluster=clusters, Batch=mnn.pancreas$batch)
 tab
 
 mnn.pancreas <- runTSNE(mnn.pancreas, dimred="corrected")
 gridExtra::grid.arrange(
     plotTSNE(mnn.pancreas, colour_by="batch", text_by=I(clusters)),
-    plotTSNE(mnn.pancreas, colour_by=I(factor(clusters)), text_by=I(clusters)),
+    plotTSNE(mnn.pancreas, colour_by=I(clusters), text_by=I(clusters)),
     ncol=2
 )
 ```
@@ -178,8 +169,13 @@ This is not surprising given the large differences between humans in the wild, b
 (That said, preservation of the within-dataset donor effects is the technically correct course of action here, as a batch correction method should try to avoid removing heterogeneity within each of its defined batches.)
 
 ```{r tsne-pancreas-mnn-donor, fig.cap="$t$-SNE plots of the four pancreas datasets after correction with `fastMNN()`. Each point represents a cell and is colored according to the donor of origin for the Segerstolpe dataset."}
-donors <- c(sce.grun2$donor, sce.muraro2$donor,
-    sce.lawlor2$`islet unos id`, sce.seger2$Donor)
+donors <- c(
+    normed.pancreas$Grun$donor, 
+    normed.pancreas$Muraro$donor,
+    normed.pancreas$Lawlor$`islet unos id`, 
+    normed.pancreas$Seger$Donor
+)
+
 seger.donors <- donors
 seger.donors[mnn.pancreas$batch!="Seger"] <- NA
 plotTSNE(mnn.pancreas, colour_by=I(seger.donors))
@@ -192,8 +188,7 @@ This involves a bit more work to properly specify the two levels of unwanted het
 To make it a bit easier, we use the `noCorrect()` utility to combine all batches into a single `SingleCellExperiment` object.
 
 ```{r}
-combined <- noCorrect(Grun=sce.grun2, Muraro=sce.muraro2, 
-    Lawlor=sce.lawlor2, Seger=sce.seger2)
+combined <- noCorrect(normed.pancreas)
 assayNames(combined) <- "logcounts"
 combined$donor <- donors
 ```
@@ -218,7 +213,7 @@ set.seed(1010100)
 multiout <- fastMNN(combined, batch=donors, subset.row=chosen.genes,
     weights=1/ndonors)
 
-# Renaming things for easier communication later.
+# Renaming metadata fields for easier communication later.
 multiout$dataset <- combined$batch
 multiout$donor <- multiout$batch
 multiout$batch <- NULL
