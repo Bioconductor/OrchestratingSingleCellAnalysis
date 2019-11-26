@@ -26,6 +26,9 @@ For this session, all we will need loaded is the *SingleCellExperiment* package:
 
 ```{r message=FALSE}
 library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(uwot)
 ```
 
 
@@ -82,8 +85,8 @@ What makes the `assay` slot especially powerful is that it can hold _multiple_ r
 Note that here, we overwrite our previous `sce` upon reassigning the results to `sce` - this is because these functions _return_ a *SingleCellExperiment* object. Some functions - especially those outside of single-cell oriented Bioconductor packages - do not, in which case you will need to append your results to the `sce` object (see below).
 
 ```{r, message=FALSE}
-sce <- scran::computeSumFactors(sce)
-sce <- scater::normalize(sce)
+sce <- computeSumFactors(sce)
+sce <- logNormCounts(sce)
 ```
 
 Viewing the object again, we see that these functions added some new entries:
@@ -172,7 +175,7 @@ colData(sce)
 Finally, some packages automatically add to the `colData` slot, for example, the `scater` package features a function, `calculateQCMetrics()`, which appends a lot of quality control data. Here we show the first five columns of `colData(sce)` with the quality control metrics appended to it.
 
 ```{r}
-sce <- scater::calculateQCMetrics(sce)
+sce <- perCellQCMetrics(sce)
 colData(sce)[, 1:5]
 ```
 
@@ -207,7 +210,7 @@ Both of these can be accessed via their respective accessors, `rowRanges()` and 
 rowRanges(sce) # empty
 ```
 
-However, our call to `calculateQCMetrics(sce)` in the prior section filled in the `rowData` slot of our `sce` object, as we can see below (only the first three columns are shown for brevity):
+However, our call to `perCellQCMetrics(sce)` in the prior section filled in the `rowData` slot of our `sce` object, as we can see below (only the first three columns are shown for brevity):
 
 ```{r}
 rowData(sce)[, 1:3]
