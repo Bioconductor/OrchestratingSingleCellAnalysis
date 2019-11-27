@@ -35,17 +35,22 @@ unfiltered <- sce.grun
 ```
 
 This dataset lacks mitochondrial genes so we will do without them for quality control.
-When computing the median and MAD, we exclude donors for which the assumption of a majority of high-quality cells seems to be violated (Figure \@ref(fig:unref-grun-qc-dist); the resulting threshold on each metric is then applied to all cells.
+We compute the median and MAD while blocking on the donor;
+for donors where the assumption of a majority of high-quality cells seems to be violated (Figure \@ref(fig:unref-grun-qc-dist)),
+we compute an appropriate threshold using the other donors as specified in the `subset=` argument.
 
 ```{r quality-control}
 library(scater)
 stats <- perCellQCMetrics(sce.grun)
+
 qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent",
+    batch=sce.grun$donor,
     subset=sce.grun$donor %in% c("D17", "D7", "D2"))
+
 sce.grun <- sce.grun[,!qc$discard]
 ```
 
-```{r unref-grun-qc-dist, fig.wide=TRUE, fig.cap="Distribution of each QC metric across cells in the Grun pancreas dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
+```{r unref-grun-qc-dist, fig.wide=TRUE, fig.cap="Distribution of each QC metric across cells from each donor of the Grun pancreas dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
 colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 

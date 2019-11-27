@@ -217,7 +217,7 @@ That said, the use of `batch=` involves the stronger assumption that most cells 
 If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
 For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(fig:qc-plot-pancreas)).
 This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
-In such cases, it is better to exclude the problematic batches, compute a common median and MAD and use those estimates to obtain a global filter threshold for all cells.
+In such cases, it is better to compute a shared median and MAD from the other batches and use those estimates to obtain an appropriate filter threshold for cells in the problematic batches, as shown below.
 
 ```{r qc-plot-pancreas, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier within each batch (left) or using a common threshold (right)."}
 library(scRNAseq)
@@ -230,7 +230,8 @@ with.blocking <- plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc))
 
 discard.ercc2 <- isOutlier(sce.grun$altexps_ERCC_percent,
-    type="higher", subset=sce.grun$donor %in% c("D17", "D2", "D10"))
+    type="higher", batch=sce.grun$donor,
+    subset=sce.grun$donor %in% c("D17", "D2", "D7"))
 without.blocking <- plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc2))
 
