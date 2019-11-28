@@ -1,4 +1,4 @@
-# Chimeric embryo 10X dataset
+# Pijuan-Sala chimeric mouse embryo (10X Genomics)
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -11,9 +11,7 @@ This performs an analysis of the @pijuansala2019single dataset on mouse gastrula
 Here, we examine chimeric embryos at the E7.5 stage of development 
 where td-Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
 
-## Analysis code
-
-### Data loading
+## Data loading
 
 ```{r loading}
 library(MouseGastrulationData)
@@ -25,15 +23,13 @@ sce.chimera
 gc()
 ```
 
-### Feature annotation
-
 ```{r feature-annotation}
 library(scater)
 rownames(sce.chimera) <- uniquifyFeatureNames(
     rowData(sce.chimera)$ENSEMBL, rowData(sce.chimera)$SYMBOL)
 ```
 
-### Quality control
+## Quality control
 
 Quality control on the cells has already been performed by the authors, so we will not repeat it here.
 We additionally remove cells that are labelled as stripped nuclei or doublets.
@@ -43,7 +39,7 @@ drop <- sce.chimera$celltype.mapped %in% c("stripped", "Doublet")
 sce.chimera <- sce.chimera[,!drop]
 ```
 
-### Normalization
+## Normalization
 
 We use the pre-computed size factors in `sce.chimera`.
 
@@ -51,7 +47,7 @@ We use the pre-computed size factors in `sce.chimera`.
 sce.chimera <- logNormCounts(sce.chimera)
 ```
 
-### Variance modelling
+## Variance modelling
 
 We retain all genes with any positive biological component, to preserve as much signal as possible across a very heterogeneous dataset.
 
@@ -61,7 +57,19 @@ dec.chimera <- modelGeneVar(sce.chimera, block=sce.chimera$sample)
 chosen.hvgs <- dec.chimera$bio > 0
 ```
 
-### Merging
+```{r unref-pijuan-var, fig.asp=0.5, fig.wide=TRUE, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Pijuan-Sala chimeric mouse embryo dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
+par(mfrow=c(1,2))
+blocked.stats <- dec.chimera$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+## Merging
 
 We use a hierarchical merge to first merge together replicates with the same genotype, 
 and then merge samples across different genotypes.
@@ -81,7 +89,13 @@ merged <- correctExperiments(sce.chimera,
 )
 ```
 
-### Clustering
+We use the percentage of variance lost as a diagnostic:
+
+```{r}
+metadata(merged)$merge.info$lost.var
+```
+
+## Clustering
 
 ```{r clustering}
 g <- buildSNNGraph(merged, use.dimred="corrected")
@@ -89,7 +103,13 @@ clusters <- igraph::cluster_louvain(g)
 merged$cluster <- factor(clusters$membership)
 ```
 
-### Dimensionality reduction
+We examine the distribution of cells across clusters and samples.
+
+```{r}
+table(Cluster=merged$cluster, Sample=merged$sample)
+```
+
+## Dimensionality reduction
 
 We use an external algorithm to compute nearest neighbors for greater speed.
 
@@ -98,37 +118,11 @@ merged <- runTSNE(merged, dimred="corrected", external_neighbors=TRUE)
 merged <- runUMAP(merged, dimred="corrected", external_neighbors=TRUE)
 ```
 
-## Results
-
-### Variance modelling
-
-```{r, fig.asp=0.5, fig.wide=TRUE}
-par(mfrow=c(1,2))
-blocked.stats <- dec.chimera$per.block
-for (i in colnames(blocked.stats)) {
-    current <- blocked.stats[[i]]
-    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
-        xlab="Mean of log-expression", ylab="Variance of log-expression")
-    curfit <- metadata(current)
-    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
-}
-```
-
-### Batch correction
-
-```{r}
-metadata(merged)$merge.info$lost.var
-```
-
-### Clustering
-
-```{r}
-table(Cluster=merged$cluster, Sample=merged$sample)
-```
-
-```{r}
-plotTSNE(merged, colour_by="cluster", text_by="cluster", text_col="red")
-plotUMAP(merged, colour_by="cluster")
+```{r unref-bach-tsne, fig.asp=1.5, fig.cap="Obligatory $t$-SNE plots of the Pijuan-Sala chimeric mouse embryo dataset, where each point represents a cell and is colored according to the assigned cluster (top) or sample of origin (bottom)."}
+gridExtra::grid.arrange(
+    plotTSNE(merged, colour_by="cluster", text_by="cluster", text_col="red"),
+    plotTSNE(merged, colour_by="batch")
+)
 ```
 
 ## Session Info {-}
