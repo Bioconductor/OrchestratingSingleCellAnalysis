@@ -32,20 +32,15 @@ For example, outlier-based QC on the cells is more effective when performed with
 The same can also be said for trend fitting when modelling the mean-variance relationship (Section \@ref(variance-batch)).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-filtered-pbmc3k", "clustering",
-    c("pbmc3k", "dec3k"))
+extractCached("workflows/tenx-filtered-pbmc3k_4k_8k", "clustering", c("all.sce", "all.dec"))
 ```
 
 ```{r}
+pbmc3k <- all.sce$pbmc3k
+dec3k <- all.dec$pbmc3k
 pbmc3k
-```
-
-```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-filtered-pbmc4k", "clustering",
-    c("pbmc4k", "dec4k"))
-```
-
-```{r}
+pbmc4k <- all.sce$pbmc4k
+dec4k <- all.dec$pbmc4k
 pbmc4k
 ```
 
@@ -337,7 +332,7 @@ gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
 ```
 
 Another evaluation approach is to compute the coassignment probabilities (Section \@ref(cluster-bootstrapping)), i.e., the probability that cells from two within-batch clusters are clustered together in the across-batch clustering. 
-High probabilities off the diagonal in Figure \@ref(coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
+High probabilities off the diagonal in Figure \@ref(fig:coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
 We would generally expect low off-diagonal probabilities for most pairs of clusters, though this may not be reasonably possible if the within-batch clusters were poorly separated in the first place.
 
 ```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilites for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
