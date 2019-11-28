@@ -1,0 +1,175 @@
+# Human PBMC 10X dataset (surface proteins)
+
+```{r setup, echo=FALSE, results="asis"}
+library(OSCAUtils)
+chapterPreamble(use_cache = TRUE)
+```
+
+## Introduction
+
+Here, we describe a brief analysis of _yet another_ peripheral blood mononuclear cell (PBMC) dataset from 10X Genomics [@zheng2017massively].
+Data are publicly available from the [10X Genomics website](https://support.10xgenomics.com/single-cell-vdj/datasets/3.0.0/vdj_v1_mm_c57bl6_pbmc_5gex), from which we download the filtered gene/barcode count matrices for gene expression and cell surface proteins.
+Note that most of the repertoire-related steps will be discussed in Chapter \@ref(repertoire-seq), this workflow mostly provides the baseline analysis for the expression data.
+
+## Analysis code
+
+### Data loading
+
+```{r loading}
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+exprs.data <- bfcrpath(bfc, file.path(
+    "http://cf.10xgenomics.com/samples/cell-vdj/3.1.0",
+    "vdj_v1_hs_pbmc3",
+    "vdj_v1_hs_pbmc3_filtered_feature_bc_matrix.tar.gz"))
+untar(exprs.data, exdir=tempdir())
+
+library(DropletUtils)
+sce.pbmc <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
+sce.pbmc <- splitAltExps(sce.pbmc, rowData(sce.pbmc)$Type)
+```
+
+### Quality control
+
+```{r}
+unfiltered <- sce.pbmc
+```
+
+We discard cells with high mitochondrial proportions and few detectable ADT counts.
+
+```{r quality-control}
+library(scater)
+is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
+stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=is.mito))
+
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
+low.adt <- stats$`altexps_Antibody Capture_detected` < nrow(altExp(sce.pbmc))/2
+
+discard <- high.mito | low.adt
+sce.pbmc <- sce.pbmc[,!discard]
+```
+
+### Normalization
+
+Computing size factors for the gene expression and ADT counts.
+
+```{r normalization}
+library(scran)
+
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
+
+# TODO: move into scran somewhere.
+library(DelayedMatrixStats)
+ambient <- rowMeans(counts(altExp(sce.pbmc)))
+sf.amb <- colMedians(DelayedArray(counts(altExp(sce.pbmc)))/ambient)
+sf.amb <- sf.amb/mean(sf.amb)
+sizeFactors(altExp(sce.pbmc)) <- sf.amb
+
+sce.pbmc <- logNormCounts(sce.pbmc, use_altexps=TRUE)
+```
+
+### Dimensionality reduction
+
+```{r dimensionality-reduction}
+set.seed(100000)
+altExp(sce.pbmc) <- runTSNE(altExp(sce.pbmc))
+
+set.seed(1000000)
+altExp(sce.pbmc) <- runUMAP(altExp(sce.pbmc))
+```
+
+### Clustering
+
+```{r clustering}
+g.adt <- buildSNNGraph(altExp(sce.pbmc), k=10, d=NA)
+clust.adt <- igraph::cluster_walktrap(g.adt)$membership
+altExp(sce.pbmc)$cluster <- factor(clust.adt)
+
+set.seed(1010010)
+subclusters <- quickSubCluster(sce.pbmc, clust.adt,
+    prepFUN=function(x) {
+        dec <- modelGeneVarByPoisson(x)
+        top <- getTopHVGs(dec, prop=0.1)
+        denoisePCA(x, dec, subset.row=top)
+    }, 
+    clusterFUN=function(x) {
+        g.gene <- buildSNNGraph(x, k=10, use.dimred = 'PCA')
+        igraph::cluster_walktrap(g.gene)$membership
+    }
+)
+```
+
+## Results
+
+### Quality control statistics
+
+```{r, fig.wide=TRUE}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(unfiltered, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(unfiltered, y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    plotColData(unfiltered, y="altexps_Antibody Capture_detected",
+        colour_by="discard") + ggtitle("ADT detected"),
+    ncol=2
+)
+```
+
+```{r}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
+    colour_by="discard") + scale_x_log10()
+```
+
+```{r}
+summary(high.mito)
+summary(low.adt)
+```
+
+### Normalization
+
+```{r}
+summary(sizeFactors(sce.pbmc))
+summary(sizeFactors(altExp(sce.pbmc)))
+```
+
+```{r}
+plot(librarySizeFactors(sce.pbmc), sizeFactors(sce.pbmc), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", 
+    main="Gene expression", log="xy")
+plot(librarySizeFactors(altExp(sce.pbmc)), sizeFactors(altExp(sce.pbmc)), pch=16,
+    xlab="Library size factors", ylab="Median-based factors", 
+    main="Antibody capture", log="xy")
+```
+
+### Clustering
+
+```{r}
+table(altExp(sce.pbmc)$cluster)
+```
+
+```{r}
+plotTSNE(altExp(sce.pbmc), colour_by="cluster", text_by="cluster", text_col="red")
+```
+
+Counting the number of gene expression-derived subclusters in each ADT-derived parent cluster:
+
+```{r}
+data.frame(
+    Cluster=names(subclusters),
+    Ncells=vapply(subclusters, ncol, 0L),
+    Nsub=vapply(subclusters, function(x) length(unique(x$subcluster)), 0L)
+)
+```
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```

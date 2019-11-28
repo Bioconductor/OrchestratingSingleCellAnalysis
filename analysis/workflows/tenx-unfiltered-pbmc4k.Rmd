@@ -87,10 +87,10 @@ set.seed(10000)
 sce.pbmc <- denoisePCA(sce.pbmc, subset.row=top.pbmc, technical=dec.pbmc)
 
 set.seed(100000)
-sce.pbmc <- runTSNE(sce.pbmc, use_dimred="PCA")
+sce.pbmc <- runTSNE(sce.pbmc, dimred="PCA")
 
 set.seed(1000000)
-sce.pbmc <- runUMAP(sce.pbmc, use_dimred="PCA")
+sce.pbmc <- runUMAP(sce.pbmc, dimred="PCA")
 ```
 
 ### Clustering
@@ -173,7 +173,7 @@ chosen.macro <- 12
 ```
 
 ```{r}
-markers <- findMarkers(sce.pbmc, clusters=sce.pbmc$cluster, 
+markers <- findMarkers(sce.pbmc, groups=sce.pbmc$cluster, 
     pval.type="some", direction="up")
 ```
 
@@ -183,7 +183,7 @@ compared to macrophages in cluster `r chosen.macro`.
 
 ```{r}
 marker.set <- markers[["7"]]
-as.data.frame(marker.set[1:30,1:2])
+as.data.frame(marker.set[1:30,1:3])
 ```
 
 ```{r, echo=FALSE, results="hide"}

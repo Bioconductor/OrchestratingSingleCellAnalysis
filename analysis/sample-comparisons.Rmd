@@ -42,7 +42,7 @@ extractCached("workflows/pijuan-embryo", "dimensionality-reduction", "merged")
 merged
 ```
 
-The differential analyses are predicated on many of the pre-processing steps covered in previous chapters.
+The differential analyses in this chapter will be predicated on many of the pre-processing steps covered previously.
 For brevity, we will not explicitly repeat them here,
 only noting that we have already merged cells from all samples into the same coordinate system (Chapter \@ref(data-integration))
 and clustered the merged dataset to obtain a common partitioning across all samples (Chapter \@ref(clustering)).
@@ -57,6 +57,13 @@ gridExtra::grid.arrange(
     plotTSNE(merged, colour_by=data.frame(pool=factor(merged$pool))),
     ncol=2
 )
+```
+
+```{r, echo=FALSE}
+tab <- table(merged$cluster, merged$pool)
+stopifnot(mean(rowMeans(tab > 0)==1) > 0.9) 
+# almost all clusters have entries in all samples,
+# indicating that things are truly well-mixed.
 ```
 
 Ordinarily, we would be obliged to perform marker detection to assign biological meaning to these clusters.
@@ -286,7 +293,7 @@ We refer readers to the `r Biocpkg("edgeR")` user's guide for more details.
 setdiff(unique(summed$celltype.mapped), names(summaries))
 ```
 
-## Differential abundance between conditions
+## Differential abundance between conditions {#differential-abundance}
 
 ### Overview
 
@@ -456,7 +463,9 @@ This ensures that any non-DA subpopulation is not reported as being depleted aft
 Some caution is still required, though - even if the external numbers are accurate, we need to assume that cell capture efficiency is (on average) equal between conditions to justify their use as $\tau$.
 And obviously, the use of a non-zero $\tau$ will reduce power to detect real changes when the composition bias is not present.
 
-## DE or DA? Two sides of the same coin {#de-da-duality}
+## Comments on interpretation
+
+### DE or DA? Two sides of the same coin {#de-da-duality}
 
 While useful, the distinction between DA and DE analyses is inherently artificial for scRNA-seq data.
 This is because the labels used in the former are defined based on the genes to be tested in the latter.
@@ -478,7 +487,29 @@ The moral of the story is that DA and DE analyses are simply two different persp
 For any comprehensive characterization of differences between populations, it is usually necessary to consider both analyses.
 Indeed, they complement each other almost by definition, e.g., clustering parameters that reduce DE will increase DA and vice versa.
 
-## Avoiding problems with ambient RNA
+### Sacrificing biology by integration {#sacrificing-differences}
+
+Earlier in this chapter, we defined clusters from corrected values after applying `fastMNN()` to cells from all samples in the chimera dataset.
+Alert readers may realize that this would result in the removal of biological differences between our conditions. 
+Any systematic difference in expression caused by injection would be treated as a batch effect and lost when cells from different samples are aligned to the same coordinate space.
+Now, one may not consider injection to be an interesting biological effect, but the same reasoning applies for other conditions, e.g., integration of wild-type and knock-out samples (Section \@ref(ambient-problems)) would result in the loss of any knock-out effect in the corrected values.
+
+This loss is both expected and desirable.
+As we mentioned in Section \@ref(using-corrected-values), the main motivation for performing batch correction is to enable us to characterize population heterogeneity in a consistent manner across samples.
+This remains true in situations with multiple conditions where we would like one set of clusters and annotations that can be used as common labels for the DE or DA analyses described above.
+The alternative would be to cluster each condition separately and to attempt to identify matching clusters across conditions - not straightforward for poorly separated clusters in contexts like differentiation.
+
+It may seem distressing to some that a (potentially very interesting) biological difference between conditions is lost during correction.
+However, this concern is largely misplaced as the correction is only ever used for defining common clusters and annotations.
+The DE analysis itself is performed on pseudo-bulk samples created from the uncorrected counts, preserving the biological difference and ensuring that it manifests in the list of DE genes for affected cell types.
+Of course, if the DE is strong enough, it may result in a new condition-specific cluster that would be captured by a DA analysis as discussed in Section \@ref(de-da-duality).
+
+One final consideration is the interaction of condition-specific expression with the assumptions of each batch correction method.
+For example, MNN correction assumes that the differences between samples are orthogonal to the variation within samples.
+Arguably, this assumption is becomes more questionable if the between-sample differences are biological in nature, e.g., a treatment effect that makes one cell type seem more transcriptionally similar to another may cause the wrong clusters to be aligned across conditions.
+As usual, users will benefit from the diagnostics described in Chapter \@ref(integrating-datasets) and a healthy dose of skepticism.
+
+## Avoiding problems with ambient RNA {#ambient-problems}
 
 ### Motivation
 
@@ -561,7 +592,7 @@ stopifnot(identical(rownames(ambient), rownames(summed.neural)))
 stopifnot(identical(as.integer(colnames(ambient)), summed.neural$sample))
 ```
 
-Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx] and subtract it to remove the effects of ambient contamination.
+Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx].
 In our case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination rate in each sample.
 
 ```{r}
@@ -611,7 +642,7 @@ subtracted[is.hbb,]
 
 Another tempting approach is to use interaction models to implicitly subtract the ambient effect during GLM fitting.
 The assumption would be that, for genuine DEGs, the log-fold change within cells is larger in magnitude than those in the ambient solution (where the effect would be diluted by contributions from cell types where the gene is not DE).
-However, this is not always the case - a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to a rather awkward conclusion.
+However, this is not always the case; a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to the rather awkward conclusion that the WT neural crest cells are expressing hemoglobin beyond that explained by ambient contamination.
 
 ```{r}
 # Re-using keep.neural to simplify comparison.
@@ -629,6 +660,7 @@ topTags(res.ambient, n=10)
 # Checking that the hemoglobins are back!
 tab <- topTags(res.ambient)$table
 stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
+stopifnot(abs(tab["Hbb-y","logFC"]) < abs(topTags(res.neural)$table["Hbb-y", "logFC"]))
 ```
 
 <!--
@@ -689,5 +721,3 @@ head(final, 10)
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
 ```
-
-

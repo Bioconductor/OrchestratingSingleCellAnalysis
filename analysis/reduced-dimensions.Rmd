@@ -128,11 +128,8 @@ Another strategy is to retain all PCs until the percentage of total variation ex
 For example, we might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
 Instead, we derive a suitable value for $T$ by calculating the proportion of variance in the data that is attributed to the biological component.
-This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVar()` or related functions, where $T$ is defined as the ratio of the sum of the biological components to the sum of total variances.
-
+This is done using the `denoisePCA()` function with the variance modelling results from `modelGeneVarWithSpikes()` or related functions, where $T$ is defined as the ratio of the sum of the biological components to the sum of total variances.
 To illustrate, we use this strategy to pick the number of PCs in the 10X PBMC dataset.
-Note that explicit feature selection is not strictly necessary, as `denoisePCA()` will automatically restrict the PCA to genes with positive biological components (Section \@ref(feature-selection-positive)) to ensure that $T$ is always a positive value.
-We also use `IrlbaParam()` to speed up the SVD as previously described.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("workflows/tenx-unfiltered-pbmc4k", "variance-modelling", 
@@ -146,15 +143,17 @@ denoised.pbmc <- denoisePCA(sce.pbmc, technical=dec.pbmc, subset.row=top.pbmc)
 ncol(reducedDim(denoised.pbmc))
 ```
 
-The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation.
-Any fewer PCs will definitely discard some aspect of biological signal.
-Note that the converse is not true, i.e., there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.
-The returned value of $d$ provides a reasonable choice of rank when we want to retain as much signal as possible while still removing some noise.
+```{r, echo=FALSE}
+# Checking we have a decent number of PCs.
+stopifnot(ncol(reducedDim(denoised.pbmc)) > 5)
+```
 
-From a practical perspective, the `denoisePCA()` approach usually retains more PCs than the elbow point method.
-This is because the former does not compare PCs to each other and thus does not discard PCs corresponding to secondary factors of variation.
+The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation.
+This choice of $d$ is motivated by the fact that any fewer PCs will definitely discard some aspect of biological signal.
+(Of course, the converse is not true; there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.)
+From a practical perspective, the `denoisePCA()` approach usually retains more PCs than the elbow point method as the former does not compare PCs to each other and is less likely to discard PCs corresponding to secondary factors of variation.
 The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
-Thus, whether this is a "better" approach depends on the analyst's willingness to increase noise in order to preserve weaker biological signals.
+Thus, whether this is a "better" approach depends on the our willingness to increase noise in order to preserve weaker biological signals.
 
 Incidentally, `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
 By default, the number is bounded within the "reasonable" limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low).
@@ -165,6 +164,20 @@ set.seed(001001001)
 denoised.zeisel <- denoisePCA(sce.zeisel, technical=dec.zeisel, 
     subset.row=top.zeisel)
 ncol(reducedDim(denoised.zeisel))
+```
+
+This method also tends to perform best when the mean-variance trend reflects the actual technical noise, i.e., estimated by `modelGeneVarByPoisson()` or `modelGeneVarWithSpikes()` instead of `modelGeneVar()` (Chapter \@ref(feature-selection)).
+Variance modelling results from `modelGeneVar()` tend to understate the actual biological variation, especially in highly heterogeneous datasets where secondary factors of variation inflate the fitted values of the trend.
+Fewer PCs are subsequently retained because $T$ is artificially lowered, as evidenced by `denoisePCA()` returning the lower limit of 5 PCs for the PBMC dataset:
+
+```{r}
+dec.pbmc2 <- modelGeneVar(sce.pbmc)
+denoised.pbmc2 <- denoisePCA(sce.pbmc, technical=dec.pbmc2, subset.row=top.pbmc)
+ncol(reducedDim(denoised.pbmc2))
+```
+
+```{r, echo=FALSE}
+stopifnot(ncol(reducedDim(denoised.pbmc2))==5)
 ```
 
 ### Based on population structure

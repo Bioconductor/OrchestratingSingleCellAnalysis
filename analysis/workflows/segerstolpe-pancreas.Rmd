@@ -10,16 +10,12 @@ chapterPreamble(use_cache = TRUE)
 This performs an analysis of the @segerstolpe2016singlecell dataset,
 consisting of human pancreas cells from various donors.
 
-## Analysis code
-
-### Data loading
+## Data loading
 
 ```{r loading}
 library(scRNAseq)
 sce.seger <- SegerstolpePancreasData()
 ```
-
-### Gene annotation
 
 ```{r gene-annotation}
 library(AnnotationHub)
@@ -33,8 +29,6 @@ keep <- !duplicated(ens.id)
 sce.seger <- sce.seger[keep,]
 rownames(sce.seger) <- ens.id[keep]
 ```
-
-### Sample annotation
 
 We simplify the names of some of the relevant column metadata fields for ease of access.
 Some editing of the cell type labels is necessary for consistency with other data sets.
@@ -51,23 +45,48 @@ sce.seger$CellType <- paste0(
     substring(sce.seger$CellType, 2))
 ```
 
-### Quality control
+## Quality control
 
 ```{r}
 unfiltered <- sce.seger
 ```
 
 We remove low quality cells that were marked by the authors.
-We then perform additional quality control, as some of the remaining 
-still have very low counts and numbers of detected features.
+We then perform additional quality control as some of the remaining cells still have very low counts and numbers of detected features.
+For some batches that seem to have a majority of low-quality cells (Figure \@ref(unref-seger-qc-dist)), we use the other batches to define an appropriate threshold via `subset=`.
 
 ```{r quality-control}
 low.qual <- sce.seger$Quality == "low quality cell"
 
 library(scater)
 stats <- perCellQCMetrics(sce.seger)
-qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent")
+qc <- quickPerCellQC(stats, percent_subsets="altexps_ERCC_percent",
+    batch=sce.seger$Donor,
+    subset=!sce.seger$Donor %in% c("HP1504901", "HP1509101"))
+
 sce.seger <- sce.seger[,!(qc$discard | low.qual)]
+```
+
+```{r unref-seger-qc-dist, fig.width=10, fig.asp=1, fig.cap="Distribution of each QC metric across cells from each donor of the Segerstolpe pancreas dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
+unfiltered$discard <- qc$discard
+
+gridExtra::grid.arrange(
+    plotColData(unfiltered, x="Donor", y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count") +
+        theme(axis.text.x = element_text(angle = 90)),
+    plotColData(unfiltered, x="Donor", y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features") +
+        theme(axis.text.x = element_text(angle = 90)),
+    plotColData(unfiltered, x="Donor", y="altexps_ERCC_percent",
+        colour_by="discard") + ggtitle("ERCC percent") +
+        theme(axis.text.x = element_text(angle = 90)),
+    ncol=2
+)
+```
+
+```{r}
+colSums(as.matrix(qc))
 ```
 
 ### Normalization
@@ -81,6 +100,15 @@ sce.seger <- computeSumFactors(sce.seger, clusters=clusters)
 sce.seger <- logNormCounts(sce.seger) 
 ```
 
+```{r}
+summary(sizeFactors(sce.seger))
+```
+
+```{r unref-seger-norm, fig.cap="Relationship between the library size factors and the deconvolution size factors in the Segerstolpe pancreas dataset."}
+plot(librarySizeFactors(sce.seger), sizeFactors(sce.seger), pch=16,
+    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
+```
+
 ### Variance modelling
 
 We do not use cells with no spike-ins for variance modelling.
@@ -91,6 +119,19 @@ for.hvg <- sce.seger[,librarySizeFactors(altExp(sce.seger)) > 0
     & sce.seger$Donor!="AZ"]
 dec.seger <- modelGeneVarWithSpikes(for.hvg, "ERCC", block=for.hvg$Donor)
 chosen.hvgs <- getTopHVGs(dec.seger, n=2000)
+```
+
+```{r unref-seger-variance, fig.asp=1, fig.height=10, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Grun pancreas dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the spike-in transcripts (red) separately for each donor."}
+par(mfrow=c(3,3))
+blocked.stats <- dec.seger$per.block
+for (i in colnames(blocked.stats)) {
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
+        xlab="Mean of log-expression", ylab="Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col="red", pch=16)
+    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
 ```
 
 ### Dimensionality reduction
@@ -109,76 +150,26 @@ snn.gr <- buildSNNGraph(sce.seger, use.dimred="PCA")
 sce.seger$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
-## Results
+We see a strong donor effect, which suggests that should have called `fastMNN()` at some point.
+(But hey, we already did that for the Muraro and Grun analyses, so where's the fun in doing that again?)
 
-### Quality control statistics
+```{r unref-seger-heat-1, fig.cap="Heatmap of the frequency of cells from each donor in each cluster."}
+tab <- table(Cluster=sce.seger$cluster, Donor=sce.seger$Donor)
+library(pheatmap)
+pheatmap(log10(tab+10), color=viridis::viridis(100))
+```
 
-```{r, fig.wide=TRUE}
-colData(unfiltered) <- cbind(colData(unfiltered), stats)
-unfiltered$discard <- qc$discard
+```{r unref-seger-heat-2, fig.cap="Heatmap of the frequency of cells from each cell type label in each cluster."}
+tab <- table(Cluster=sce.seger$cluster, Donor=sce.seger$CellType)
+pheatmap(log10(tab+10), color=viridis::viridis(100))
+```
 
+```{r unref-grun-tsne, fig.cap="Obligatory $t$-SNE plots of the Segerstolpe pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotColData(unfiltered, x="Donor", y="sum", colour_by="discard") +
-        scale_y_log10() + ggtitle("Total count"),
-    plotColData(unfiltered, x="Donor", y="detected", colour_by="discard") +
-        scale_y_log10() + ggtitle("Detected features"),
-    plotColData(unfiltered, x="Donor", y="altexps_ERCC_percent",
-        colour_by="discard") + ggtitle("ERCC percent"),
+    plotTSNE(sce.seger, colour_by="cluster"),
+    plotTSNE(sce.seger, colour_by="Donor"),
     ncol=2
 )
-```
-
-```{r}
-colSums(as.matrix(qc))
-```
-
-### Normalization
-
-```{r}
-summary(sizeFactors(sce.seger))
-```
-
-```{r}
-plot(librarySizeFactors(sce.seger), sizeFactors(sce.seger), pch=16,
-    xlab="Library size factors", ylab="Deconvolution factors", log="xy")
-```
-
-### Variance modelling
-
-```{r, fig.asp=1, fig.height=10}
-par(mfrow=c(3,3))
-blocked.stats <- dec.seger$per.block
-for (i in colnames(blocked.stats)) {
-    current <- blocked.stats[[i]]
-    plot(current$mean, current$total, main=i, pch=16, cex=0.5,
-        xlab="Mean of log-expression", ylab="Variance of log-expression")
-    curfit <- metadata(current)
-    points(curfit$mean, curfit$var, col="red", pch=16)
-    curve(curfit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
-}
-```
-
-### Dimensionality reduction
-
-```{r}
-ncol(reducedDim(sce.seger, "PCA"))
-```
-
-### Clustering
-
-We see a strong donor effect, which suggests that should have called `fastMNN()` at some point.
-
-```{r}
-table(Cluster=sce.seger$cluster, Donor=sce.seger$Donor)
-```
-
-```{r}
-table(Cluster=sce.seger$cluster, Donor=sce.seger$CellType)
-```
-
-```{r}
-plotTSNE(sce.seger, colour_by="cluster")
-plotTSNE(sce.seger, colour_by="Donor")
 ```
 
 ## Session Info {-}

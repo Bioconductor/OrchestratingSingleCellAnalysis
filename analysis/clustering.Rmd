@@ -125,6 +125,11 @@ clust.50 <- igraph::cluster_walktrap(g.50)$membership
 table(clust.50)
 ```
 
+```{r, echo=FALSE}
+stopifnot(length(unique(clust)) < length(unique(clust.5)))
+stopifnot(length(unique(clust)) > length(unique(clust.50)))
+```
+
 The graph itself can be visualized using a force-directed layout (Figure \@ref(fig:pbmc-force)).
 This yields a dimensionality reduction result that is closely related to $t$-SNE and UMAP, though which of these is the most aesthetically pleasing is left to the eye of the beholder.
 
@@ -159,13 +164,30 @@ clust.eigen <- igraph::cluster_leading_eigen(g)$membership
 ```
 
 It is then straightforward to compare two clustering strategies to see how they differ.
-For example, the results below suggest that Louvain is similar to Walktrap;
-fast-greedy yields coarser clusters; and Infomap provides higher resolution.
+For example, Figure \@ref(fig:walktrap-v-others) suggests that Infomap yields finer clusters than Walktrap while fast-greedy yields coarser clusters.
 
-```{r}
-table(Louvain=clust.louvain, Walktrap=clust)
-table(Infomap=clust.infomap, Walktrap=clust)
-table(Fast=clust.fast, Walktrap=clust)
+```{r walktrap-v-others, fig.asp=2, fig.cap="Number of cells assigned to combinations of cluster labels with different community detection algorithms in the PBMC dataset. Each entry of each heatmap represents a pair of labels, coloured proportionally to the log-number of cells with those labels."}
+library(pheatmap)
+
+# Using a large pseudo-count for a smoother color transition
+# between 0 and 1 cell in each 'tab'.
+tab <- table(paste("Infomap", clust.infomap), 
+    paste("Walktrap", clust))
+ivw <- pheatmap(log10(tab+10), main="Infomap vs Walktrap",
+    color=viridis::viridis(100), silent=TRUE)
+
+tab <- table(paste("Fast", clust.fast), 
+    paste("Walktrap", clust))
+fvw <- pheatmap(log10(tab+10), main="Fast-greedy vs Walktrap",
+    color=viridis::viridis(100), silent=TRUE)
+
+gridExtra::grid.arrange(ivw[[4]], fvw[[4]])
+```
+
+```{r, echo=FALSE}
+# Checking my comments above.
+stopifnot(length(unique(clust.fast)) < length(unique(clust)))
+stopifnot(length(unique(clust.infomap)) > length(unique(clust)))
 ```
 
 Some community detection algorithms operate by agglomeration and thus can be used to construct a hierarchical dendrogram based on the pattern of merges between clusters.
@@ -195,10 +217,10 @@ We use the ratio instead of the difference as the former is less dependent on th
 
 ```{r}
 ratio <- clusterModularity(g, clust, as.ratio=TRUE)
-ratio
+dim(ratio)
 ```
 
-In each matrix, each row/column corresponds to a cluster, and each entry of the matrix contains the ratio of the observed to total weight of edges between cells in the respective clusters.
+In this matrix, each row/column corresponds to a cluster and each entry contains the ratio of the observed to total weight of edges between cells in the respective clusters.
 A dataset containing well-separated clusters should contain most of the observed total weight on the diagonal entries, i.e., most edges occur between cells in the same cluster.
 Indeed, concentration of the weight on the diagonal of (Figure \@ref(fig:cluster-mod)) indicates that most of the clusters are well-separated, while some modest off-diagonal entries represent closely related clusters with more inter-connecting edges.
 
@@ -210,16 +232,18 @@ pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
 
 One useful approach is to use the `ratio` matrix to form another graph where the nodes are clusters rather than cells.
 Edges between nodes are weighted according to the ratio of observed to expected edge weights between cells in those clusters.
-We can then repeat our graph operations on this new cluster-level graph.
+We can then repeat our graph operations on this new cluster-level graph to explore the relationships between clusters.
 For example, we could obtain clusters of clusters, or we could simply create a new cluster-based layout for visualization (Figure \@ref(fig:cluster-graph)).
-This is analogous to the "graph abstraction" approach described by @wolf2017graph.
+This is analogous to the "graph abstraction" approach described by @wolf2017graph, which can be used to identify trajectories in the data based on high-weight paths between clusters.
 
-```{r cluster-graph, fig.cap="Force-directed layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
-cluster.gr <- igraph::graph_from_adjacency_matrix(ratio, 
+```{r cluster-graph, fig.cap="Force-based layout showing the relationships between clusters based on the log-ratio of observed to expected total weights between nodes in different clusters. The thickness of the edge between a pair of clusters is proportional to the corresponding log-ratio."}
+cluster.gr <- igraph::graph_from_adjacency_matrix(log2(ratio+1), 
     mode="upper", weighted=TRUE, diag=FALSE)
 
+# Increasing the weight to increase the visibility of the lines.
 set.seed(11001010)
-plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*20)
+plot(cluster.gr, edge.width=igraph::E(cluster.gr)$weight*5,
+    layout=igraph::layout_with_lgl)
 ```
 
 Incidentally, some readers may have noticed that all `r CRANpkg("igraph")` commands were prefixed with `igraph::`.
@@ -483,6 +507,42 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
+## Evaluating cluster stability {#cluster-bootstrapping}
+
+A desirable property of a given clustering is that it is stable to perturbations to the input data [@luxburg2010clustering].
+Stable clusters are logistically convenient as small changes to upstream processing will not change the conclusions;
+greater stability also increases the likelihood that those conclusions can be reproduced in an independent replicate study.
+`r Biocpkg("scran")` uses bootstrapping to evaluate the stability of a clustering algorithm on a given dataset - that is, cells are sampled with replacement to create a "bootstrap replicate" dataset, and clustering is repeated on this replicate to see if the same clusters can be reproduced.
+We demonstrate below for graph-based clustering on the PBMC dataset.
+
+```{r}
+myClusterFUN <- function(x) {
+    g <- buildSNNGraph(x, use.dimred="PCA", type="jaccard")
+    igraph::cluster_louvain(g)$membership
+}
+
+originals <- myClusterFUN(sce.pbmc)
+
+set.seed(0010010100)
+coassign <- bootstrapCluster(sce.pbmc, FUN=myClusterFUN, clusters=originals)
+dim(coassign)
+```
+
+The function returns a matrix of coassignment probabilities between every pair of original clusters in `originals` (Figure \@ref(fig:bootstrap-matrix)).
+Each coassignment probability between clusters $X$ and $Y$ represents the probability that a randomly chosen cell from $X$ and a randomly chosen from $Y$ are assigned to the same cluster in the bootstrap replicate.
+High co-assignment probabilities indicate that $X$ is not stable with respect to its separation from $Y$, given that their cells are liable to cluster together in the replicates.
+Ideally, we would hope for high coassignment probabilites on the diagonal (i.e., $X$ cells cluster with themselves) and low probabilites off the diagonal.
+
+```{r bootstrap-matrix, fig.cap="Heatmap of coassignment probabilities from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the coassignment probability between that pair of clusters."}
+pheatmap(coassign, cluster_row=FALSE, cluster_col=FALSE,
+    color=rev(viridis::magma(100)))
+```
+
+Bootstrapping is a general approach for evaluating cluster stability that is compatible with any clustering algorithm.
+The coassignment probability is also more informative than a single per-cluster stability measure as the former considers the relationships between clusters, e.g., unstable separation between $X$ and $Y$ does not penalize the stability of separation between $X$ and another cluster $Z$.
+Of course, one should take these probabilities with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation).
+In addition, it is possible for a poor separation to be highly stable, so highly stable cluster may not necessarily represent some distinct subpopulation.
+
 ## Subclustering {#subclustering}
 
 Another simple approach to improving resolution is to repeat the feature selection and clustering _within_ a single cluster.
@@ -532,23 +592,30 @@ stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
 
 For subclustering analyses, it is helpful to define a customized function that calls our desired algorithms to obtain a clustering from a given `SingleCellExperiment`.
 This function can then be applied multiple times on different subsets without having to repeatedly copy and modify the code for each subset.
+For example, `quickSubCluster()` loops over all subsets and executes this user-specified function to generate a list of `SingleCellExperiment` objects containing the subclustering results.
 (Of course, the downside is that this assumes that a similar analysis is appropriate for each subset.
 If different subsets require extensive reparametrization, copying the code may actually be more straightforward.)
 
 ```{r}
-mySubClusteringFunction <- function(input) {
-    dec <- modelGeneVar(input)
-    input <- denoisePCA(input, technical=dec,
-        subset.row=getTopHVGs(dec, prop=0.1),
-        BSPARAM=BiocSingular::IrlbaParam())
-    g <- buildSNNGraph(input, use.dimred="PCA", k=20)
-    input$cluster <- igraph::cluster_walktrap(g)$membership
-    input
-}
+set.seed(1000010)
+subcluster.out <- quickSubCluster(sce.pbmc, groups=clust.full,
+    prepFUN=function(x) { # Preparing the subsetted SCE for clustering.
+        dec <- modelGeneVar(x)
+        input <- denoisePCA(x, technical=dec,
+            subset.row=getTopHVGs(dec, prop=0.1),
+            BSPARAM=BiocSingular::IrlbaParam())
+    },
+    clusterFUN=function(x) { # Performing the subclustering in the subset.
+        g <- buildSNNGraph(x, use.dimred="PCA", k=20)
+        igraph::cluster_walktrap(g)$membership
+    }
+)
 
-sce.sub.1 <- mySubClusteringFunction(sce.pbmc[,clust.full==1])
-sce.sub.2 <- mySubClusteringFunction(sce.pbmc[,clust.full==2])
-# etc.
+# One SingleCellExperiment object per parent cluster:
+names(subcluster.out)
+
+# Looking at the subclustering for one example:
+table(subcluster.out[[1]]$subcluster)
 ```
 
 Subclustering is a general and conceptually straightforward procedure for increasing resolution. 

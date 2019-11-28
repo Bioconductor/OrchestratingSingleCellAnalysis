@@ -217,16 +217,25 @@ That said, the use of `batch=` involves the stronger assumption that most cells 
 If an entire batch failed, outlier detection will not be able to act as an appropriate QC filter for that batch.
 For example, two batches in the @grun2016denovo human pancreas dataset contain a substantial proportion of putative damaged cells with higher ERCC content than the other batches (Figure \@ref(fig:qc-plot-pancreas)).
 This inflates the median and MAD within those batches, resulting in a failure to remove the assumed low-quality cells.
-In such cases, it is better to either not use `batch=` or to apply a custom filter to the problematic batches (possibly based on the thresholds for the other batches in `attr(discard.ercc, "thresholds")`).
+In such cases, it is better to compute a shared median and MAD from the other batches and use those estimates to obtain an appropriate filter threshold for cells in the problematic batches, as shown below.
 
-```{r qc-plot-pancreas, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier within each batch."}
+```{r qc-plot-pancreas, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of the proportion of ERCC transcripts in each donor of the Grun pancreas dataset. Each point represents a cell and is coloured according to whether it was identified as an outlier within each batch (left) or using a common threshold (right)."}
 library(scRNAseq)
 sce.grun <- GrunPancreasData()
 sce.grun <- addPerCellQC(sce.grun)
+
 discard.ercc <- isOutlier(sce.grun$altexps_ERCC_percent,
     type="higher", batch=sce.grun$donor)
-plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
+with.blocking <- plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc))
+
+discard.ercc2 <- isOutlier(sce.grun$altexps_ERCC_percent,
+    type="higher", batch=sce.grun$donor,
+    subset=sce.grun$donor %in% c("D17", "D2", "D7"))
+without.blocking <- plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
+    colour_by=I(discard.ercc2))
+
+gridExtra::grid.arrange(with.blocking, without.blocking, ncol=2)
 ```
 
 ### Other approaches
@@ -393,6 +402,11 @@ Discerning readers will notice the use of `which()`, which conveniently removes 
 ```{r}
 sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
 ```
+
+It is worth pointing out that, at this point, we do not attempt to remove the ambient contamination from each library.
+Accurate quantification of the contamination rate in each cell is difficult as it generally requires some prior biological knowledge about genes that are expected to have mutually exclusive expression profiles _and_ are highly abundant in the ambient solution [@young2018soupx].
+Fortunately, ambient contamination usually has little effect on the downstream conclusions for routine analyses; cell type identities are usually easy enough to determine from the affected genes, notwithstanding a (mostly harmless) low background level of expression for marker genes that should be unique to a cell type.
+However, more susceptible analyses may require specific remedies like those discussed in Section \@ref(ambient-problems).
 
 ### Relationship with other QC metrics
 
