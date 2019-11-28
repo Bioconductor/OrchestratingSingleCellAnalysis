@@ -1,4 +1,4 @@
-# Human pancreas dataset (Lawlor)
+# Lawlor human pancreas (SMARTer)
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)

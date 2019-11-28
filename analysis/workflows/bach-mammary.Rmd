@@ -1,4 +1,4 @@
-# Mammary gland 10X dataset
+# Bach mouse mammary gland (10X Genomics)
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -94,7 +94,7 @@ dec.mam <- modelGeneVarByPoisson(sce.mam)
 top.mam <- getTopHVGs(dec.mam, prop=0.1)
 ```
 
-```{r, unref-bach-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to simulated Poisson counts."}
+```{r unref-bach-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to simulated Poisson counts."}
 plot(dec.mam$mean, dec.mam$total, pch=16, cex=0.5,
     xlab="Mean of log-expression", ylab="Variance of log-expression")
 curfit <- metadata(dec.mam)

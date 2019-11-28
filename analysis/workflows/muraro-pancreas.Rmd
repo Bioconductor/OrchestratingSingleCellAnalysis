@@ -1,4 +1,4 @@
-# Muraro human pancreas dataset 
+# Muraro human pancreas (CEL-seq)
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
