@@ -514,12 +514,14 @@ As usual, users will benefit from the diagnostics described in Chapter \@ref(int
 ### Motivation
 
 Ambient contamination is a phenomenon that is generally most pronounced in massively multiplexed scRNA-seq protocols.
-Differences in the ambient profile across samples are not uncommon when dealing with strong experimental perturbations.
+Briefly, extracellular RNA (most commonly released upon cell lysis) is captured along with each cell in its reaction chamber, contributing counts to genes that are not otherwise expressed in that cell (see Section \@ref(qc-droplets)).
+Differences in the ambient profile across samples are not uncommon when dealing with strong experimental perturbations where strong expression of a gene in a condition-specific cell type can "bleed over" into all other cell types in the same sample.
 This is problematic for DE analyses between conditions, as DEGs detected for a particular cell type may be driven by differences in the ambient profiles rather than any intrinsic change in gene regulation. 
 
 To illustrate, we consider the _Tal1_-knockout (KO) chimera data from @pijuansala2019single.
 This is very similar to the WT chimera dataset we previously examined, only differing in that the _Tal1_ gene was knocked out in the injected cells.
 _Tal1_ is a transcription factor that has known roles in erythroid differentiation; the aim of the experiment was to determine if blocking of the erythroid lineage diverted cells to other developmental fates.
+(To cut a long story short: yes, it did.)
 
 ```{r}
 library(MouseGastrulationData)
@@ -566,8 +568,9 @@ stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
 ### Discarding ambient DEGs
 
 The presence of ambient contamination makes it difficult to interpret multi-condition DE analyses.
-To mitigate its effects, we need to obtain an estimate of the ambient "expression" profile by going back to the raw count matrix for each sample.
+To mitigate its effects, we need to obtain an estimate of the ambient "expression" profile from the raw count matrix for each sample.
 We follow the approach used in `emptyDrops()` [@lun2018distinguishing] and consider all barcodes with total counts below 100 to represent empty droplets.
+This allows us to construct a matrix containing UMI counts attributable to contaminating ambient transcripts in each sample.
 
 ```{r}
 raw.tal1 <- Tal1ChimeraData(type="raw")
@@ -593,22 +596,24 @@ stopifnot(identical(as.integer(colnames(ambient)), summed.neural$sample))
 ```
 
 Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx].
-In our case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination rate in each sample.
+In this case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination in each sample.
+Specifically, we scale `ambient.hb` so that the hemoglobin coverage is the same as the corresponding sample of `neural.hb`; this represents an estimate of the contaminating counts in each pseudo-bulk sample.
 
 ```{r}
 is.hbb <- grep("^Hb[ab]-", rownames(summed.neural))
 neural.hb <- colSums(counts(summed.neural)[is.hbb,])
 ambient.hb <- colSums(ambient[is.hbb,])
-con.rate <- neural.hb/ambient.hb
-data.frame(neural=neural.hb, ambient=ambient.hb, rate=con.rate)
+scaled.ambient <- t(t(ambient) * neural.hb/ambient.hb)
+head(scaled.ambient)
 ```
 
-We scale the ambient counts by this rate to determine the proportion of ambient contribution to each gene.
-Genes in which over 10% of the counts are ambient-derived are discarded from our analysis.
-This yields a slightly smaller list of DEGs without the hemoglobins - by definition, but encouraging nonetheless as it suggests that any other (less obvious) effects of ambient contamination have also been removed.
+For each gene, we compute the proportion of the average count attributable to ambient contamination.
+Genes in which over 10% of the counts are ambient-derived are subsequently discarded from our analysis.
+Roughly speaking, this threshold prevents ambient contribution from biasing the true fold-change by more than 10%, which is a tolerable margin of error for most applications.
+(In more extreme situations with large condition-specific differences between the total counts of the pseudo-bulk samples, one might consider applying this threshold to the proportions computed within each condition instead.)
+This approach yields a slightly smaller list of DEGs without the hemoglobins - by definition, but encouraging nonetheless as it suggests that any other (less obvious) effects of ambient contamination have also been removed.
 
 ```{r}
-scaled.ambient <- t(t(ambient) * con.rate)
 ratio <- rowMeans(scaled.ambient) / rowMeans(counts(summed.neural))
 non.ambient <- ratio < 0.1 
 summary(non.ambient)
@@ -628,8 +633,7 @@ stopifnot(all(!grepl("^Hb[ab]-", rownames(tab))))
 ### Subtracting ambient counts
 
 It is worth commenting on the seductive idea of subtracting the ambient counts from the pseudo-bulk samples.
-This may seem like the most obvious approach for removing ambient contamination.
-Unfortunately, subtracted counts have unpredictable statistical properties due the distortion of the mean-variance relationship.
+This may seem like the most obvious approach for removing ambient contamination, but unfortunately, subtracted counts have unpredictable statistical properties due the distortion of the mean-variance relationship.
 Minor relative fluctuations at very large counts become large fold-changes after subtraction, manifesting as spurious DE in genes where a substantial proportion of counts is derived from the ambient solution.
 For example, several hemoglobin genes retain strong DE even after subtraction of the scaled ambient profile.
 
@@ -643,6 +647,7 @@ subtracted[is.hbb,]
 Another tempting approach is to use interaction models to implicitly subtract the ambient effect during GLM fitting.
 The assumption would be that, for genuine DEGs, the log-fold change within cells is larger in magnitude than those in the ambient solution (where the effect would be diluted by contributions from cell types where the gene is not DE).
 However, this is not always the case; a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to the rather awkward conclusion that the WT neural crest cells are expressing hemoglobin beyond that explained by ambient contamination.
+In addition, per-gene subtraction will fail to consistently detect DEGs that occur in all cell types as there is no longer a dilution effect being applied to the log-fold change in the ambient solution.
 
 ```{r}
 # Re-using keep.neural to simplify comparison.
