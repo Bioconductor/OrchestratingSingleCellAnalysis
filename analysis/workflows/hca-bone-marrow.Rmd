@@ -1,4 +1,4 @@
-# Human Cell Atlas bone marrow dataset
+# HCA human bone marrow (10X Genomics) 
 
 ```{r setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -10,9 +10,7 @@ chapterPreamble(use_cache = TRUE)
 Here, we use an example dataset from the [Human Cell Atlas immune cell profiling project on bone marrow](https://preview.data.humancellatlas.org), which contains scRNA-seq data for 380,000 cells generated using the 10X Genomics technology.
 This is a fairly big dataset that represents a good use case for the techniques in Chapter \@ref(dealing-with-big-data).
 
-## Analysis code
-
-### Data loading
+## Data loading
 
 This dataset is loaded via the `r Biocpkg("HCAData")` package, which provides a ready-to-use `SingleCellExperiment` object. 
 
@@ -27,8 +25,6 @@ set.seed(1234)
 sce.bone <- sce.bone[, sample(ncol(sce.bone), 1000)]
 ```
 
-### Gene annotation
-
 We use symbols in place of IDs for easier interpretation later.
 
 ```{r gene-annotation}
@@ -41,100 +37,31 @@ rownames(sce.bone) <- uniquifyFeatureNames(rowData(sce.bone)$ID,
     names = rowData(sce.bone)$Symbol)
 ```
 
-### Quality control
+## Quality control
+
+```{r}
+unfiltered <- sce.bone
+```
+
 
 Cell calling was not performed (see [here](https://s3.amazonaws.com/preview-ica-expression-data/Brief+ICA+Read+Me.pdf)) so we will perform QC using all metrics and block on the donor of origin during outlier detection.
 We perform the calculation across multiple cores to speed things up.
 
 ```{r quality-control}
 library(BiocParallel)
-sce.bone <- addPerCellQC(sce.bone, subsets=list(
-    Mito=which(rowData(sce.bone)$Chr=="MT")),
-    BPPARAM=MulticoreParam())
-unfiltered <- sce.bone
+bpp <- MulticoreParam(8)
+stats <- perCellQCMetrics(sce.bone, BPPARAM=bpp,
+    subsets=list(Mito=which(rowData(sce.bone)$Chr=="MT")))
 
-qc <- quickPerCellQC(colData(sce.bone), batch=sce.bone$Donor,
+qc <- quickPerCellQC(stats, batch=sce.bone$Donor,
     percent_subset="subsets_Mito_percent")
 sce.bone <- sce.bone[,!qc$discard]
 ```
 
-### Normalization
-
-For a minor speed-up, we piggy-back off the already-computed library sizes to avoid having to re-compute them as size factors.
-
-```{r normalization}
-sce.bone <- logNormCounts(sce.bone, size_factors = sce.bone$sum)
-```
-
-### Variance modeling
-
-Blocking on the donor to mitigate batch effects during HVG selection.
-
-```{r variance-modelling}
-library(scran)
-dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor,
-    BPPARAM=MulticoreParam())
-top.bone <- getTopHVGs(dec.bone, n=2000)
-```
-
-### Data integration
-
-Here we use multiple cores, randomized SVD and approximate nearest-neighbor detection to speed up this step.
-
-```{r integration}
-library(batchelor)
-library(BiocNeighbors)
-
-set.seed(1010001)
-merged.bone <- fastMNN(sce.bone, batch = sce.bone$Donor, subset.row = top.bone,
-     BSPARAM=BiocSingular::RandomParam(deferred = TRUE),
-     BNPARAM=AnnoyParam(),
-     BPPARAM=MulticoreParam())
-
-reducedDim(sce.bone, 'MNN') <- reducedDim(merged.bone, 'corrected')
-```
-
-### Dimensionality reduction
-
-We set `external_neighbors=TRUE` to replace the internal NN search in the UMAP implementation with our parallelized approximate search.
-
-```{r dimensionality-reduction}
-set.seed(01010100)
-sce.bone <- runUMAP(sce.bone, dimred="MNN",
-    external_neighbors=TRUE, 
-    BNPARAM=AnnoyParam(),
-    BPPARAM=MulticoreParam())
-```
-
-### Clustering
-
-Graph-based clustering generates an excessively large intermediate graph, so we will switch to $k$-means instead.
-Some parameter fiddling is required to improve convergence with such a large number of points.
-
-```{r clustering}
-set.seed(1000)
-kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
-    centers=25, iter.max=1000, algorithm="MacQueen") 
-sce.bone$cluster <- factor(kout.bone$cluster)
-```
-
-### Differential expression
-
-We identify marker genes for each cluster while blocking on the donor.
-
-```{r differential-expression}
-markers.bone <- findMarkers(sce.bone, sce.bone$cluster,
-    block = sce.bone$Donor, 
-    direction = 'up', lfc = 1,
-    BPPARAM = MulticoreParam())
-```
-
-## Results
-
-### Quality control statistics
-
-```{r, fig.wide=TRUE}
+```{r unref-hca-bone-qc, fig.wide=TRUE, fig.asp=1, fig.cap="Distribution of QC metrics in the HCA bone marrow dataset. Each point represents a cell and is colored according to whether it was discarded."}
+colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
+
 gridExtra::grid.arrange(
     plotColData(unfiltered, x="Donor", y="sum", colour_by="discard") +
         scale_y_log10() + ggtitle("Total count"),
@@ -146,15 +73,35 @@ gridExtra::grid.arrange(
 )
 ```
 
-### Normalization
+```{r unref-hca-bone-mito, fig.cap="Percentage of mitochondrial reads in each cell in the Bach mammary gland dataset compared to its total count. Each point represents a cell and is colored according to whether that cell was discarded."}
+plotColData(unfiltered, x="sum", y="subsets_Mito_percent", 
+    colour_by="discard") + scale_x_log10()
+```
+
+## Normalization
+
+For a minor speed-up, we piggy-back off the already-computed library sizes to avoid having to re-compute them as size factors.
+
+```{r normalization}
+sce.bone <- logNormCounts(sce.bone, size_factors = sce.bone$sum)
+```
 
 ```{r}
 summary(sizeFactors(sce.bone))
 ```
 
-### Variance modelling
+### Variance modeling
 
-```{r, fig.asp=2, fig.height=10}
+We block on the donor of origin to mitigate batch effects during HVG selection.
+We select a larger number of HVGs to capture any batch-specific variation that might be present.
+
+```{r variance-modelling}
+library(scran)
+dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor, BPPARAM=bpp)
+top.bone <- getTopHVGs(dec.bone, n=5000)
+```
+
+```{r unref-bach-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
 par(mfrow=c(4,2))
 blocked.stats <- dec.bone$per.block
 for (i in colnames(blocked.stats)) {
@@ -166,151 +113,142 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
-### Data integration
+## Data integration
+
+Here we use multiple cores, randomized SVD and approximate nearest-neighbor detection to speed up this step.
+
+```{r integration}
+library(batchelor)
+library(BiocNeighbors)
+
+set.seed(1010001)
+merged.bone <- fastMNN(sce.bone, batch = sce.bone$Donor, subset.row = top.bone,
+     BSPARAM=BiocSingular::RandomParam(deferred = TRUE), 
+     BNPARAM=AnnoyParam(),
+     BPPARAM=bpp)
+
+reducedDim(sce.bone, 'MNN') <- reducedDim(merged.bone, 'corrected')
+```
+
+We use the percentage of variance lost as a diagnostic measure:
 
 ```{r}
 metadata(merged.bone)$merge.info$lost.var
 ```
 
-### Clustering
+## Dimensionality reduction
 
-```{r}
-table(Cluster=sce.bone$cluster, Donor=sce.bone$Donor)
+We set `external_neighbors=TRUE` to replace the internal nearest neighbor search in the UMAP implementation with our parallelized approximate search.
+We also set the number of threads to be used in the UMAP iterations.
+
+```{r dimensionality-reduction}
+set.seed(01010100)
+sce.bone <- runUMAP(sce.bone, dimred="MNN",
+    external_neighbors=TRUE, 
+    BNPARAM=AnnoyParam(),
+    BPPARAM=bpp,
+    n_threads=bpnworkers(bpp))
 ```
 
-```{r}
-plotUMAP(sce.bone, colour_by="cluster")
+## Clustering
 
+Graph-based clustering generates an excessively large intermediate graph, so we will switch to $k$-means instead.
+We err on the side of overclustering to ensure that the major cell types are distinguished; in fact, this is actually useful for resolving fine structure with such a large number of cells.
+Some parameter fiddling is required to improve convergence with a large number of points.
+
+```{r clustering}
+set.seed(1000)
+kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
+    centers=40, iter.max=1000, algorithm="MacQueen") 
+sce.bone$cluster <- factor(kout.bone$cluster)
+```
+
+We observe mostly balanced contributions from different samples to each cluster (Figure \@ref(fig:unref-hca-bone-ab)), consistent with the expectation that all samples are replicates from different donors.
+
+```{r unref-hca-bone-ab, fig.asp=1, fig.cap="Heatmap of log~10~-number of cells in each cluster (row) from each sample (column)."}
+tab <- table(Cluster=sce.bone$cluster, Donor=sce.bone$Donor)
+library(pheatmap)
+pheatmap(log10(tab+10), color=viridis::viridis(100))
+```
+
+```{r, echo=FALSE}
+# Checking that it is, in fact, pretty well-mixed.
+stopifnot(all(tab>10))
+```
+
+```{r unref-hca-bone-umap, fig.asp=1.2, fig.cap="UMAP plots of the HCA bone marrow dataset after merging. Each point represents a cell and is colored according to the assigned cluster (top) or the donor of origin (bottom)."}
 # TODO: add scrambling option in scater's plotting functions.
 scrambled <- sample(ncol(sce.bone))
-plotUMAP(sce.bone[,scrambled], colour_by="Donor")
+
+gridExtra::grid.arrange(
+    plotUMAP(sce.bone, colour_by="cluster"),
+    plotUMAP(sce.bone[,scrambled], colour_by="Donor")
+)
 ```
 
-## Downstream Analysis
+We end up with quite a few clusters, several of which are likely to be closely related to each other and thus redundant.
+These can be easily identified by further clustering on the cluster centroids in `kout.bone` (Figure \@ref(fig:unref-hca-bone-hclust)), with the aim being to avoid unnecessary manual annotation of close relatives.
 
-### Marker Heatmaps
-
-Visualizing the top markers is useful for the annotation of clusters. The top markers per cluster can be visualized as a heatmap at the single-cell level to ascertain expression variance of the discovered markers. Here we show a downsampled version of the data to fit onto a heatmap.
-
-```{r cluster-expression-heatmap-sc}
-## Grab top markers based on previous findMarkers() output
-top.markers <- lapply(markers.bone, function(x) {
-    rownames(x)[1:5]
-}) 
-top.markers <- unique(unlist(top.markers))
-top.markers <- top.markers[!grepl('^RP[SL0-9]|^MT-', top.markers)]
-
-## Draw heatmap - single-cell level
-set.seed(1234)
-dat <- sce.bone[, sample(ncol(sce.bone), 2000)]
-
-plotHeatmap(dat,
-            features = top.markers,
-            symmetric = TRUE, zlim = c(-3, 3), center = TRUE,
-            scale = 'row',
-            color = scico::scico(n = 21, palette = 'berlin'),
-            order_columns_by = "cluster",
-            show_colnames = FALSE)
+```{r unref-hca-bone-hclust, fig.cap="Hierarchical clustering of the $k$-means cluster centroids from the PBMC dataset."}
+bone.clust <- hclust(dist(kout.bone$centers))
+plot(bone.clust)
 ```
 
-The top markers per cluster can also be visualized at the cluster level by aggregating ("pseudobulking") per cluster.
+## Differential expression
 
-```{r cluster-expression-heatmap-agg}
-## Aggregate data to cluster level; average norm. gene expression
-sce.agg <- aggregateAcrossCells(sce.bone,
-                                ids = sce.bone$cluster,
-                                subset_row = top.markers,
-                                use_exprs_values = 'logcounts',
-                                average = TRUE)
+We identify marker genes for each cluster while blocking on the donor.
 
-
-## Draw heatmap - aggregated by cluster level
-plotHeatmap(sce.agg,
-            features = top.markers,
-            symmetric = TRUE, zlim = c(-4, 4), center = TRUE,
-            scale = 'row',
-            color = scico::scico(n = 21, palette = 'cork'),
-            clustering_method = 'ward.D2',
-            cluster_distance_cols = 'correlation',
-            cluster_distance_rows = 'correlation',            
-            show_colnames = TRUE)
+```{r differential-expression}
+markers.bone <- findMarkers(sce.bone, sce.bone$cluster,
+    block = sce.bone$Donor, 
+    direction = 'up', lfc = 1,
+    BPPARAM=bpp)
 ```
 
+We visualize the top markers for a randomly chosen cluster using a "dot plot" in Figure \@ref(fig:unref-hca-bone-dotplot).
+The presence of upregulated genes like _LYZ_, _S100A8_ and _VCAN_ is consistent with a monocyte identity for this cluster.
 
-## Reference-Based Cell Type Classification
+```{r, echo=FALSE}
+cluster.choice <- "1"
+```
 
-Here we perform automated cell type classification using a reference dataset to aid in further annotating the dataset. 
+```{r unref-hca-bone-dotplot, fig.cap=sprintf("Heatmap of log~2~-fold changes for the top marker genes (rows) of cluster %s compared to all other clusters (columns).", cluster.choice)}
+top.markers <- markers.bone[["1"]]
+best <- top.markers[top.markers$Top <= 5,]
+lfcs <- getMarkerEffects(best)
 
-Below, we perform cell type classification first at the cluster level, and append the main classification result to the `sce.bone` object.
+library(pheatmap)
+pheatmap(lfcs, breaks=seq(-5, 5, length.out=101))
+```
 
-<!-- ```{r} -->
-<!-- ## Perform pairwise DE comparisons to select best paired markers -->
-<!-- out <- pairwiseTTests(logcounts(sce.bone), sce.bone$cluster, direction = 'up') -->
-<!-- paired.markers <- getTopMarkers(out$statistics, out$pairs, n = 10) -->
-<!-- ``` -->
+```{r, echo=FALSE}
+# Genes taken from https://www.nature.com/articles/s41467-018-04985-0.pdf?origin=ppub.
+# Hey, don't look at me, I don't know what these "monocytes" are.
+# Don't most cells have one nucleus? What's so special about these guys?
+stopifnot(c("LYZ", "VCAN", "S100A8", "CTSS") %in% rownames(best))
+```
 
-```{r singler-cluster}
+## Cell type classification
+
+We perform automated cell type classification using a reference dataset to annotate each cluster based on its pseudo-bulk profile. 
+This is faster than the per-cell approaches described in Chapter \@ref(cell-type-annotation), but sacrifices resolution for detecting heterogeneity inside a cluster.
+Nonetheless, it is often sufficient for a quick assignment of cluster identity, and indeed, cluster `r cluster.choice` is also identified as consisting of monocytes from this analysis.
+
+```{r cell-type-classification}
+# TODO: have SingleR use sumCountsAcrossCells to benefit from 
+# parallelized summation as well.
+aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
+
 library(SingleR)
-
-## Load reference dataset
 hpc <- HumanPrimaryCellAtlasData()
-
-## Annotate cells at the cluster level
-anno.cluster <- SingleR(sce.bone, ref = hpc,
-                        labels = hpc$label.main,
-                        method = 'cluster',
-                        clusters = sce.bone$cluster,
-                        BNPARAM = BiocNeighbors::AnnoyParam(),
-                        BPPARAM = BiocParallel::MulticoreParam())
-
-## Append cluster classifications to sce
-sce.bone$anno.cluster <- anno.cluster[sce.bone$cluster, ]$labels
+anno.single <- SingleR(aggregated, ref = hpc, labels = hpc$label.main)
+anno.single
 ```
 
-The enrichment of a given cell type's signature per cluster can be visualized on a heatmap.
-
-```{r singler-cluster-heatmap}
-## Show scores per cluster
-plotScoreHeatmap(anno.cluster, show.labels = TRUE, show_colnames = TRUE)
+```{r, echo=FALSE}
+# Checking that our statement above is correct. 
+stopifnot(anno.single[cluster.choice,]$labels!="monocyte")
 ```
-
-Classification can also be performed at the single-cell level, and is subsequently appended to the `sce.bone` object as well. 
-
-```{r singler-single}
-## Annotate cells at the single-cell level
-anno.single <- SingleR(sce.bone, ref = hpc,
-                       labels = hpc$label.main,
-                       method = 'single',
-                       BNPARAM = BiocNeighbors::AnnoyParam(),
-                       BPPARAM = BiocParallel::MulticoreParam())
-
-
-## Append single-cell classifications to sce
-sce.bone$anno.single <- anno.single$labels
-```
-
-The classification scores can similarly be visualized at the single-cell level as well.
-
-```{r singler-single-heatmap}
-## Show scores per single-cell label using downsampled 
-set.seed(1234)
-anno.single.downsampled <- anno.single[sample(nrow(anno.single), 5000), ]
-plotScoreHeatmap(anno.single.downsampled, show.labels = TRUE)
-```
-
-These classifications can thus be visualized on subsequent plots such as reduced dimension representations (UMAP, t-SNE) and for downstream analysis.
-
-
-```{r UMAP-singler-cluster, caption = 'UMAP with cluster labels and coloured by SingleR cluster annotations based on the provided reference dataset.'}
-## Plot UMAP with cluster labels and coloured by SingleR cluster annotations
-plotUMAP(sce.bone, colour_by = 'anno.cluster', text_by = 'cluster')
-```
-
-```{r UMAP-singler-single, caption = 'UMAP coloured by SingleR single-cell annotations based on the provided reference dataset.'}
-## Plot UMAP with single-cell labels and coloured by SingleR cluster annotations
-plotUMAP(sce.bone, colour_by = 'anno.single', text_by = 'cluster')
-```
-
 
 <!-- ```{r saveRDS, include=FALSE} -->
 <!-- ## TEMP FIX -->
@@ -321,13 +259,12 @@ plotUMAP(sce.bone, colour_by = 'anno.single', text_by = 'cluster')
 <!-- markers.bone <- readRDS('markers.bone.rds') -->
 <!-- ``` -->
 
-
-
+<!--
 ## Gene set Enrichment Analysis
 
 To interpret differential expression (DE) results, gene set enrichment analysis (GSEA) can be performed to annotate DE results. The first step is to acquire a mapping of ENTREZID to gene symbol.
 
-```{r annotation-mapping}
+```{r annotation-mapping, eval=FALSE}
 ## Get mappings of ENTREZID to Symbol
 library(org.Hs.eg.db)
 keys_entrez <- keys(org.Hs.eg.db, 'ENTREZID')
@@ -340,7 +277,7 @@ mapping_es$ENTREZID <- as.integer(mapping_es$ENTREZID)
 
 The next is to parse the gene sets (here we use a "tidy" representation of MSigDB gene sets) and remap them.
 
-```{r annotation-pathways}
+```{r annotation-pathways, eval=FALSE}
 ## Get pathways of interest - convert to list with symbol
 ## devtools::install_github('stephenturner/msigdf') # "tidy" MSigDB genesets
 library(msigdf)
@@ -358,7 +295,7 @@ names(pathways) <- mdb$geneset
 
 Finally, the DE results from the `findMarkers()` function are used to test for differential gene set enrichment using the `fgsea` package. Here we compare cluster 3 against cluster 15, which are at opposite ends of a UMAP group.
 
-```{r annotation-fgsea}
+```{r annotation-fgsea, eval=FALSE}
 ## Get stats based on markers search
 ## Compare cluster 3 (Dendritic cells) and 15 (HSCs)
 stats <- markers.bone[[3]]$logFC.15
@@ -376,7 +313,7 @@ gse <- fgsea(pathways = pathways,
 
 The enrichment scores of the top up and down pathways can then be plotted as a table:
 
-```{r annotation-viz-fgsea-table}
+```{r annotation-viz-fgsea-table, eval=FALSE}
 ## Get top up and down pathways based on NES
 gse.up <- gse[order(gse$NES, decreasing = TRUE)[1:2], ]$pathway
 gse.dn <- gse[order(gse$NES)[1:2], ]$pathway
@@ -390,18 +327,17 @@ plotGseaTable(pathways[topPathways], stats,
 
 Or select pathways can also be plotted as a more traditional running score plot:
 
-```{r annotation-viz-fgsea-es}
+```{r annotation-viz-fgsea-es, eval=FALSE}
 ## Traditional GSEA plot
 plotEnrichment(pathways[[topPathways[1]]],
                stats)
 ```
 
-
 ### Trajectory analysis
 
 Slingshot relies on providing a set of clusters on which to construct a trajectory.
 
-```{r trajectory}
+```{r trajectory, eval=FALSE}
 library(slingshot)
 
 ## Clusters to attempt trajectory on:
@@ -419,7 +355,7 @@ slc <- slingshot(slc.subdat,
 
 The calculated principal curve can then be visualized on the UMAP space.
 
-```{r viz-trajectory}
+```{r viz-trajectory, eval=FALSE}
 ## Slingshot trajectory plot
 library(RColorBrewer)
 colors <- colorRampPalette(brewer.pal(11, 'Spectral')[-6])(100)
@@ -427,7 +363,7 @@ plotcol <- colors[cut(slc$slingPseudotime_1, breaks = 100)]
 plot(reducedDims(slc)$UMAP, col = plotcol, pch=16, asp = 1)
 lines(SlingshotDataSet(slc), lwd = 2, col = 'black')
 ```
-
+-->
 
 ## Session Info {-}
 
