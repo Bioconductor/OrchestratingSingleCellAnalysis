@@ -235,18 +235,17 @@ By operating on log-transformed data, we ensure that these procedures are measur
 Or in other words, which is more interesting - a gene that is expressed at an average count of 50 in cell type $A$ and 10 in cell type $B$, or a gene that is expressed at an average count of 1100 in $A$ and 1000 in $B$?
 Log-transformation focuses on the former by promoting contributions from genes with strong relative differences.
 
-When log-transforming, we need to consider the pseudo-count that is added to avoid undefined values at zero.
-Larger pseudo-counts will effectively shrink the log-fold changes between cells towards zero for low-abundance genes, meaning that downstream analyses will be driven more by differences in expression for high-abundance genes.
-Conversely, smaller pseudo-counts will increase the contribution of low-abundance genes.
+When log-transforming, we typically add a pseudo-count to avoid undefined values at zero.
+Larger pseudo-counts will effectively shrink the log-fold changes between cells towards zero for low-abundance genes, meaning that downstream high-dimensional analyses will be driven more by differences in expression for high-abundance genes.
+Conversely, smaller pseudo-counts will increase the relative contribution of low-abundance genes.
 Common practice is to use a pseudo-count of 1, for the simple pragmatic reason that it preserves sparsity in the original matrix (i.e., zeroes in the input remain zeroes after transformation).
 This works well in all but the most pathological scenarios [@lun2018overcoming].
 
-(Incidentally, the addition of the pseudo-count is the motivation for the centering of the size factors at unity.
-This ensures that both the pseudo-count and the normalized expression values are on the same scale.
-A pseudo-count of 1 can then be interpreted as an extra read or UMI for each gene.
-In practical terms, this means that the shrinkage effect of the pseudo-count diminishes as sequencing depth improves.
-This is the correct behavior as it allows log-fold change estimates to become increasingly accurate with deeper coverage.
-In contrast, if we had simply divided each cell's counts by its library size before log-transformation, accuracy of the log-fold changes would never improve regardless of how much additional sequencing we performed.)
+Incidentally, the addition of the pseudo-count is the motivation for the centering of the size factors at unity.
+This ensures that both the pseudo-count and the normalized expression values are on the same scale; a pseudo-count of 1 can be interpreted as an extra read or UMI for each gene.
+In practical terms, centering means that the shrinkage effect of the pseudo-count diminishes as sequencing depth improves.
+This correctly ensures that estimates of the log-fold change in expression (e.g., from differences in the log-values between groups of cells) become increasingly accurate with deeper coverage.
+In contrast, if we applied a constant pseudo-count to some count-per-million-like measure, accuracy of the subsequent log-fold changes would never improve regardless of how much additional sequencing we performed.
 
 ### Downsampling and log-transforming
 
