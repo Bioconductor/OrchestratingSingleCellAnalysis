@@ -262,10 +262,57 @@ However, such comparisons must be interpreted with much caution as the AUCs are 
 
 As we mentioned previously, the advantage of the `r Biocpkg("AUCell")` approach is that it does not require reference expression values.
 This is particularly useful when dealing with gene sets derived from the literature or other qualitative forms of biological knowledge.
-(In this particular example, we _do_ have the original expression values, so we could have used `r Biocpkg("SingleR")` directly.
-However, this may not always be the case.)
+For example, we might instead use single-cell signatures defined from MSigDB, obtained as shown below.
+
+```{r}
+# Downloading the signatures and caching them locally.
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+scsig.path <- bfcrpath(bfc, file.path("http://software.broadinstitute.org",
+    "gsea/msigdb/supplemental/scsig.all.v1.0.symbols.gmt"))
+scsigs <- getGmt(scsig.path)
+```
+
 The flipside is that information on relative expression is lost when only the marker identities are used.
-The net effect of ignoring expression values is difficult to predict - it may reduce performance for resolving more subtle cell types, but may also improve performance if the per-cell expression was too noisy to be useful. 
+The net effect of ignoring expression values is difficult to predict; for example, it may reduce performance for resolving more subtle cell types, but may also improve performance if the per-cell expression was too noisy to be useful.
+Performance is also highly dependent on the gene sets themselves, which may not be defined in the same context in which they are used.
+For example, applying all of the MSigDB signatures on the Muraro dataset is rather disappointing (Figure \@ref(fig:aucell-muraro-heat)), while restricting to the subset of pancreas signatures is more promising.
+
+```{r aucell-muraro-heat, fig.asp=1, fig.wide=TRUE, fig.cap="Heatmaps of the log-number of cells with each combination of known labels (columns) and assigned MSigDB signatures (rows) in the Muraro data set. The signature assigned to each cell was defined as that with the highest AUC across all (top) or all pancreas-related signatures (bottom)."}
+muraro.mat <- counts(sce.muraro)
+rownames(muraro.mat) <- rowData(sce.muraro)$symbol
+muraro.rankings <- AUCell_buildRankings(muraro.mat,
+    plotStats=FALSE, verbose=FALSE)
+
+# Applying MsigDB to the Muraro dataset, because it's human:
+scsig.aucs <- AUCell_calcAUC(scsigs, muraro.rankings)
+scsig.results <- t(assay(scsig.aucs))
+full.labels <- colnames(scsig.results)[max.col(scsig.results)]
+tab <- table(full.labels, sce.muraro$label)
+fullheat <- pheatmap(log10(tab+10), color=viridis::viridis(100), silent=TRUE)
+
+# Restricting to the subset of Muraro-derived gene sets:
+scsigs.sub <- scsigs[grep("Pancreas", names(scsigs))]
+sub.aucs <- AUCell_calcAUC(scsigs.sub, muraro.rankings)
+sub.results <- t(assay(sub.aucs))
+sub.labels <- colnames(sub.results)[max.col(sub.results)]
+tab <- table(sub.labels, sce.muraro$label)
+subheat <- pheatmap(log10(tab+10), color=viridis::viridis(100), silent=TRUE)
+
+gridExtra::grid.arrange(fullheat[[4]], subheat[[4]])
+```
+
+```{r, echo=FALSE}
+# Checking that my trash talk above is correct.
+stopifnot(rand.index(
+    as.integer(factor(full.labels)), 
+    as.integer(factor(sce.muraro$label))
+) < 0.5)
+stopifnot(rand.index(
+    as.integer(factor(sub.labels)), 
+    as.integer(factor(sce.muraro$label))
+) > 0.9)
+```
 
 ## Assigning cluster labels from markers
 
