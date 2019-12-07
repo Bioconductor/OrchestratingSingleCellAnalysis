@@ -39,18 +39,13 @@ rownames(sce.bone) <- uniquifyFeatureNames(rowData(sce.bone)$ID,
 
 ## Quality control
 
-```{r}
-unfiltered <- sce.bone
-```
-
-
 Cell calling was not performed (see [here](https://s3.amazonaws.com/preview-ica-expression-data/Brief+ICA+Read+Me.pdf)) so we will perform QC using all metrics and block on the donor of origin during outlier detection.
 We perform the calculation across multiple cores to speed things up.
 
 ```{r quality-control}
 library(BiocParallel)
 bpp <- MulticoreParam(8)
-stats <- perCellQCMetrics(sce.bone, BPPARAM=bpp,
+sce.bone <- unfiltered <- addPerCellQC(sce.bone, BPPARAM=bpp,
     subsets=list(Mito=which(rowData(sce.bone)$Chr=="MT")))
 
 qc <- quickPerCellQC(stats, batch=sce.bone$Donor,
@@ -59,7 +54,6 @@ sce.bone <- sce.bone[,!qc$discard]
 ```
 
 ```{r unref-hca-bone-qc, fig.wide=TRUE, fig.asp=1, fig.cap="Distribution of QC metrics in the HCA bone marrow dataset. Each point represents a cell and is colored according to whether it was discarded."}
-colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 
 gridExtra::grid.arrange(
@@ -80,7 +74,7 @@ plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
 
 ## Normalization
 
-For a minor speed-up, we piggy-back off the already-computed library sizes to avoid having to re-compute them as size factors.
+For a minor speed-up, we use already-computed library sizes rather than re-computing them from the column sums.
 
 ```{r normalization}
 sce.bone <- logNormCounts(sce.bone, size_factors = sce.bone$sum)
