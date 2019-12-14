@@ -167,6 +167,34 @@ stopifnot(identical(chosen, markers[[cluster]]))
 stopifnot(all(c("Car2", "Hba-a2", "Hba-a1", "Hebp1") %in% rownames(aucs)))
 ```
 
+## Cell type annotation
+
+```{r cell-annotation}
+library(SingleR)
+mm.ref <- MouseRNAseqData()
+
+# Renaming to symbols to match with reference row names.
+renamed <- sce.nest
+rownames(renamed) <- uniquifyFeatureNames(rownames(renamed),
+    rowData(sce.nest)$SYMBOL)
+labels <- SingleR(renamed, mm.ref, labels=mm.ref$label.fine)
+```
+
+Most clusters are not assigned to any single lineage (Figure \@ref(fig:unref-assignments-nest)), which is perhaps unsurprising given that HSCs are quite different from their terminal fates.
+Cluster `r cluster` is considered to contain erythrocytes, which is roughly consistent with our conclusions from the marker gene analysis above.
+
+```{r unref-assignments-nest, fig.cap="Heatmap of the distribution of cells for each cluster in the Nestorowa HSC dataset, based on their assignment to each label in the mouse RNA-seq references from the _SingleR_ package."}
+tab <- table(labels$labels, sce.nest$cluster)
+pheatmap(log10(tab+10), color=viridis::viridis(100))
+```
+
+```{r, echo=FALSE}
+test <- tab[,"8"]
+stopifnot(test["Erythrocytes"]/sum(test) > 0.9)
+```
+
+## Miscellaneous analyses
+
 This dataset also contains information about the protein abundances in each cell from FACS.
 There is barely any heterogeneity in the chosen markers across the clusters (Figure \@ref(fig:unref-nest-facs));
 this is perhaps unsurprising given that all cells should be HSCs of some sort.
