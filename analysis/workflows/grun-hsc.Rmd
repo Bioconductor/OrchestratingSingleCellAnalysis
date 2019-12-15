@@ -37,64 +37,29 @@ unfiltered <- sce.grun.hsc
 ```
 
 For some reason, no mitochondrial transcripts are available, and we have no spike-in transcripts, so we only use the number of detected genes and the library size for quality control.
-We block on the sample of origin, detecting low-quality _batches_ based on whether their thresholds are low outliers.
-We then recompute the thresholds for those batches using information from the rest of the dataset.
-(The situation is rather complex as we have both microdissected cells and sorted HSCs in the same object.
-Thus, the "outliers of outlier thresholds" is detected within each protocol.)
+We block on the protocol used for cell extraction, ignoring the micro-dissected cells when computing this threshold.
+This is based on our judgement that a majority of micro-dissected plates consist of a majority of low-quality cells, compromising the assumptions of outlier detection.
 
 ```{r quality-control}
 library(scater)
 stats <- perCellQCMetrics(sce.grun.hsc)
-is.micro <- sce.grun.hsc$protocol=="micro-dissected cells"
-
-# Extracting the outlier thresholds for the micro-dissected cells,
-# and identifying outliers of the thresholds (using a lower MAD
-# count to be more stringent for this set of cells).
-stats.micro <- stats[is.micro,]
-sample.micro <- sce.grun.hsc$sample[is.micro]
-
-qc.micro <- quickPerCellQC(stats.micro, batch=sample.micro)
-lib.size.micro <- attr(qc.micro$low_lib_size, "thresholds")["lower",]
-n.genes.micro <- attr(qc.micro$low_n_features, "thresholds")["lower",]
-
-bad.micro <- isOutlier(lib.size.micro, log=TRUE, type="lower", nmads=2) |
-    isOutlier(n.genes.micro, log=TRUE, type="lower", nmads=2)
-qc.micro <- quickPerCellQC(stats.micro, batch=sample.micro,
-    subset=!sample.micro %in% names(which(bad.micro)))
-
-# Repeating for the sorted HSCs:
-stats.hsc <- stats[!is.micro,]
-sample.hsc <- sce.grun.hsc$sample[!is.micro]
-
-qc.hsc <- quickPerCellQC(stats.hsc, batch=sample.hsc)
-lib.size.hsc <- attr(qc.hsc$low_lib_size, "thresholds")["lower",]
-n.genes.hsc <- attr(qc.hsc$low_n_features, "thresholds")["lower",]
-
-bad.hsc <- isOutlier(lib.size.hsc, log=TRUE, type="lower") |
-    isOutlier(n.genes.hsc, log=TRUE, type="lower")
-qc.hsc <- quickPerCellQC(stats.hsc, batch=sample.hsc,
-    subset=!sample.hsc %in% names(which(bad.hsc)))
-
-# Actually performing the QC.
-overall.discard <- logical(ncol(sce.grun.hsc))
-overall.discard[is.micro] <- qc.micro$discard
-overall.discard[!is.micro] <- qc.hsc$discard
-sce.grun.hsc <- sce.grun.hsc[,!overall.discard]
+qc <- quickPerCellQC(stats, batch=sce.grun.hsc$protocol,
+    subset=grepl("sorted", sce.grun.hsc$protocol))
+sce.grun.hsc <- sce.grun.hsc[,!qc$discard]
 ```
 
 We examine the number of cells discarded for each reason.
 
 ```{r}
-colSums(as.matrix(qc.micro))
-colSums(as.matrix(qc.hsc))
+colSums(as.matrix(qc))
 ```
 
 We create some diagnostic plots for each metric (Figure \@ref(fig:unref-hgrun-qc-dist)).
-It must be said that the library sizes are unusually low for many plates of micro-dissected cells; this may be attributable to damage induced by the extraction protocol compared to cell sorting.
+The library sizes are unusually low for many plates of micro-dissected cells; this may be attributable to damage induced by the extraction protocol compared to cell sorting.
 
-```{r unref-hgrun-qc-dist, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of each QC metric across cells in the Grun HSC dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
+```{r unref-hgrun-qc-dist, fig.asp=0.8, fig.wide=10, fig.cap="Distribution of each QC metric across cells in the Grun HSC dataset. Each point represents a cell and is colored according to whether that cell was discarded."}
 colData(unfiltered) <- cbind(colData(unfiltered), stats)
-unfiltered$discard <- overall.discard
+unfiltered$discard <- qc$discard
 
 gridExtra::grid.arrange(
     plotColData(unfiltered, y="sum", x="sample", colour_by="discard", 
@@ -105,18 +70,6 @@ gridExtra::grid.arrange(
         ggtitle("Detected features") + facet_wrap(~protocol),
     ncol=1
 )
-```
-
-We see that the batches containing the discarded cells are also those identified as the "bad" batches:
-
-```{r}
-names(which(bad.micro))
-names(which(bad.hsc))
-```
-
-```{r, echo=FALSE}
-stopifnot("JC28" %in% names(which(bad.micro)))
-stopifnot(identical(names(which(bad.hsc)), "JC4"))
 ```
 
 ## Normalization
@@ -185,7 +138,7 @@ sce.grun.hsc$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 table(sce.grun.hsc$cluster)
 ```
 
-```{r unref-hgrun-tsne, fig.wide=TRUE, fig.cap="Obligatory $t$-SNE plot of the Grun HSC dataset, where each point represents a cell and is colored according to the assigned cluster (left) or extraction protocol (right)."}
+```{r unref-hgrun-tsne, fig.asp=0.5, fig.width=10, fig.cap="Obligatory $t$-SNE plot of the Grun HSC dataset, where each point represents a cell and is colored according to the assigned cluster (left) or extraction protocol (right)."}
 short <- ifelse(grepl("micro", sce.grun.hsc$protocol), "micro", "sorted")
 gridExtra:::grid.arrange(
     plotTSNE(sce.grun.hsc, colour_by="cluster"),
@@ -203,14 +156,14 @@ markers <- findMarkers(sce.grun.hsc, sce.grun.hsc$cluster,
 ```
 
 ```{r, echo=FALSE}
-cluster <- "2"
+cluster <- "6"
 ```
 
 To illustrate the manual annotation process, we examine the marker genes for one of the clusters.
-Upregulation of _Camp_, _Cd177_, _S100a9_ and lysozyme genes indicates that this cluster contains cells of neuronal origin.
+Upregulation of _Camp_, _Lcn2_, _Ltf_ and lysozyme genes indicates that this cluster contains cells of neuronal origin.
 
 ```{r unref-heat-hgrun-markers, fig.asp=1.5, fig.cap=sprintf("Heatmap of the AUCs for the top marker genes in cluster %s compared to all other clusters in the Grun HSC dataset.", cluster)}
-chosen <- markers[['2']]
+chosen <- markers[['6']]
 best <- chosen[chosen$Top <= 10,]
 aucs <- getMarkerEffects(best, prefix="AUC")
 rownames(aucs) <- best$SYMBOL
@@ -222,7 +175,7 @@ pheatmap(aucs, color=viridis::plasma(100))
 ```{r, echo=FALSE}
 # Checking my statements:
 stopifnot(identical(chosen, markers[[cluster]]))
-stopifnot(all(c("Camp", "Cd177", "S100a9", "Lyz1") %in% rownames(aucs)))
+stopifnot(all(c("Camp", "Lcn2", "Ltf", "Lyz1") %in% rownames(aucs)))
 ```
 
 ## Session Info {-}
