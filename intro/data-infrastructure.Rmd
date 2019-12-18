@@ -175,7 +175,7 @@ colData(sce)
 Finally, some packages automatically add to the `colData` slot, for example, the `scater` package features a function, `calculateQCMetrics()`, which appends a lot of quality control data. Here we show the first five columns of `colData(sce)` with the quality control metrics appended to it.
 
 ```{r}
-sce <- perCellQCMetrics(sce)
+sce <- addPerCellQC(sce)
 colData(sce)[, 1:5]
 ```
 
