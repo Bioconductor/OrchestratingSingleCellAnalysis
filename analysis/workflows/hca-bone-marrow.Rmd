@@ -95,7 +95,7 @@ dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor, BPPARAM=bpp)
 top.bone <- getTopHVGs(dec.bone, n=5000)
 ```
 
-```{r unref-bach-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
+```{r unref-nest-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
 par(mfrow=c(4,2))
 blocked.stats <- dec.bone$per.block
 for (i in colnames(blocked.stats)) {
