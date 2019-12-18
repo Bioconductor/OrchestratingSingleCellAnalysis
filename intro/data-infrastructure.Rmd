@@ -172,7 +172,7 @@ And furthermore access our column (meta)data with the accessor, `colData()`:
 colData(sce)
 ```
 
-Finally, some packages automatically add to the `colData` slot, for example, the `scater` package features a function, `calculateQCMetrics()`, which appends a lot of quality control data. Here we show the first five columns of `colData(sce)` with the quality control metrics appended to it.
+Finally, some packages automatically add to the `colData` slot, for example, the `scater` package features a function, `addPerCellQC()`, which appends a lot of quality control data. Here we show the first five columns of `colData(sce)` with the quality control metrics appended to it.
 
 ```{r}
 sce <- addPerCellQC(sce)
@@ -210,10 +210,11 @@ Both of these can be accessed via their respective accessors, `rowRanges()` and 
 rowRanges(sce) # empty
 ```
 
-However, our call to `perCellQCMetrics(sce)` in the prior section filled in the `rowData` slot of our `sce` object, as we can see below (only the first three columns are shown for brevity):
+Currently the `rowData` slot is also empty.  However, analogous our call to `addPerCellQC()` in the prior section, the function `addPerFeatureQC()` will insert values in the `rowData` slot of our `sce` object, as we can see below:
 
 ```{r}
-rowData(sce)[, 1:3]
+sce <- addPerFeatureQC(sce)
+rowData(sce)
 ```
 
 In a similar fashion to the `colData` slot, such feature metadata could be provided at the onset when creating the *SingleCellExperiment* object, which we leave up to the reader as an exercise.
@@ -236,7 +237,7 @@ Briefly, we already encountered this via the `scran::computeSumFactors(sce)` cal
 
 ```{r}
 sce <- scran::computeSumFactors(sce)
-sce <- scater::normalize(sce)
+sce <- scater::logNormCounts(sce)
 sizeFactors(sce)
 ```
 
