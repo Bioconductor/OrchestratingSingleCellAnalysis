@@ -211,7 +211,7 @@ Both of these can be accessed via their respective accessors, `rowRanges()` and 
 rowRanges(sce) # empty
 ```
 
-Currently the `rowData` slot is also empty.  However, analogous our call to `addPerCellQC()` in the prior section, the function `addPerFeatureQC()` will insert values in the `rowData` slot of our `sce` object, as we can see below:
+Currently the `rowData` slot is also empty.  However, analogous to our call to `addPerCellQC()` in the prior section, the function `addPerFeatureQC()` will insert values in the `rowData` slot of our `sce` object, as we can see below:
 
 ```{r}
 sce <- addPerFeatureQC(sce)
