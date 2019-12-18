@@ -19,7 +19,7 @@ BiocManager::install('SingleCellExperiment')
 Additionally, we use some functions from the `scater` and `scran` packages, as well as the CRAN package `uwot` (which conveniently can also be installed through `BiocManager`). These functions will be accessed through the `<package>::<function>` convention as needed.
 
 ```{r eval=FALSE}
-BiocManager::install(c('scater', 'scran', 'uwot'))
+BiocManager::install(c('scater', 'scran', 'uwot', 'Rtsne'))
 ```
 
 For this session, all we will need loaded is the *SingleCellExperiment* package:
@@ -29,6 +29,7 @@ library(SingleCellExperiment)
 library(scater)
 library(scran)
 library(uwot)
+library(Rtsne)
 ```
 
 
