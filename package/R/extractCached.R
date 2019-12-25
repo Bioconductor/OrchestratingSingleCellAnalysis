@@ -5,6 +5,7 @@
 #' @param prefix String containing the prefix of the Rmarkdown file.
 #' @param chunk String containing the name of the requested chunk.
 #' @param objects Character vector containing variable names for one or more objects to be extracted.
+#' @param flexible Logical scalar indicating a flexible search for the Rmarkdown file should be performed.
 #'
 #' @details
 #' Each object is extracted in its state at the requested chunk at \code{chunk}.
@@ -27,6 +28,16 @@
 #'
 #' Chunks with names starting with \code{unref-} are considered to be the same as unnamed chunks and will not be referenced.
 #'
+#' @section Flexible search:
+#' The function will first attempt to find a Rmarkdown file with name \code{<prefix>.Rmd} relative to the working directory.
+#' This is used in situations where one workflow depends on another in the \code{workflows/} directory.
+#' 
+#' If this fails and \code{flexible=TRUE}, the function will then search in \code{../workflows/<prefix>},
+#' under the assumption that it is being called from a file in \code{analysis/}.
+#' 
+#' If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
+#' This is relevant for the final compilation of the book.
+#' 
 #' @return Variables with names \code{objects} are created in the global environment.
 #' An markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
 #' based on the code in the named chunks of the Rmarkdown file.
@@ -38,7 +49,22 @@
 #' 
 #' @export
 #' @importFrom knitr opts_knit load_cache
-extractCached <- function(prefix, chunk, objects) {
+extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
+    if (flexible) {
+        if (!file.exists(paste0(prefix, ".Rmd"))) {
+            tmp <- file.path("../workflows", prefix)
+
+            if (file.exists(paste0(tmp, ".Rmd"))) {
+                prefix <- tmp
+            } else {
+                potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
+                if (length(potential)) {
+                    prefix <- sub("\\.Rmd$", "", potential[1])
+                }
+            }
+        }
+    }
+
     all.lines <- readLines(paste0(prefix, ".Rmd"))
 
     # Extracting chunks until we get to the one with 'chunk'.
