@@ -19,11 +19,7 @@ We start by considering only two datasets from @muraro2016singlecell and @grun20
 This is a relatively simple scenario involving very similar protocols (CEL-seq and CEL-seq2) and a similar set of authors.
 
 ```{r, results='asis', echo=FALSE}
-WFUN <- function(x) {
-    if (file.exists("workflows")) file.path("workflows", x) else x
-}
-extractCached(WFUN("grun-pancreas"), "variance-modelling",
-    c("sce.grun", "dec.grun"))
+extractCached("grun-pancreas", "variance-modelling", c("sce.grun", "dec.grun"))
 ```
 
 ```{r}
@@ -31,8 +27,7 @@ sce.grun
 ```
 
 ```{r, results='asis', echo=FALSE}
-extractCached(WFUN("muraro-pancreas"), "variance-modelling",
-    c("sce.muraro", "dec.muraro"))
+extractCached("muraro-pancreas", "variance-modelling", c("sce.muraro", "dec.muraro"))
 ```
 
 ```{r}
@@ -102,8 +97,7 @@ Flushed with our previous success, we now attempt to merge the other datasets fr
 This is a more challenging task as it involves different technologies, mixtures of UMI and read count data and a more diverse set of authors (presumably with greater differences in the patient population).
 
 ```{r, results='asis', echo=FALSE}
-extractCached(WFUN("lawlor-pancreas"), "variance-modelling",
-    c("sce.lawlor", "dec.lawlor"))
+extractCached("lawlor-pancreas", "variance-modelling", c("sce.lawlor", "dec.lawlor"))
 ```
 
 ```{r}
@@ -111,8 +105,7 @@ sce.lawlor
 ```
 
 ```{r, results='asis', echo=FALSE}
-extractCached(WFUN("segerstolpe-pancreas"), "variance-modelling",
-    c("sce.seger", "dec.seger"))
+extractCached("segerstolpe-pancreas", "variance-modelling", c("sce.seger", "dec.seger"))
 ```
 
 ```{r}

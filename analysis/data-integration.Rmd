@@ -32,7 +32,7 @@ For example, outlier-based QC on the cells is more effective when performed with
 The same can also be said for trend fitting when modelling the mean-variance relationship (Section \@ref(variance-batch)).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-filtered-pbmc3k-4k-8k", "clustering", c("all.sce", "all.dec"))
+extractCached("tenx-filtered-pbmc3k-4k-8k", "clustering", c("all.sce", "all.dec"))
 ```
 
 ```{r}

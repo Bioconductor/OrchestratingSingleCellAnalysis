@@ -36,7 +36,7 @@ This step is commonly referred to as quality control (QC) on the cells.
 We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, which is provided with no prior QC so that we can apply our own procedures.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/lun-416b", "loading", "sce.416b")
+extractCached("lun-416b", "loading", "sce.416b")
 ```
 
 ```{r}

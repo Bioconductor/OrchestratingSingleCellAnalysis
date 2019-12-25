@@ -46,7 +46,7 @@ These built-in references are often good enough for most applications, provided 
 We will demonstrate on the 10X PBMC dataset using a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated].
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
 ```
 
 ```{r}
@@ -116,7 +116,7 @@ For bulk references, the same code shown above can be used, while some additiona
 To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/muraro-pancreas", "normalization", "sce.muraro")
+extractCached("muraro-pancreas", "normalization", "sce.muraro")
 ```
 
 ```{r}
@@ -145,7 +145,7 @@ As it so happens, we are in the fortunate position where our test dataset also c
 We see strong consistency between the two sets of labels (Figure \@ref(fig:singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/segerstolpe-pancreas", "normalization", "sce.seger")
+extractCached("segerstolpe-pancreas", "normalization", "sce.seger")
 ```
 
 ```{r singler-comp-pancreas, fig.cap="Heatmap of the confusion matrix between the predicted labels (rows) and the independently defined labels (columns) in the Segerstolpe dataset. The color is proportinal to the log-transformed number of cells with a given combination of labels from each set."}
@@ -178,7 +178,7 @@ This does not require matching of individual cells to the expression values of t
 We demonstrate this approach using neuronal cell type markers derived from the @zeisel2015brain study.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/zeisel-brain", "normalization", c("sce.zeisel"))
+extractCached("zeisel-brain", "normalization", c("sce.zeisel"))
 ```
 
 ```{r}
@@ -321,7 +321,7 @@ This identifies the pathways and processes that are (relatively) active in each 
 We demonstrate on the mouse mammary dataset from @bach2017differentiation, using markers that are identified by `findMarkers()` as being upregulated at a log-fold change threshold of 1.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/bach-mammary", "clustering", "sce.mam")
+extractCached("bach-mammary", "clustering", "sce.mam")
 ```
 
 ```{r}

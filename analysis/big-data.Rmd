@@ -29,7 +29,7 @@ The `r Biocpkg("BiocNeighbors")` framework makes it easy to switch between searc
 To demonstrate, we will use the 10X PBMC data:
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
 ```
 
 ```{r}

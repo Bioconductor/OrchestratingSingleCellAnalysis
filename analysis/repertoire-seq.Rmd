@@ -33,7 +33,7 @@ We achieve this using the `SplitDataFrame` class from the `r Biocpkg("S4Vectors"
 We demonstrate on a publicly available 10X Genomics dataset using mouse PBMCs:
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("workflows/tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
+extractCached("tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
 ```
 
 ```{r}

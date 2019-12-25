@@ -26,7 +26,7 @@ To this end, `iSEE` provides a flexible framework immediately compatible with a 
 In this chapter, we use the 10X PBMC dataset for demonstration purposes.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("workflows/tenx-unfiltered-pbmc4k", "dimensionality-reduction", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k", "dimensionality-reduction", "sce.pbmc")
 ```
 
 Then, we load the `iSEE` and `shiny` packages for use in the rest of this chapter.
