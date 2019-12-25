@@ -4,7 +4,7 @@
 \alias{extractCached}
 \title{Extract cached objects}
 \usage{
-extractCached(prefix, chunk, objects)
+extractCached(prefix, chunk, objects, flexible = TRUE)
 }
 \arguments{
 \item{prefix}{String containing the prefix of the Rmarkdown file.}
@@ -12,6 +12,8 @@ extractCached(prefix, chunk, objects)
 \item{chunk}{String containing the name of the requested chunk.}
 
 \item{objects}{Character vector containing variable names for one or more objects to be extracted.}
+
+\item{flexible}{Logical scalar indicating a flexible search for the Rmarkdown file should be performed.}
 }
 \value{
 Variables with names \code{objects} are created in the global environment.
@@ -42,6 +44,18 @@ i.e., code in unnamed chunks should be \dQuote{read-only} with respect to variab
 
 Chunks with names starting with \code{unref-} are considered to be the same as unnamed chunks and will not be referenced.
 }
+\section{Flexible search}{
+
+The function will first attempt to find a Rmarkdown file with name \code{<prefix>.Rmd} relative to the working directory.
+This is used in situations where one workflow depends on another in the \code{workflows/} directory.
+
+If this fails and \code{flexible=TRUE}, the function will then search in \code{../workflows/<prefix>},
+under the assumption that it is being called from a file in \code{analysis/}.
+
+If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
+This is relevant for the final compilation of the book.
+}
+
 \seealso{
 \code{\link{setupHTML}} and \code{\link{chapterPreamble}}, to set up the code for the collapsible element.
 }

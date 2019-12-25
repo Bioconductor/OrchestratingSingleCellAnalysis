@@ -23,7 +23,7 @@ to make it easier to simply install all dependencies required for the book.
 if (file.exists("analysis")) {
     scraped <- scrapeDependencies("analysis/")
     others <- c("GO.db")
-    cat(paste0("    ", c(scraped, others)), sep=",\\n")
+    cat(paste0("    ", c(scraped, others)), sep=",\n")
 }
 }
 \author{
