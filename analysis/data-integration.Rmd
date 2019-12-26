@@ -88,6 +88,9 @@ In contrast, approaches based on taking the intersection or union of HVGs across
 
     When integrating datasets of variable composition, it is generally safer to err on the side of including more genes than are used in a single dataset analysis, to ensure that markers are retained for any dataset-specific subpopulations that might be present.
     For a top $X$ selection, this means using a larger $X$ (say, ~5000), or in this case, we simply take all genes above the trend.
+    That said, many of the signal-to-noise considerations described in Section \@ref(hvg-selection) still apply here, so some experimentation may be necessary for best results.
+
+    Alternatively, a more forceful approach to feature selection can be used based on marker genes from within-batch comparisons; this is discussed in more detail in Section \@ref(integration-with-markers). 
 
 ## Diagnosing batch effects {#batch-diagnosis}
 
@@ -302,6 +305,8 @@ In this case, the proportion of lost variance is small, indicating that non-orth
 
 ## Preserving biological heterogeneity
 
+### Comparison to within-batch clusters
+
 Another useful diagnostic check is to compare the clustering within each batch to the clustering of the merged data.
 Accurate data integration should preserve variance within each batch as there should be nothing to remove between cells in the same batch.
 This check complements the previously mentioned diagnostics that only focus on the removal of differences between batches.
@@ -367,6 +372,57 @@ ri4k
 # Checking that it works.
 stopifnot(ri3k > 0.9)
 stopifnot(ri4k > 0.9)
+```
+
+### Encouraging consistency with marker genes {#integration-with-markers}
+
+In some situations, we will already have performed within-batch analyses to characterize salient aspects of population heterogeneity.
+This is not uncommon when merging datasets from different sources where each dataset has already been analyzed, annotated and interpreted separately.
+It is subsequently desirable for the integration procedure to retain these "known interesting" aspects of each dataset in the merged dataset.
+We can encourage this outcome by using the marker genes within each dataset as our selected feature set for `fastMNN()` and related methods.
+This focuses on the relevant heterogeneity and represents a semi-supervised approach that is a natural extension of the strategy described in Section \@ref(apriori-hvgs).
+
+To illustrate, we apply this strategy to our PBMC datasets.
+We identify the top marker genes from pairwise Wilcoxon ranked sum tests between every pair of clusters _within_ each batch, analogous to the method used by `r Biocpkg("SingleR")` (Chapter \@ref(cell-type-annotation)).
+In this case, we use the top 10 marker genes but any value can be used depending on the acceptable trade-off between signal and noise (and speed).
+We then take the union across all comparisons in all batches and use that in place of our HVG set in `fastMNN()`.
+
+```{r}
+stats3 <- pairwiseWilcox(logcounts(pbmc3k), pbmc3k$cluster, direction="up")
+markers3 <- getTopMarkers(stats3[[1]], stats3[[2]], n=10)
+
+stats4 <- pairwiseWilcox(logcounts(pbmc4k), pbmc4k$cluster, direction="up")
+markers4 <- getTopMarkers(stats4[[1]], stats4[[2]], n=10)
+
+marker.set <- unique(unlist(c(unlist(markers3), unlist(markers4))))
+length(marker.set) # getting the number of genes selected in this manner.
+
+set.seed(1000110)
+mnn.out2 <- fastMNN(pbmc3k, pbmc4k, subset.row=marker.set,
+    BSPARAM=BiocSingular::RandomParam(deferred=TRUE))
+```
+
+A quick inspection of Figure \@ref(fig:tsne-pbmc-corrected-markers) indicates that the original within-batch structure is indeed preserved in the corrected data.
+This highlights the utility of a marker-based feature set for integrating datasets that have already been characterized separately in a manner that preserves existing interpretations of each dataset.
+We note that some within-batch clusters have merged, most likely due to the lack of robust separation in the first place, though this may also be treated as a diagnostic on the appropriateness of the integration depending on the context.
+
+```{r tsne-pbmc-corrected-markers, fig.cap="$t$-SNE plots of the merged PBMC datasets, where the merge was performed using only marker genes identified within each batch. Each point represents a cell that is colored by the assigned cluster from the within-batch analysis for the 3K (left) and 4K dataset (right)."}
+mnn.out2 <- runTSNE(mnn.out2, dimred="corrected")
+gridExtra::grid.arrange(
+    plotTSNE(mnn.out2[,mnn.out2$batch==1], colour_by=I(pbmc3k$cluster)),
+    plotTSNE(mnn.out2[,mnn.out2$batch==2], colour_by=I(pbmc4k$cluster)),
+    ncol=2
+)
+```
+
+```{r, echo=FALSE}
+# Checking that we're not getting robust separation.
+i1 <- which(stats4$pairs$first=="6" & stats4$pairs$second=="5")
+Y <- stats4$statistics[[i1]]
+stopifnot(all(Y$FDR >= 0.1))
+i2 <- which(stats4$pairs$first=="5" & stats4$pairs$second=="6")
+Y <- stats4$statistics[[i2]]
+stopifnot(all(Y$FDR >= 0.1))
 ```
 
 ## Using the corrected values {#using-corrected-values}
