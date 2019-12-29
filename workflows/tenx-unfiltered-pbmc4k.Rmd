@@ -154,8 +154,8 @@ plotTSNE(sce.pbmc, colour_by="cluster")
 ## Interpretation
 
 ```{r, echo=FALSE}
-chosen.mono <- 7
-chosen.macro <- 12
+chosen.mono <- "7"
+chosen.macro <- "12"
 ```
 
 ```{r}
