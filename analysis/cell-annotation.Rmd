@@ -112,7 +112,8 @@ We suggest applying both strategies and, if major disagreements are present betw
 ### Using custom references
 
 It is also straightforward to apply `r Biocpkg("SingleR")` to user-supplied reference datasets.
-For bulk references, the same code shown above can be used, while some additional work is required for single-cell references.
+This is most obviously useful when we have an existing dataset that was previously (manually) annotated,
+and we want to use that knowledge to annotate a new dataset in an automated manner.
 To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
 
 ```{r, echo=FALSE, results="asis"}
@@ -126,32 +127,24 @@ sce.muraro <- sce.muraro[,!is.na(sce.muraro$label) &
 table(sce.muraro$label)
 ```
 
-We use methods from `r Biocpkg("scran")` to generate marker sets for every reference label (Chapter \@ref(marker-detection)).
-Here, we use the `pairwiseWilcox()` and `getTopMarkers()` functions to take the top 10 upregulated genes from each pairwise comparison between reference labels, using the Wilcoxon test with a log-fold change threshold of 1.
-This enables us to select a custom set of marker genes that is both discriminative and concise, which is faster to run and often more effective for single-cell references than the default marker set that is auto-generated inside `SingleR()`.
-(We could also use this custom approach for our bulk references, but the default is more convenient and often works well enough.)
-
-```{r}
-library(scran)
-pairwise.muraro <- pairwiseWilcox(logcounts(sce.muraro),
-    sce.muraro$label, direction="up", lfc=1)
-muraro.markers <- getTopMarkers(pairwise.muraro$statistics,
-    pairwise.muraro$pairs, n=10)
-muraro.markers
-```
-
-We use these newly identified markers in `SingleR()` to assign labels to our test dataset from @segerstolpe2016singlecell.
-As it so happens, we are in the fortunate position where our test dataset also contains independently defined labels.
-We see strong consistency between the two sets of labels (Figure \@ref(fig:singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
+Our aim is to assign labels to our test dataset from @segerstolpe2016singlecell.
+We use the same call to `SingleR()` but with `de.method="wilcox"` to identify markers via pairwise Wilcoxon ranked sum tests between labels in the reference dataset.
+This re-uses the same machinery from Chapter \@ref(marker-detection), and indeed, further options to fine-tune the test procedure can be passed via the `de.args` argument.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("segerstolpe-pancreas", "normalization", "sce.seger")
 ```
 
-```{r singler-comp-pancreas, fig.cap="Heatmap of the confusion matrix between the predicted labels (rows) and the independently defined labels (columns) in the Segerstolpe dataset. The color is proportinal to the log-transformed number of cells with a given combination of labels from each set."}
+```{r}
 pred.seger <- SingleR(test=sce.seger, ref=sce.muraro, 
-    labels=sce.muraro$label, genes=muraro.markers)
+    labels=sce.muraro$label, de.method="wilcox")
 table(pred.seger$labels)
+```
+
+As it so happens, we are in the fortunate position where our test dataset also contains independently defined labels.
+We see strong consistency between the two sets of labels (Figure \@ref(fig:singler-comp-pancreas)), indicating that our automatic annotation is comparable to that generated manually by domain experts.
+
+```{r singler-comp-pancreas, fig.cap="Heatmap of the confusion matrix between the predicted labels (rows) and the independently defined labels (columns) in the Segerstolpe dataset. The color is proportinal to the log-transformed number of cells with a given combination of labels from each set."}
 tab <- table(pred.seger$pruned.labels, sce.seger$CellType)
 library(pheatmap)
 pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
