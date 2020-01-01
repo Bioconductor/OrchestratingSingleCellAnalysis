@@ -1,0 +1,28 @@
+bookdown::gitbook:
+  css: style.css
+  highlight: tango
+  config:
+    fontsettings:
+      theme: white
+    toc:
+      before: |
+        <li><a href="./">Orchestrating Single-Cell Analysis</a></li>
+      after: |
+        <li><a href="https://bioconductor.org" target="blank">Published by Bioconductor</a></li>
+    download: null
+    bookdown::epub_book: default
+    # edit: https://github.com/Bioconductor/OrchestratingSingleCellAnalysis/edit/master/docs/%s
+    sharing:
+      github: no
+      facebook: no
+      twitter: no
+      linkedin: no
+    cover: images/cover.png
+
+bookdown::pdf_book:
+  includes:
+    in_header: preamble.tex
+  latex_engine: xelatex
+  citation_package: natbib
+  keep_tex: yes
+

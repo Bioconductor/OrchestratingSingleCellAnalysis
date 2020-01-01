@@ -1,0 +1,59 @@
+Package: OrchestratingSingleCellAnalysis
+Title: Orchestrating Single Cell Analysis with Bioconductor
+Version: 0.0.1.9999
+Authors@R: c(person('Robert', 'Amezquita', role = c('aut', 'cre')), person('Aaron', 'Lun', role = c('aut')), person('Stephanie', 'Hicks', role = 'aut'), person('Raphael', 'Gottardo', role = 'aut'))
+Description: Online book for orchestrating single cell analysis with Bioconductor. Methods and resources with plenty of examples.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Imports:
+AnnotationHub
+BiocFileCache
+BiocManager
+BiocNeighbors
+BiocParallel
+BiocPkgTools
+BiocSingular
+BiocStyle
+DropletUtils
+EnsDb.Hsapiens.v86
+GSEABase
+HDF5Array
+Matrix
+MouseGastrulationData
+OSCAUtils
+PCAtools
+SingleCellExperiment
+SingleR
+TENxPBMCData
+batchelor
+bench
+bookdown
+cluster
+dendextend
+dplyr
+dynamicTreeCut
+edgeR
+fossil
+ggraph
+gridExtra
+iSEE
+igraph
+knitr
+limma
+org.Hs.eg.db
+org.Mm.eg.db
+pheatmap
+rhdf5
+rmarkdown
+scRNAseq
+scater
+scran
+shiny
+tidygraph
+tidyverse BiocFileCache
+uwot
+viridis
+AUCell
+    devtools
+    bookdown
