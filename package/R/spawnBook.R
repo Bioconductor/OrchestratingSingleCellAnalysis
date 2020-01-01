@@ -31,7 +31,7 @@ spawnBook <- function(dir) {
     setupBookChapters()
 
     # Copying over various bookdown required files.
-    others <- list.files("OSCABase", "sundries", full.names=TRUE)
+    others <- list.files(file.path("OSCABase", "sundries"), full.names=TRUE)
     file.copy(others, basename(others))
     
     invisible(NULL)
