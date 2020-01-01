@@ -16,7 +16,9 @@
 #' We use dynamic regeneration of book chapters in a separate repository to isolate the book source from its outputs.
 #' This reduces the size of the \dQuote{effective} Git repository in \pkg{OSCABase},
 #' making it easier to work with (i.e., faster cloning/pulling, no pollution of the commit history). 
-#' It also easily supports multiple versions of the book, e.g., for release and devel.
+#' Contributors are no longer burdened with the management of chapter numbering,
+#' which if they are adding a new chapter in the middle of a part.
+#' Our system also easily supports multiple versions of the book, e.g., for release and devel.
 #' 
 #' Note that any existing chapters will be deleted upon running this function.
 #' Any persistent changes to chapter content should be made to the \pkg{OSCABase} repository. 
@@ -25,8 +27,8 @@
 #'
 #' @export
 setupBookChapters <- function(dir=".") {
-    setwd(dir)
     wd <- getwd()
+    setwd(dir)
     on.exit(setwd(wd))
 
     basic <- "OSCABase"
@@ -37,6 +39,7 @@ setupBookChapters <- function(dir=".") {
     }
 
     file.copy(file.path(basic, "intro", "index.Rmd"), "index.Rmd")
+    file.copy(file.path(basic, "ref.bib"), "ref.bib")
 
     .uplift(part=1, 
         files=file.path(basic, "intro",
