@@ -10,7 +10,9 @@ Description: Provides specific utilities to compile the
     any use other than book compilation.
 Imports:
     knitr,
-    utils
+    utils,
+    callr,
+    rmarkdown
 Suggests:
     AnnotationDbi,
     AnnotationHub,
