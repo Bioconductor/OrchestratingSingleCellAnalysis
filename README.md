@@ -2,11 +2,11 @@
 
 ## Overview
 
-This repository contains the raw Rmarkdown files for the 
+This repository contains the basic ingredients for the 
 [Orchestrating Single Cell Analysis](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis) book.
 Developers wanting to contribute scientific content to the book should make pull requests to this repository, 
-the one linked above is just required to build the actual book.
-This set-up provides a light code-only repository (this one) for day-to-day developer use,
+the one linked above is just used to host the book content on GitHub Pages.
+Our set-up provides a light code-only repository (this one) for day-to-day developer use,
 which avoids the Git blob bloat from storing PNGs and HTMLs in the other repository.
 It also enables us to automatically reconstruct the section orderings without needing to manually rename the files.
 
@@ -16,11 +16,11 @@ The repository subdirectories reflect the structure of the book:
 
 - `intro`: some introductory sections focusing on how to install and use R and Bioconductor.
 - `analysis`: the meat of the book, where each chapter focuses on a different step of a scRNA-seq analysis.
+- `workflows`: end-to-end analysis Rmarkdown reports with minimal explanatory text.
 - `about`: some bits and pieces about the contributors.
 
-Within `analysis`, there is an additional `workflows` subdirectory.
-This contains end-to-end analysis Rmarkdown reports with minimal text and the bare minimum of code.
-We will refer to these `analysis/workflows` files as "workflows", in contrast to the "chapters" in `analysis` itself.
+In addition, there is the **OSCAUtils** package in `package`, which provides a number of utilities for book construction;
+and `sundries`, which provides some **bookdown**-related bits and pieces.
 
 ## Using cached objects
 
@@ -38,33 +38,20 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 ## Instructions
 
-### To build the reports
-
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
-Before compilation of the chapters, the workflows must be compiled:
+Run the following code to create a book repository in `"some_dir"`.
 
-```r
-all.workflows <- list.files('analysis/workflows', pattern="Rmd$", full=TRUE)
-for (x in all.workflows) {
-    rmarkdown::render(x)
-}
-```
-
-Each chapter should be compilable as a standalone unit, depending only on the workflows and not on other chapters.
-As such, there is no need to compile chapters in any chronological order.
-
-```r
-rmarkdown::render("analysis/clustering.Rmd")
-rmarkdown::render("analysis/quality-control.Rmd")
-rmarkdown::render("analysis/reduced-dimensions.Rmd")
-# and so on.
+```{r}
+library(OSCAUtils)
+spawnBook("some_dir")
+compileWorkflows("some_dir")
 ```
 
 ### To contribute reports
 
 Standard procedure: fork and PR.
 
-- All chapters must start from a `SingleCellExperiment` object.
-- All workflows should use a `SingleCellExperiment` object throughout the various chunks.
+- All `analysis` chapters must start from a `SingleCellExperiment` object and should be independent of other `analysis` chapters.
+- All `workflow` chapters should use a `SingleCellExperiment` object throughout the various chunks.
 This allows chapters to pick up the SCE at any point.
