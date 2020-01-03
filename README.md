@@ -38,15 +38,20 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 ## Instructions
 
+### To build the book
+
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
 Run the following code to create a book repository in `"some_dir"`.
 
-```{r}
+```r
 library(OSCAUtils)
 spawnBook("some_dir")
 compileWorkflows("some_dir")
 ```
+
+Setting `fresh=FALSE` in `compileWorkflows()` will avoid deleting old caches for a faster compilation,
+though it is recommended to routinely compile with `fresh=TRUE` to avoid problems with silently invalidated caches.
 
 ### To contribute reports
 
