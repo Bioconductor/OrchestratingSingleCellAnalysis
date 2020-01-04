@@ -90,6 +90,8 @@ setupBookChapters <- function(dir=".") {
                 "lawlor-pancreas.Rmd",
                 "segerstolpe-pancreas.Rmd",
                 "merged-pancreas.Rmd",
+                "grun-hsc.Rmd",
+                "nestorowa-hsc.Rmd",
                 "pijuan-embryo.Rmd",
                 "bach-mammary.Rmd",
                 "hca-bone-marrow.Rmd"
