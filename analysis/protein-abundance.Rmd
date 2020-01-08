@@ -89,9 +89,9 @@ We thus remove cells that have unusually low numbers of detected ADTs, defined h
 (We could use the MAD-based default behavior of `isOutlier()`, but the MAD is zero in this case and filtering would discard useful cells with almost all ADTs detected.)
 
 ```{r detected-ab-hist, fig.cap="Distribution of the number of detected ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
-# Require a minimum fold-change of 2 from the median (converted into log10).
+# Require a minimum fold-change of 2 from the median (converted into log2).
 ab.discard <- isOutlier(df$`altexps_Antibody Capture_detected`,
-    log=TRUE, type="lower", min_diff=log10(2))
+    log=TRUE, type="lower", min_diff=1)
 summary(ab.discard)
 
 hist(df$`altexps_Antibody Capture_detected`, col='grey', 
