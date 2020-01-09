@@ -38,7 +38,7 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 ## Instructions
 
-### To build the book
+### To build the workflows
 
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
@@ -46,12 +46,24 @@ Run the following code to create a book repository in `"some_dir"`.
 
 ```r
 library(OSCAUtils)
-spawnBook("some_dir")
-compileWorkflows("some_dir")
+spawnBook("OSCA")
+compileWorkflows("OSCA")
 ```
 
 Setting `fresh=FALSE` in `compileWorkflows()` will avoid deleting old caches for a faster compilation,
 though it is recommended to routinely compile with `fresh=TRUE` to avoid problems with silently invalidated caches.
+
+### To build the book
+
+To compile the book in its entirety, the following code will create the book in a subdirectory (in this case `OSCA/docs/`).
+
+```r
+setwd("OSCA") # process must be started in the book directory
+bookdown::render_book("index.Rmd", "bookdown::gitbook",
+                      quiet = FALSE, output_dir = "docs", new_session = TRUE)
+```
+
+Note that for pushing figures to the main book repository, the `Cairo` library is required so that images are rendered as PNG files (see the `chapterPreamble()` function of the `OSCAUtils` package).
 
 ### To contribute reports
 
