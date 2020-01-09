@@ -42,7 +42,7 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
-Run the following code to create a book repository in `"some_dir"`.
+Run the following code to create a book repository in `"OSCA"`.
 
 ```r
 library(OSCAUtils)
