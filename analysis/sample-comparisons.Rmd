@@ -238,15 +238,9 @@ Here, we will re-use our previous additive design involving the batch (`pool`) a
 Recall that this matrix should have one row per unique sample (and named as such), 
 reflecting the fact that we are modelling counts on the sample level instead of the cell level.
 
-<!--
-Technically, we could dynamically construct the design matrix for each label using a formula,
-but this can silently give incorrect results when the dimensions change.
--->
-
 ```{r}
 # Pulling out a sample-level 'targets' data.frame:
-targets <- colData(merged)[!duplicated(merged$sample),
-    c("sample", "tomato", "pool")]
+targets <- colData(merged)[!duplicated(merged$sample),]
 
 # Constructing the design matrix:
 design <-  model.matrix(~factor(pool) + factor(tomato), data=targets)
@@ -254,7 +248,7 @@ rownames(design) <- targets$sample
 ```
 
 We then apply the `pseudoBulkDGE()` function to obtain a list of injection-induced DE genes for each label.
-This function also puts some additional care into automatically dealing with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
+This function puts some additional effort into automatically dealing with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
 or are not represented in a sufficient number of replicate samples to enable modelling of biological variability.
 
 ```{r}
@@ -265,7 +259,7 @@ de.results <- pseudoBulkDGE(summed.filt,
     design=design,
     coef=ncol(design),
 
-    # 'condition' just sets the group size for filterByExpr(),
+    # 'condition' sets the group size for filterByExpr(),
     # to perfectly mimic our previous manual analysis.
     condition=targets$tomato 
 )
@@ -278,13 +272,13 @@ or the comparison of interest was not possible for a particular label,
 e.g., due to lack of residual degrees of freedom or an absence of samples from both conditions.
 
 ```{r}
-dge <- decideTestsPerLabel(de.results, threshold=0.05)
-summarizeTestsPerLabel(dge)
+is.de <- decideTestsPerLabel(de.results, threshold=0.05)
+summarizeTestsPerLabel(is.de)
 ```
 
 ```{r, echo=FALSE}
 # Checking that this is exactly the same as our manual analysis.
-stuff <- summarizeTestsPerLabel(dge)[label,]
+stuff <- summarizeTestsPerLabel(is.de)[label,]
 ref <- summary(decideTests(res))
 stopifnot(identical(as.integer(stuff["-1"]), as.integer(ref["Down",])))
 stopifnot(identical(as.integer(stuff["1"]), as.integer(ref["Up",])))
@@ -292,20 +286,23 @@ stopifnot(identical(as.integer(stuff["0"]), as.integer(ref["NotSig",])))
 ```
 
 For each gene, we compute the percentage of cell types in which that gene is upregulated or downregulated upon injection.
+(Here, we consider a gene to be non-DE if it is not retained after filtering.)
 We see that _Xist_ is consistently downregulated in the injected cells; 
 this is consistent with the fact that the injected cells are male while the background cells are derived from pools of male and female embryos (due to experimental difficulties with resolving sex at this stage).
 The consistent downregulation of _Phlda2_ and _Cdkn1c_ in the injected cells is also interesting given that both are imprinted genes. 
 
 ```{r}
 # Upregulated across most cell types.
-head(sort(rowMeans(dge > 0, na.rm=TRUE), decreasing=TRUE), 10)
+up.de <- is.de > 0 & !is.na(is.de)
+head(sort(rowMeans(up.de), decreasing=TRUE), 10)
 
 # Downregulated across cell types.
-head(sort(rowMeans(dge < 0, na.rm=TRUE), decreasing=TRUE), 10)
+down.de <- is.de > 0 & !is.na(is.de)
+head(sort(rowMeans(down.de), decreasing=TRUE), 10)
 ```
 
 ```{r, echo=FALSE}
-down.degs <- head(sort(rowMeans(dge < 0, na.rm=TRUE), decreasing=TRUE), 10)
+down.degs <- head(sort(rowMeans(down.de), decreasing=TRUE), 10)
 
 # Check that the above paragraph is valid.
 stopifnot("Xist" %in% names(down.degs))
@@ -313,23 +310,29 @@ stopifnot("Phlda2" %in% names(down.degs))
 stopifnot("Cdkn1c" %in% names(down.degs))
 ```
 
-We can identify label-specific DE genes, i.e., significantly in our label of interest yet not DE in any other label.
+We further identify label-specific DE genes that are significant in our label of interest yet not DE in any other label.
 As hypothesis tests are not typically geared towards identifying genes that are not DE,
-we use an _ad hoc_ approach where we consider a gene to be satisfactorily non-DE in the other labels 
+we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
 if it fails to be detected even at a generous FDR threshold of 50%.
-For the purposes of this step, a gene is also considered to be non-DE if it is not retained after filtering.
+We demonstrate below to identify injection-induced DE genes that are unique to the allantois,
+though differences in power between labels suggest that this should be interpreted with some caution;
+for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked unique gene exhibits some evidence of DE in other labels but was not detected for various reasons like too low abundance or insufficient replicates.
 
-```{r}
-unique.dge <- dge[,"Allantois"]!=0 
+```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
+remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
+not.de <- remotely.de==0 | is.na(remotely.de)
 
-# Using a generous FDR threshold so that, if it fails to be detected
-# even in this case, the data is consistent with the null hypothesis.
-remotely.dge <- decideTestsPerLabel(de.results, threshold=0.5)
-not.dge <- remotely.dge==0 | is.na(remotely.dge)
+other.labels <- setdiff(colnames(not.de), "Allantois")
+unique.degs <- is.de[,"Allantois"]!=0 & rowMeans(not.de[,other.labels])==1
+unique.degs <- names(which(unique.degs))
+unique.degs
 
-other.labels <- setdiff(colnames(not.dge), "Allantois")
-unique.dge <- unique.dge & rowMeans(not.dge[,other.labels])==1
-names(which(unique.dge))
+# Choosing the top-ranked gene for inspection:
+de.allantois <- de.results$Allantois
+de.allantois <- de.allantois[order(de.allantois$PValue),]
+de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
+plotExpression(logNormCounts(summed.filt), features=rownames(de.allantois)[1],
+    x="tomato", colour_by="tomato", other_fields="label") + facet_wrap(~label)
 ```
 
 We also list the labels that were skipped due to the absence of replicates or contrasts.
