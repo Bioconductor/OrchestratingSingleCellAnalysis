@@ -22,7 +22,7 @@ This concept can be extended to data sets with thousands of genes where each cel
 As the name suggests, dimensionality reduction aims to reduce the number of separate dimensions in the data.
 This is possible because different genes are correlated if they are affected by the same biological process.
 Thus, we do not need to store separate information for individual genes, but can instead compress multiple features into a single dimension, e.g., an "eigengene" [@langfelder2007eigengene].
-This reduces computational work in downstream analyses, as calculations only need to be performed for a few dimensions rather than thousands of genes;
+This reduces computational work in downstream analyses like clustering, as calculations only need to be performed for a few dimensions rather than thousands of genes;
 reduces noise by averaging across multiple genes to obtain a more precise representation of the patterns in the data;
 and enables effective plotting of the data, for those of us who are not capable of visualizing more than 3 dimensions.
 
@@ -124,6 +124,8 @@ Strong biological variation in the early PCs will shift the elbow to the left, p
 
 ### Using the technical noise
 
+#### Method description
+
 Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
 For example, we might retain the top set of PCs that explains 80% of the total variation in the data.
 Of course, it would be pointless to swap one arbitrary parameter $d$ for another $T$.
@@ -155,7 +157,9 @@ From a practical perspective, the `denoisePCA()` approach usually retains more P
 The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
 Thus, whether this is a "better" approach depends on the our willingness to increase noise in order to preserve weaker biological signals.
 
-Incidentally, `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
+#### Additional comments
+
+`denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
 By default, the number is bounded within the "reasonable" limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low).
 For example, applying this function to the Zeisel brain data hits the upper limit:
 
@@ -232,6 +236,74 @@ reducedDimNames(sce.zeisel)
 
 Note that this is not necessary if the desired number of PCs is directly specified in the initial call to `runPCA()`.
 Similarly, `denoisePCA()` will return its chosen number of PCs without requiring further user intervention.
+
+## Non-negative matrix factorization
+
+Non-negative matrix factorization (NMF) involves approximating a matrix by the product of two lower-rank matrices,
+all of which can only contain non-negative entries.
+This is conceptually similar to PCA in that we are aiming to summarize the major features in our matrix with a smaller matrix,
+reducing noise and compacting the data.
+However, the NMF coordinates are more interpretable as large values unambiguously represent greater expression of genes in the corresponding factor; this cannot be said of PCA coordinates, for which negative values could be caused by higher expression if the corresponding entry of the rotation vector is negative.
+scRNA-seq expression data is a popular use case for NMF [@shao2017robust;@kotliar2019identifying] as sequencing counts are always non-negative - even after log-transformation, provided that the pseudo-count is greater than 1.
+
+To demonstrate the application of NMF, we take the top 10 factors from the @zeisel2015brain dataset using the `runNMF()` function from `r Biocpkg("scater")` (powered by the `r CRANpkg("NNLM")` package).
+As with the PCA results, `runNMF()` stores the per-cell coordinates in the `"NMF"` entry of the `reducedDims()` of the output, which we could then use directly for downstream steps like clustering.
+However, the main benefit of NMF over PCA is that we can directly study the individual factors based on their contributing genes in the basis matrix.
+(The product of the basis matrix and the per-cell coordinate matrix forms the approximation to the original input.)
+This allows us to quickly characterize cellular heterogeneity and its driver genes (Figure \@ref(fig:heat-nmf-zeisel)).
+
+```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp=0.5, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
+set.seed(101001)
+nmf.zeisel <- runNMF(sce.zeisel, ncomponents=10, subset_row=top.zeisel)
+
+# Extracting the basis matrix of per-gene contributions to each factor.
+nmf.out <- reducedDim(nmf.zeisel, "NMF")
+nmf.basis <- attr(nmf.out, "basis")
+colnames(nmf.out) <- colnames(nmf.basis) <- 1:10
+
+# Creating a heatmap where each row is a cell:
+per.cell <- pheatmap::pheatmap(nmf.out, silent=TRUE, 
+    main="By cell", show_rownames=FALSE,
+    color=rev(viridis::magma(100)), cluster_cols=FALSE) 
+
+# Creating a heatmap where each row is a gene:
+per.gene <- pheatmap::pheatmap(nmf.basis, silent=TRUE, 
+    main="By gene", cluster_cols=FALSE, show_rownames=FALSE,
+    color=rev(viridis::magma(100)))
+
+gridExtra::grid.arrange(per.cell[[4]], per.gene[[4]], ncol=2)
+```
+
+Specifically, we examine the top ranking genes for each factor to attempt to assign biological meaning to them.
+There are at least a few marker genes here that will be familiar to readers who have studied neuronal cell types,
+e.g., _Mog_ for oligodendrocytes and _Gad1_ for interneurons.
+A factor with a high basis value for _Mog_ can be treated as a proxy for oligodendrocyte identity;
+cells with high NMF coordinates for that factor (Figure \@ref(fig:heat-nmf-zeisel)) are likely to be oligodendrocytes.
+
+```{r}
+by.factor <- list()
+for (x in colnames(nmf.basis)) {
+    by.factor[[x]] <- sort(nmf.basis[,x], decreasing=TRUE)
+}
+lapply(by.factor, head, n=10)
+```
+
+```{r, echo=FALSE}
+# Checking my trash talk.
+top <- lapply(lapply(by.factor, head, n=10), names)
+stopifnot("Mog" %in% unlist(top))
+stopifnot("Gad1" %in% unlist(top))
+stopifnot(sum("Malat1"==unlist(top)) > 3)
+```
+
+NMF provides a fast alternative to the relatively circuitous process of clustering (Chapter \@ref(clustering)) and marker gene detection (Chapter \@ref(marker-detection)) for identifying cell populations.
+However, it could also be argued that the NMF output is somewhat more difficult to interpret than conventional marker genes for distinguishing between subpopulations.
+There is no guarantee that each factor represents an orthogonal biological process, meaning that some care is required to ensure that the interpretation of one factor is not invalidated by other factors affecting the same genes.
+NMF also tends to assign higher weight to high-abundance genes to reduce approximation error - as evidenced by the recurrence of _Malat1_ in multiple factors above - even though such genes may not exhibit strong DE between populations.
+
+As such, we tend to prefer PCA for general-purpose dimensionality reduction to denoise and compact the data.
+That said, NMF can be a powerful tool in more targeted applications where interpretability of the dimensions is important;
+one such example is provided in Chapter \@ref(cell-type-annotation).
 
 ## Dimensionality reduction for visualization
 
