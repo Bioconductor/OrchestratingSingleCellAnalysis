@@ -239,20 +239,19 @@ Similarly, `denoisePCA()` will return its chosen number of PCs without requiring
 
 ## Non-negative matrix factorization
 
-Non-negative matrix factorization (NMF) involves approximating a matrix by the product of two lower-rank matrices,
+Non-negative matrix factorization (NMF) involves approximating a matrix by the product of two lower-rank matrices $W$ and $H$,
 all of which can only contain non-negative entries.
 This is conceptually similar to PCA in that we are aiming to summarize the major features in our matrix with a smaller matrix,
 reducing noise and compacting the data.
-However, the NMF coordinates are more interpretable as large values unambiguously represent greater expression of genes in the corresponding factor; this cannot be said of PCA coordinates, for which negative values could be caused by higher expression if the corresponding entry of the rotation vector is negative.
+However, the NMF coordinates are more interpretable as larger values unambiguously represent greater expression of genes in the corresponding factor; 
+the same cannot be said of PCA coordinates, for which negative values could be caused by higher expression if the corresponding entry of the rotation vector is negative.
+
 scRNA-seq expression data is a popular use case for NMF [@shao2017robust;@kotliar2019identifying] as sequencing counts are always non-negative - even after log-transformation, provided that the pseudo-count is greater than 1.
-
-To demonstrate the application of NMF, we take the top 10 factors from the @zeisel2015brain dataset using the `runNMF()` function from `r Biocpkg("scater")` (powered by the `r CRANpkg("NNLM")` package).
+We demonstrate the application of NMF on the @zeisel2015brain dataset using the `runNMF()` function from `r Biocpkg("scater")` (powered by the `r CRANpkg("NNLM")` package).
 As with the PCA results, `runNMF()` stores the per-cell coordinates in the `"NMF"` entry of the `reducedDims()` of the output, which we could then use directly for downstream steps like clustering.
-However, the main benefit of NMF over PCA is that we can directly study the individual factors based on their contributing genes in the basis matrix.
-(The product of the basis matrix and the per-cell coordinate matrix forms the approximation to the original input.)
-This allows us to quickly characterize cellular heterogeneity and its driver genes (Figure \@ref(fig:heat-nmf-zeisel)).
+However, the main benefit of NMF over PCA is that we can directly interpret the individual factors based on the identity of the highly weighted genes in the basis matrix $W$ and the affected cells in the coordinate matrix $H$ (Figure \@ref(fig:heat-nmf-zeisel)).
 
-```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp=0.5, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
+```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
 set.seed(101001)
 nmf.zeisel <- runNMF(sce.zeisel, ncomponents=10, subset_row=top.zeisel)
 
@@ -279,6 +278,7 @@ There are at least a few marker genes here that will be familiar to readers who 
 e.g., _Mog_ for oligodendrocytes and _Gad1_ for interneurons.
 A factor with a high basis value for _Mog_ can be treated as a proxy for oligodendrocyte identity;
 cells with high NMF coordinates for that factor (Figure \@ref(fig:heat-nmf-zeisel)) are likely to be oligodendrocytes.
+Indeed, the concept of "cell type identity" is particularly amenable for NMF as the upregulation of marker genes manifests as large positive values in both $H$ and $W$ matrices, simplifying the process of interpretation for the affected factor.
 
 ```{r}
 by.factor <- list()
@@ -296,14 +296,17 @@ stopifnot("Gad1" %in% unlist(top))
 stopifnot(sum("Malat1"==unlist(top)) > 3)
 ```
 
-NMF provides a fast alternative to the relatively circuitous process of clustering (Chapter \@ref(clustering)) and marker gene detection (Chapter \@ref(marker-detection)) for identifying cell populations.
-However, it could also be argued that the NMF output is somewhat more difficult to interpret than conventional marker genes for distinguishing between subpopulations.
+For characterizing population heterogeneity, NMF provides a fast alternative to the relatively circuitous process of clustering (Chapter \@ref(clustering)) and marker gene detection (Chapter \@ref(marker-detection)) 
+The continuous nature of the NMF output also lends itself to describing gradients of biological state that are not easily captured by discrete clusters, while the availability of multiple factors allows simultaneous examination of many such gradients compared to a single trajectory.
+Of course, we do not entirely avoid clustering in Figure \@ref(fig:heat-nmf-zeisel), but at least the heatmap retains more information about the structure within and between clusters that is usually lost in pure cluster-based interpretations.
+
+On the other hand, NMF output is arguably more difficult to interpret than a conventional list of marker genes for distinguishing between subpopulations.
 There is no guarantee that each factor represents an orthogonal biological process, meaning that some care is required to ensure that the interpretation of one factor is not invalidated by other factors affecting the same genes.
 NMF also tends to assign higher weight to high-abundance genes to reduce approximation error - as evidenced by the recurrence of _Malat1_ in multiple factors above - even though such genes may not exhibit strong DE between populations.
 
-As such, we tend to prefer PCA for general-purpose dimensionality reduction to denoise and compact the data.
-That said, NMF can be a powerful tool in more targeted applications where interpretability of the dimensions is important;
-one such example is provided in Chapter \@ref(cell-type-annotation).
+We tend to prefer PCA for general-purpose dimensionality reduction given that the interpretability of NMF is not a critical feature for most scRNA-seq workflows.
+That said, NMF can provide another perspective on our high-dimensional data that can serve as a sanity check for more complicated downstream procedures.
+For example, we would hope that any identified clusters and marker genes would correspond to large values in the $W$ and $H$ matrices for the relevant factors.
 
 ## Dimensionality reduction for visualization
 
