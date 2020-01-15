@@ -102,11 +102,12 @@ summed
 At this point, it is worth reflecting on the motivations behind the use of pseudo-bulking:
 
 - Larger counts are more amenable to standard DE analysis pipelines designed for bulk RNA-seq data.
-Normalization is more straightforward and certain statistical approximations are more accurate for large counts.
+Normalization is more straightforward and certain statistical approximations are more accurate 
+e.g., the saddlepoint approximation for quasi-likelihood methods or normality for linear models.
 - Collapsing cells into samples reflects the fact that our biological replication occurs at the sample level [@lun2017overcoming].
 Each sample is represented no more than once for each condition, avoiding problems from unmodelled correlations between samples. 
 Supplying the per-cell counts directly to a DE analysis pipeline would imply that each cell is an independent biological replicate, which is not true from an experimental perspective.
-(Yes, use of a mixed effects model can overcome this, but it adds an extra layer of [statistical and computational complexity](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html) to little benefit.)
+(A mixed effects model can handle this variance structure but involves extra [statistical and computational complexity](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html) for little benefit, see @crowell2019discovery.)
 - Variance between cells within each sample is masked, provided it does not affect variance across (replicate) samples.
 This avoids penalizing DEGs that are not uniformly up- or down-regulated for all cells in all samples of one condition.
 Masking is generally desirable as DEGs - unlike marker genes - do not need to have low within-sample variance to be interesting, e.g., if the treatment effect is consistent across replicate populations but heterogeneous on a per-cell basis.
@@ -127,7 +128,7 @@ Instead, we arbitrarily pick one of the labels to use for this demonstration.
 
 ```{r}
 label <- "Mesenchyme"
-current <- summed[,label==summed$celltype.mapped]
+current <- summed[,label==summed$label]
 
 # Creating up a DGEList object for use in edgeR:
 library(edgeR)
@@ -137,13 +138,14 @@ y
 
 #### Pre-processing
 
-A typical step in bulk RNA-seq data analyses is to remove samples with very low library sizes corresponding to failed library preparation or sequencing.
+A typical step in bulk RNA-seq data analyses is to remove samples with very low library sizes due to failed library preparation or sequencing.
+The very low counts in these samples can be troublesome in downstream steps such as normalization (Chapter \@ref(normalization)) or for some statistical approximations used in the DE analysis.
 In our situation, this is equivalent to removing label-sample combinations that have very few or lowly-sequenced cells.
-The corresponding summed count vectors are likely to be highly variable and thus reduce power for DE detection.
-The exact definition of "very low" will vary, but in this case, we define it to be log-library sizes that are more than 3 median absolute deviations from the median.
+The exact definition of "very low" will vary, but in this case, we remove combinations containing fewer than 20 cells [@crowell2019discovery].
+Alternatively, we could apply the outlier-based strategy described in Chapter \@ref(quality-control), but this makes the strong assumption that all label-sample combinations have similar numbers of cells that are sequenced to similar depth.
 
 ```{r}
-discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower")
+discarded <- current$ncells < 20
 y <- y[,!discarded]
 summary(discarded)
 ```
@@ -221,68 +223,116 @@ stopifnot(mean(abs(decideTests(res))) < 0.005)
 
 ### Putting it all together
 
-We repeat this process for each of the labels to identify injection-induced DE in each cell type.
-This is mostly straightforward as we can write a loop that simply performs the DE analysis for each subset of columns in `summed`.
-However, some additional care is required to automatically deal with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
+Now that we have laid out the theory underlying the DE analysis,
+we repeat this process for each of the labels to identify injection-induced DE in each cell type.
+This is conveniently done using the `pseudoBulkDGE()` function from `r Biocpkg("scran")`,
+which will loop over all labels and apply the exact analysis described above to each label.
+To prepare for this, we filter out all sample-label combinations with insufficient cells.
+
+```{r}
+summed.filt <- summed[,summed$ncells >= 20]
+```
+
+We construct a common design matrix that will be used in the analysis for each label.
+Here, we will re-use our previous additive design involving the batch (`pool`) and injection effects (`tomato`).
+Recall that this matrix should have one row per unique sample (and named as such), 
+reflecting the fact that we are modelling counts on the sample level instead of the cell level.
+
+```{r}
+# Pulling out a sample-level 'targets' data.frame:
+targets <- colData(merged)[!duplicated(merged$sample),]
+
+# Constructing the design matrix:
+design <-  model.matrix(~factor(pool) + factor(tomato), data=targets)
+rownames(design) <- targets$sample
+```
+
+We then apply the `pseudoBulkDGE()` function to obtain a list of injection-induced DE genes for each label.
+This function puts some additional effort into automatically dealing with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
 or are not represented in a sufficient number of replicate samples to enable modelling of biological variability.
-This is represented by the extra checks related to `design` in the code chunk below.
 
 ```{r}
-de.results <- list()
-for (i in unique(summed$celltype.mapped)) {
-    current <- summed[,i==summed$celltype.mapped]
-    y <- DGEList(counts(current), samples=colData(current))
+library(scran)
+de.results <- pseudoBulkDGE(summed.filt, 
+    sample=summed.filt$sample,
+    label=summed.filt$label,
+    design=design,
+    coef=ncol(design),
 
-    discarded <- isOutlier(colSums(counts(current)), log=TRUE, type="lower")
-    y <- y[,!discarded]
-    y <- y[filterByExpr(y, group=current$tomato),]
-    y <- calcNormFactors(y)
-
-    design <- try(
-        model.matrix(~factor(pool) + factor(tomato), y$samples),
-        silent=TRUE
-    )
-    if (is(design, "try-error") || 
-        qr(design)$rank==nrow(design) ||
-        qr(design)$rank < ncol(design)) 
-    {
-        # Skipping labels without contrasts or without 
-        # enough residual d.f. to estimate the dispersion.
-        next
-    }
-
-    y <- estimateDisp(y, design)
-    fit <- glmQLFit(y, design)
-    res <- glmQLFTest(fit, coef=ncol(design))
-    de.results[[i]] <- res
-}
+    # 'condition' sets the group size for filterByExpr(),
+    # to perfectly mimic our previous manual analysis.
+    condition=targets$tomato 
+)
 ```
 
-We examine the numbers of DEGs at a FDR of 5% for each label.
+We examine the numbers of DEGs at a FDR of 5% for each label using the `decideTestsPerLabel()` function.
 In general, there seems to be very little differential expression that is introduced by injection.
+Note that genes listed as `NA` were either filtered out as low-abundance genes for a given label's analysis,
+or the comparison of interest was not possible for a particular label,
+e.g., due to lack of residual degrees of freedom or an absence of samples from both conditions.
 
 ```{r}
-summaries <- lapply(de.results, FUN=function(x) summary(decideTests(x))[,1])
-sum.tab <- do.call(rbind, summaries)
-sum.tab
-```
-
-A survey of the DEGs from all labels identifies _Xist_ as being consistently downregulated in the injected cells.
-This is consistent with the fact that the injected cells are male while the background cells are derived from pools of male and female embryos (due to experimental difficulties with resolving sex at this stage).
-The consistent downregulation of _Phlda2_ and _Cdkn1c_ in the injected cells is also interesting, given that both are imprinted genes. 
-
-```{r}
-# TODO: easier consolidation.
-degs <- lapply(de.results, FUN=function(x) rownames(topTags(x, p.value=0.05)))
-common.degs <- sort(table(unlist(degs)), decreasing=TRUE)
-head(common.degs, 20)
+is.de <- decideTestsPerLabel(de.results, threshold=0.05)
+summarizeTestsPerLabel(is.de)
 ```
 
 ```{r, echo=FALSE}
+# Checking that this is exactly the same as our manual analysis.
+stuff <- summarizeTestsPerLabel(is.de)[label,]
+ref <- summary(decideTests(res))
+stopifnot(identical(as.integer(stuff["-1"]), as.integer(ref["Down",])))
+stopifnot(identical(as.integer(stuff["1"]), as.integer(ref["Up",])))
+stopifnot(identical(as.integer(stuff["0"]), as.integer(ref["NotSig",])))
+```
+
+For each gene, we compute the percentage of cell types in which that gene is upregulated or downregulated upon injection.
+(Here, we consider a gene to be non-DE if it is not retained after filtering.)
+We see that _Xist_ is consistently downregulated in the injected cells; 
+this is consistent with the fact that the injected cells are male while the background cells are derived from pools of male and female embryos (due to experimental difficulties with resolving sex at this stage).
+The consistent downregulation of _Phlda2_ and _Cdkn1c_ in the injected cells is also interesting given that both are imprinted genes. 
+
+```{r}
+# Upregulated across most cell types.
+up.de <- is.de > 0 & !is.na(is.de)
+head(sort(rowMeans(up.de), decreasing=TRUE), 10)
+
+# Downregulated across cell types.
+down.de <- is.de > 0 & !is.na(is.de)
+head(sort(rowMeans(down.de), decreasing=TRUE), 10)
+```
+
+```{r, echo=FALSE}
+down.degs <- head(sort(rowMeans(down.de), decreasing=TRUE), 10)
+
 # Check that the above paragraph is valid.
-stopifnot("Xist" %in% names(head(common.degs, 20)))
-stopifnot("Phlda2" %in% names(head(common.degs, 20)))
-stopifnot("Cdkn1c" %in% names(head(common.degs, 20)))
+stopifnot("Xist" %in% names(down.degs))
+stopifnot("Phlda2" %in% names(down.degs))
+stopifnot("Cdkn1c" %in% names(down.degs))
+```
+
+We further identify label-specific DE genes that are significant in our label of interest yet not DE in any other label.
+As hypothesis tests are not typically geared towards identifying genes that are not DE,
+we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
+if it fails to be detected even at a generous FDR threshold of 50%.
+We demonstrate below to identify injection-induced DE genes that are unique to the allantois,
+though differences in power between labels suggest that this should be interpreted with some caution;
+for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked unique gene exhibits some evidence of DE in other labels but was not detected for various reasons like too low abundance or insufficient replicates.
+
+```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
+remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
+not.de <- remotely.de==0 | is.na(remotely.de)
+
+other.labels <- setdiff(colnames(not.de), "Allantois")
+unique.degs <- is.de[,"Allantois"]!=0 & rowMeans(not.de[,other.labels])==1
+unique.degs <- names(which(unique.degs))
+unique.degs
+
+# Choosing the top-ranked gene for inspection:
+de.allantois <- de.results$Allantois
+de.allantois <- de.allantois[order(de.allantois$PValue),]
+de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
+plotExpression(logNormCounts(summed.filt), features=rownames(de.allantois)[1],
+    x="tomato", colour_by="tomato", other_fields="label") + facet_wrap(~label)
 ```
 
 We also list the labels that were skipped due to the absence of replicates or contrasts.
@@ -290,7 +340,7 @@ If it is necessary to extract statistics in the absence of replicates, several s
 We refer readers to the `r Biocpkg("edgeR")` user's guide for more details.
 
 ```{r}
-setdiff(unique(summed$celltype.mapped), names(summaries))
+metadata(de.results)$failed
 ```
 
 ## Differential abundance between conditions {#differential-abundance}
