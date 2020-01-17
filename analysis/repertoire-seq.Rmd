@@ -19,7 +19,7 @@ knitr::include_graphics("https://honeysanime.com/wp-content/uploads/2018/10/Hata
 
 An organism's immune repertoire is defined as the set of T and B cell subtypes that contain genetic diversity in the T cell receptor (TCR) components or immunoglobin chains, respectively.
 This diversity is important for ensuring that the adaptive immune system can respond effectively to a wide range of antigens.
-We can profile the immune repertoire by simply sequencing the relevant transcripts [@georgiou2014promise;@rosati2017overview], which can be combined with previously mentioned technologies [@zheng2017massively] to achieve single-cell resolution.
+We can profile the immune repertoire by simply sequencing the relevant transcripts [@georgiou2014promise;@rosati2017overview], a procedure that can be combined with previously mentioned technologies [@zheng2017massively] to achieve single-cell resolution.
 This data can then be used to characterize an individual's immune response based on the expansion of T or B cell clones, i.e., multiple cells with the same sequences for each TCR component or immunoglobulin chain.
 
 By itself, single-cell repertoire sequencing data can be readily analyzed using tools from the [ImmCantation suite](https://immcantation.readthedocs.io/en/stable/).
@@ -29,8 +29,8 @@ This is not entirely trivial as each cell may have zero, one or multiple sequenc
 
 We would like to define a single data structure that captures both the expression profile and repertoire state for each cell.
 This ensures synchronization during operations like subsetting (as previously discussed for the `SingleCellExperiment` class) and reduces book-keeping errors throughout the course of an interactive analysis.
-We achieve this using the `SplitDataFrame` class from the `r Biocpkg("S4Vectors")` package, which allows us to accommodate repertoire sequencing data into existing Bioconductor classes while retaining compatibility with ImmCantation functions.
-We demonstrate on a publicly available 10X Genomics dataset using mouse PBMCs:
+We achieve this using the `SplitDataFrameList` class from the `r Biocpkg("IRanges")` package, which allows us to accommodate repertoire sequencing data into existing Bioconductor classes while retaining compatibility with ImmCantation functions.
+We demonstrate on a publicly available 10X Genomics dataset using mouse PBMCs, for which the expression and ADT data have already been processed below:
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
@@ -38,6 +38,9 @@ extractCached("tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
 
 ```{r}
 sce.pbmc
+
+# Moving ADT-based clustering to the top level for convenience.
+sce.pbmc$cluster <- altExp(sce.pbmc)$cluster
 ```
 
 ## Analyzing the T cell receptor repertoire
@@ -56,6 +59,7 @@ tcr.data <- bfcrpath(bfc, file.path(
     "http://cf.10xgenomics.com/samples/cell-vdj/3.1.0",
     "vdj_v1_hs_pbmc3/vdj_v1_hs_pbmc3_t_filtered_contig_annotations.csv"))
 tcr <- read.csv(tcr.data, stringsAsFactors=FALSE)
+nrow(tcr)
 head(tcr)
 ```
 
@@ -66,54 +70,140 @@ This is easily done using the `DataFrame()` constructor and the `split()` functi
 
 ```{r}
 tra <- tcr[tcr$chain=="TRA",]
-trb <- tcr[tcr$chain=="TRB",]
 sce.pbmc$TRA <- split(DataFrame(tra), factor(tra$barcode, sce.pbmc$Barcode))
-sce.pbmc$TRB <- split(DataFrame(trb), factor(trb$barcode, sce.pbmc$Barcode))
+length(sce.pbmc$TRA) # Now the same as the number of cells.
 
-# Putting cluster information at the top level, for convenience.
-sce.pbmc$cluster <- altExp(sce.pbmc)$cluster
+trb <- tcr[tcr$chain=="TRB",]
+sce.pbmc$TRB <- split(DataFrame(trb), factor(trb$barcode, sce.pbmc$Barcode))
+length(sce.pbmc$TRB)
 ```
 
 ### Basic diagnostics
 
 We start by generating some basic cell-level diagnostics.
 For each cluster, we determine the proportion of cells that have at least one sequence of a TCR component (Figure \@ref(fig:tcr-prop-cluster-all)).
-Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and expression in other cell types.
+Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and potential expression in other cell types.
 
-```{r tcr-prop-cluster-all, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the TCR $\\alpha$ or $\\beta$-chains."}
+```{r tcr-prop-cluster-all, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
 ncells <- table(sce.pbmc$cluster)
 ncells
 
-tra.counts.any <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 0])
-trb.counts.any <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 0])
-barplot(rbind(TRA=tra.counts.any/ncells, TRB=trb.counts.any/ncells), 
-    beside=TRUE)
+# `lengths()` returns the number of sequences per cell.
+at.least.one.A <- lengths(sce.pbmc$TRA) > 0
+tra.counts.any <- table(sce.pbmc$cluster[at.least.one.A])
+
+at.least.one.B <- lengths(sce.pbmc$TRB) > 0
+trb.counts.any <- table(sce.pbmc$cluster[at.least.one.B])
+
+barplot(rbind(TRA=tra.counts.any/ncells, TRB=trb.counts.any/ncells), beside=TRUE)
 ```
 
-We can refine this to only consider the productive sequences, i.e., contigs that are likely to produce a functional protein (Figure \@ref(fig:tcr-prop-cluster-prod)).
-This is achieved by subsetting the `SplitDataFrameList` with a `LogicalList` object, the latter of which specifies the rows of each per-cell `DataFrame` corresponding to productive sequences.
+We can refine this to only consider the productive sequences, i.e., contigs that are likely to produce a functional protein.
+This is easily achieved by taking advantage of some powerful grammar in the `r Biocpkg("IRanges")` package for handling `List` structures as if they were standard R vectors.
+We see a slight drop in the proportions in Figure \@ref(fig:tcr-prop-cluster-prod), which is to be expected as not all sequences are productive.
 
-```{r tcr-prop-cluster-prod, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the TCR $\\alpha$ or $\\beta$-chains."}
-is.prod.A <- sce.pbmc$TRA[,"productive"]=="True" # LogicalList
-has.prod.A <- lengths(sce.pbmc$TRA[is.prod.A]) > 0
+```{r tcr-prop-cluster-prod, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
+# Generate a LogicalList class where each entry corresponds to a cell and is
+# a logical vector specifying which of that cell's sequences are productive.
+is.prod.A <- sce.pbmc$TRA[,"productive"]=="True" 
+is.prod.A
+
+# We can apply operations to this LogicalList that mimic looping over a logical
+# vector. For example, `any()` will return a logical vector of length equal to 
+# the number of cells, with a value of TRUE if any sequence is productive.
+has.prod.A <- any(is.prod.A)
+head(has.prod.A)
+
+# And then we simply count the number of cells in each cluster.
 tra.counts.prod <- table(sce.pbmc$cluster[has.prod.A])
 
 is.prod.B <- sce.pbmc$TRB[,"productive"]=="True"
-has.prod.B <- lengths(sce.pbmc$TRB[is.prod.B]) > 0
+has.prod.B <- any(is.prod.B)
 trb.counts.prod <- table(sce.pbmc$cluster[has.prod.B])
 
 barplot(rbind(TRA=tra.counts.prod/ncells, TRB=trb.counts.prod/ncells),
-    legend=TRUE, beside=TRUE, ylim=c(0, 1.2))
+    legend=TRUE, beside=TRUE)
 ```
 
-In contrast, using a conventional logical or integer vector to subset the `SplitDataFrameList` will subset the cells themselves (rather than the rows for each cell, as shown above).
-For example, we can use this approach to count the number of cells in each cluster that have multiple sequences for a component (Figure \@ref(tcr-prop-cluster-multi)).
+For completeness, we also count the number of cells in each cluster that have multiple sequences for a component (Figure \@ref(tcr-prop-cluster-multi)).
+The percentages are clearly lower but this phenomenon is still surprisingly common.
 
-```{r tcr-prop-cluster-multi, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the TCR $\\alpha$ or $\\beta$-chains."}
+```{r tcr-prop-cluster-multi, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
 tra.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
 trb.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
 barplot(rbind(TRA=tra.counts.multi/ncells, TRB=trb.counts.multi/ncells), 
-    legend=TRUE, beside=TRUE)
+    beside=TRUE)
+```
+
+### Complex diagnostics
+
+At this point, it is worth spending some time on the amazingness of the `List` grammar.
+We can easily assemble complex queries on the table of contig sequence information by using nothing more than basic R syntax.
+To illustrate, we will use the $\alpha$-chain data to extract some complex features,
+starting with the identification of sequences that have UMI counts no less than 50% of the largest UMI count for the same cell.
+
+```{r}
+# Assigning to a short-name variable for convenience.
+tra <- sce.pbmc$TRA
+
+# Obtaining the maximum UMI count for each cell.
+max.umi <- max(tra[,"umis"])
+head(max.umi)
+
+# Generate a LogicalList indicating which sequences have UMI counts
+# greater than half the maximum UMI count in the same cell.
+keep <- tra[,"umis"] >= max.umi/2
+keep
+
+# Examine the distribution of the proportion of sequences in each cell
+# that satisfied our requirements.
+summary(mean(keep))
+```
+
+Boolean statements are easily accommodated with standard methods.
+For example, we can identify sequences that are full-length, productive and have the largest UMI count in the cell.
+Another useful aspect of the `SplitDataFrameList`'s behavior is that we can use a `LogicalList` as an argument for subsetting, which will then subset at the sequence level, i.e., the rows of each per-cell `DataFrame`.
+(This contrasts with more conventional uses of a logical vector as the subset argument, which will simply subset at the cell level, i.e., the elements of the `SplitDataFrameList` itself.)
+
+```{r}
+keep <- tra[,"full_length"]=="True" &
+    tra[,"productive"]=="True" &
+    tra[,"umis"] == max(tra[,"umis"])
+keep 
+
+# Subsets the SplitDataFrameList to only retain sequences in each cell
+# that satisfy our requirements.
+tra.sub <- tra[keep]
+```
+
+The grammar also extends to dealing with character vectors.
+Say we want to quantify all combinations of V and J genes, each of which is extracted from `tra` as a `CharacterList` object. 
+The simplest approach is to simply `paste()` the `CharacterList` objects together and count the frequencies of the concatenated strings, as shown below.
+
+```{r}
+combined <- paste(tra[,"v_gene"], tra[,"j_gene"])
+combined
+
+combo.freq <- table(unlist(combined))
+head(sort(combo.freq, decreasing=TRUE))
+```
+
+If an operation must be performed on the original sequence-level data frame, 
+we can efficiently recover the latter by calling `unlist()` on our `SplitDataFrameList`.
+It is similarly straightforward to regenerate our `SplitDataFrameList` from the data frame by using the little-known `relist()` command. 
+This framework permits users to quickly switch between sequence level and cell level perspectives of the repertoire data depending on which is most convenient at any given point in the analysis.
+
+```{r}
+tra.seq <- unlist(tra)
+dim(tra.seq) # Each row represents a sequence now.
+
+# Adding some arbitrary extra annotation (mocked up here).
+extra.anno <- DataFrame(anno=sample(LETTERS, nrow(tra.seq), replace=TRUE))
+tra.seq <- cbind(tra.seq, extra.anno)
+
+# Regenerating the SplitDataFrameList from the modified DataFrame.
+tra2 <- relist(tra.seq, tra)
+length(tra2) # Each element represents a cell again.
 ```
 
 ### Quantifying clonal expansion
