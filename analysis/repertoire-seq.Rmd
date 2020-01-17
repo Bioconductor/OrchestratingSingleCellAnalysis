@@ -11,8 +11,8 @@ library(OSCAUtils)
 chapterPreamble()
 ```
 
-```{r, fig.cap="This page is under construction. Enjoy these platelets at work instead.", echo=FALSE}
-knitr::include_graphics("https://honeysanime.com/wp-content/uploads/2018/10/Hataraku-Saibou-Cells-at-Work-Wallpaper-5.jpg")
+```{r, fig.cap="This page is under construction.", echo=FALSE}
+knitr::include_graphics("https://dl.dropboxusercontent.com/s/gnhk1mhbwrivmb5/yuno.jpg?dl=0")
 ```
 
 ## Motivation
