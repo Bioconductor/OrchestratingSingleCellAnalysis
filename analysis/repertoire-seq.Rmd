@@ -23,7 +23,7 @@ This diversity is important for ensuring that the adaptive immune system can res
 We can profile the immune repertoire by simply sequencing the relevant transcripts [@georgiou2014promise;@rosati2017overview], a procedure that can be combined with previously mentioned technologies [@zheng2017massively] to achieve single-cell resolution.
 This data can then be used to characterize an individual's immune response based on the expansion of T or B cell clones, i.e., multiple cells with the same sequences for each TCR component or immunoglobulin chain.
 
-By itself, single-cell repertoire sequencing data can be readily analyzed using tools from the [ImmCantation suite](https://immcantation.readthedocs.io/en/stable/).
+By itself, repertoire sequencing data can be readily analyzed using tools from the [ImmCantation suite](https://immcantation.readthedocs.io/en/stable/).
 In particular, the `r CRANpkg("alakazam")` package provides functions to perform common analyses to quantify clonal diversity, reconstruct lineages, examine amino acid properties, etc.
 However, in most experiments, we also obtain standard RNA sequencing data for each cell; the challenge lies in how we can integrate these two datasets together in the same analysis.
 This is not entirely trivial as each cell may have zero, one or multiple sequences for any given repertoire component, whereas we only obtain a single expression profile for that cell.
@@ -66,79 +66,102 @@ head(tcr)
 
 The challenge in incorporating all of these data structures into a single object lies in the fact that each cell may have zero, one or many TCR/immunoglobulin sequences.
 This precludes direct storage of repertoire information in the `colData()` of the `SingleCellExperiment`, which expects a 1:1 mapping from each cell to each repertoire sequence.
-Instead, we store the repertoire data as a `SplitDataFrameList` object where each cell corresponds to a variable-row `DataFrame` containing information for zero-to-many sequences.
-This is easily done using the `DataFrame()` constructor and the `split()` function, as shown below:
+Instead, we store the repertoire data as a `SplitDataFrameList` object where each cell is represented by a `DataFrame` and each row of that `DataFrame` represents a sequence for that cell.
+This is easily done using the `splitToCells()` utility function from the `r Githubpkg("LTLA/RepertoireUtils")` package, as shown below. 
+(We set the `universe=` argument to ensure that the `SplitDataFrameList` has the same number and order of cells in our `sce.pbmc` object, even if some cells have no sequences, i.e., zero-row `DataFrame`s.)
 
 ```{r}
-tra <- tcr[tcr$chain=="TRA",]
-sce.pbmc$TRA <- split(DataFrame(tra), factor(tra$barcode, sce.pbmc$Barcode))
+library(RepertoireUtils)
+
+# For the alpha chain sequences:
+sce.pbmc$TRA <- splitToCells(tcr[tcr$chain=="TRA",], 
+    field="barcode", universe=sce.pbmc$Barcode)
+
+# Inspecting the class:
+class(sce.pbmc$TRA)
 length(sce.pbmc$TRA) # Now the same as the number of cells.
 
-trb <- tcr[tcr$chain=="TRB",]
-sce.pbmc$TRB <- split(DataFrame(trb), factor(trb$barcode, sce.pbmc$Barcode))
-length(sce.pbmc$TRB)
+# Repeating for the beta chain:
+sce.pbmc$TRB <- splitToCells(tcr[tcr$chain=="TRB",], 
+    field="barcode", universe=sce.pbmc$Barcode)
 ```
 
 ### Basic diagnostics
 
-We start by generating some basic cell-level diagnostics.
-For each cluster, we determine the proportion of cells that have at least one sequence of a TCR component (Figure \@ref(fig:tcr-prop-cluster-all)).
-Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and potential expression in other cell types.
+We start by generating some basic diagnostics using the `countSequencesPerCell()` function.
+This returns the number of sequences for each cell, possibly after some simple filtering on the sequence characteristics.
+Here, we assemble a matrix indicating whether each cell has any TCR $\alpha$-chain sequence,
+multiple sequences or productive, full-length or high-confidence sequences.
+We also determine whether each cell has an "awesome" sequence that is productive, full-length and high-confidence.
+We use this information to compute the proportion of cells in each cluster that are positive for each metric.
 
-```{r tcr-prop-cluster-all, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
-ncells <- table(sce.pbmc$cluster)
-ncells
+```{r}
+status <- rbind(
+    HasAnySequence=countSequencesPerCell(sce.pbmc$TRA) > 0,
+    HasMultiSequence=countSequencesPerCell(sce.pbmc$TRA) > 1,
+    HasProductiveSequence=countSequencesPerCell(sce.pbmc$TRA,
+        filter.field="productive", filter.value="True") > 0,
+    HasFullLengthSequence=countSequencesPerCell(sce.pbmc$TRA,
+        filter.field="full_length", filter.value="True") > 0,
+    HasHighConfSequence=countSequencesPerCell(sce.pbmc$TRA,
+        filter.field="high_confidence", filter.value="True") > 0,
+    HasAwesomeSequence=countSequencesPerCell(sce.pbmc$TRA,
+        filter.field=c("productive", "full_length", "high_confidence"),
+        filter.value=c("True", "True", "True")) > 0
+)
 
-# `lengths()` returns the number of sequences per cell.
-at.least.one.A <- lengths(sce.pbmc$TRA) > 0
-tra.counts.any <- table(sce.pbmc$cluster[at.least.one.A])
-
-at.least.one.B <- lengths(sce.pbmc$TRB) > 0
-trb.counts.any <- table(sce.pbmc$cluster[at.least.one.B])
-
-barplot(rbind(TRA=tra.counts.any/ncells, TRB=trb.counts.any/ncells), beside=TRUE)
+stats <- colsum(status+0, sce.pbmc$cluster)
+props <- t(t(stats)/as.numeric(table(sce.pbmc$cluster)))
+props[,1:10]
 ```
 
-We can refine this to only consider the productive sequences, i.e., contigs that are likely to produce a functional protein.
-This is easily achieved by taking advantage of some powerful grammar in the `r Biocpkg("IRanges")` package for handling `List` structures as if they were standard R vectors.
-We see a slight drop in the proportions in Figure \@ref(fig:tcr-prop-cluster-prod), which is to be expected as not all sequences are productive.
+We then identify clusters of T cells as those with large proportions of TCR-expressing cells (Figure \@ref(fig:tcra-prop-cluster)).
+Some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and - in more unusual cases - genuine expression in other cell types.
+We would also generally expect a high proportion of awesome sequences, as a large proportion of low-confidence or non-full-length sequences indicates that the sequencing was not deep enough for successful alignment and assembly.
 
-```{r tcr-prop-cluster-prod, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one productive sequence of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
-# Generate a LogicalList class where each entry corresponds to a cell and is
-# a logical vector specifying which of that cell's sequences are productive.
-is.prod.A <- sce.pbmc$TRA[,"productive"]=="True" 
-is.prod.A
-
-# We can apply operations to this LogicalList that mimic looping over a logical
-# vector. For example, `any()` will return a logical vector of length equal to 
-# the number of cells, with a value of TRUE if any sequence is productive.
-has.prod.A <- any(is.prod.A)
-head(has.prod.A)
-
-# And then we simply count the number of cells in each cluster.
-tra.counts.prod <- table(sce.pbmc$cluster[has.prod.A])
-
-is.prod.B <- sce.pbmc$TRB[,"productive"]=="True"
-has.prod.B <- any(is.prod.B)
-trb.counts.prod <- table(sce.pbmc$cluster[has.prod.B])
-
-barplot(rbind(TRA=tra.counts.prod/ncells, TRB=trb.counts.prod/ncells),
-    legend=TRUE, beside=TRUE)
+```{r tcra-prop-cluster, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express TCR $\\alpha$-chain sequences in the PBMC dataset."}
+library(reshape2)
+library(ggplot2)
+tmp <- melt(props)
+colnames(tmp) <- c("Type", "Cluster", "Proportion")
+tmp$Cluster <- factor(tmp$Cluster)
+ggplot(tmp, aes(x=Cluster, y=Proportion, fill=factor(Type))) +
+    geom_bar(stat="identity", position="dodge", colour="black") +
+    scale_fill_brewer(type="qual", palette=1)
 ```
 
-For completeness, we also count the number of cells in each cluster that have multiple sequences for a component (Figure \@ref(tcr-prop-cluster-multi)).
-The percentages are clearly lower but this phenomenon is still surprisingly common.
+The proportion of cells with multiple sequences is an interesting metric.
+In most cells contributing to the immune repertoire, allelic exclusion ensures that only one TCR $\alpha$-chain (or $\beta$-chain, or immunoglobulin heavy/light-chain for B cells) is actively expressed [@brady2010antigen].
+We might then expect that the substantial proportion of multi-sequence-expressing cells in Figure \@ref(fig:tcra-prop-cluster) is a symptom of some technical problem like doublets or ambient contamination.
+However, it is also known a substantial proportion of T cells are able to escape allelic exclusion and express multiple sequences, so the magnitude of these proportions are not necessarily problematic.
 
-```{r tcr-prop-cluster-multi, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
-tra.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
-trb.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
-barplot(rbind(TRA=tra.counts.multi/ncells, TRB=trb.counts.multi/ncells), 
-    beside=TRUE)
+We can explore this phenomenon in more detail with the `topCoveragePropPerCell()` function, which returns the proportion of UMI counts allocated to the most abundant $\alpha$-chain sequence within each cell.
+Figure \@ref(fig:tcra-top-umi-prop) suggests that, if a cell has multiple sequences, the secondary sequence is expressed at a level comparable to the primary sequence.
+This indicates that the presence of multiple sequences cannot be wholly attributed to a low level of background contamination, otherwise we would expect most ratios to be close to 0.
+
+```{r tcra-top-umi-prop, fig.cap="Distribution of the ratio of UMIs assigned to the second-most abundant sequence in each cell compared to the most abundant sequence, across all cells with multiple sequences in the PBMC dataset."}
+second.ratio <- topCoveragePropPerCell(sce.pbmc$TRA, 
+    cov.field="umis", second.ratio=TRUE)
+hist(second.ratio[second.ratio!=0], col="grey", 
+    xlab="Ratio of UMIs of second sequence to top",
+    ylab="Number of cells")
+```
+
+Finally, it can be valuable to compute the ratio of reads to UMIs across all cells (Figure \@ref(fig:tcra-read-umi-ratio)).
+Unlike gene expression, the ratio tends to be very large in repertoire data as the space of available transcripts is much smaller.
+In addition, the processing tends to select for large ratios as sequences are only reported if they are sufficiently well-sequenced for alignment, assembly and gene assignment.
+We would generally expect most sequences to have around 1000 reads per transcript molecule, and a lower ratio may indicate that deeper sequencing is required.
+
+```{r tcra-read-umi-ratio, fig.cap="Distribution of read-to-UMI ratios across all cells in the PBMC dataset. Counts are summed over all sequences for a cell if multiple sequences are available."}
+read.umi <- readToUmiPerCell(sce.pbmc$TRA, umi.field="umis", read.field="reads")
+hist(read.umi, col="grey", 
+    xlab="Ratio of reads to UMIs",
+    ylab="Number of cells")
 ```
 
 ### Complex diagnostics
 
-At this point, it is worth spending some time on the amazingness of the `List` grammar.
+At this point, it is worth spending some time on the sheer power of the `List` grammar in the `r Biocpkg("IRanges")` package.
 We can easily assemble complex queries on the table of contig sequence information by using nothing more than basic R syntax.
 To illustrate, we will use the $\alpha$-chain data to extract some complex features,
 starting with the identification of sequences that have UMI counts no less than 50% of the largest UMI count for the same cell.
@@ -172,8 +195,9 @@ keep <- tra[,"full_length"]=="True" &
     tra[,"umis"] == max(tra[,"umis"])
 keep 
 
-# Subsets the SplitDataFrameList to only retain sequences in each cell
-# that satisfy our requirements.
+# Subsets the SplitDataFrameList to only retain sequences in each cell that
+# satisfy our requirements (note, this does not change the total number of
+# cells, only the number of sequences per cell).
 tra.sub <- tra[keep]
 ```
 
@@ -215,6 +239,7 @@ Thus, we can gain some insights into the immune activity of each T cell cluster 
 (We do not exclude clonotypes containing cells in different clusters, which can arise for various genuine biological reasons, e.g., differences in the microenvironment.) 
 
 ```{r, fig.cap="Proportion of cells in each cluster that have multiple clonotypes, based on the TCR $\\alpha$ or $\\beta$-chains."}
+# TODO: shovel this inside a package somewhere:
 clone.id.A <- unlist(unique(sce.pbmc$TRA[,"raw_clonotype_id"]))
 expanded.id.A <- setdiff(clone.id.A[duplicated(clone.id.A)], "None")
 length(expanded.id.A) # number of expanded clonotypes for TRA
