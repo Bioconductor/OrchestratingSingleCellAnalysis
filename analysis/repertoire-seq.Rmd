@@ -161,7 +161,7 @@ hist(read.umi, col="grey",
 
 ### Custom diagnostics with `List` grammar
 
-At this point, it is worth spending some time on the sheer power of the `List` grammar in the `r Biocpkg("IRanges")` package.
+At this point, it is worth spending some time on the sheer power of the `List` grammar from the `r Biocpkg("IRanges")` package.
 We can easily assemble complex queries on the table of contig sequence information by using nothing more than basic R syntax.
 To illustrate, we will use the $\alpha$-chain data to extract some complex features,
 starting with the identification of sequences that have UMI counts no less than 50% of the largest UMI count for the same cell.
@@ -230,6 +230,71 @@ tra2 <- relist(tra.seq, tra)
 length(tra2) # Each element represents a cell again.
 ```
 
+### Quantifying gene expression
+
+We use the `countCellsPerGeneCombo()` function to count the number of cells expressing each gene or combination thereof.
+The function returns a `SummarizedExperiment` object containing the number of cells expressing each gene combination (row) in each level of the grouping factor (column).
+In this case, we stratify the counts by the cluster of origin such that each column corresponds to one of our clusters.
+For simplicity, we will also set `cov.field="umis"` so that only the most abundant sequence from each cell is considered during counting.
+
+```{r}
+se.genes <- countCellsPerGeneCombo(sce.pbmc$TRA,
+    gene.field=c("v_gene", "d_gene", "j_gene", "c_gene"),
+    group=sce.pbmc$cluster,
+    cov.field="umis"
+)
+rowData(se.genes)
+head(assay(se.genes))
+```
+
+```{r, echo=FALSE}
+greedy.bastard <- "2"
+```
+
+We can summarize the diversity of gene expression within each grouping level using the `summarizeGeneComboCounts()` function.
+This computes the Gini index, a measure of the unevenness of the distribution of counts among gene combinations in each cluster;
+the proportion of counts assigned to the top $T$ gene combinations;
+and the Hill numbers of varying order, 
+which quantify the number of unique combinations (`"hill0"`) or the evenness of their abundances (`"hill1"`, `"hill2"`).
+We can see that cluster `r greedy.bastard` has the most uneven count distribution by some margin, indicating that the $\alpha$-chain expression in this cluster is dominated by only a small number of gene combinations;
+this is possibly interesting if it reflects an immune response to particular epitopes.
+
+```{r}
+set.seed(100)
+has.tcr <- colSums(assay(se.genes)) >= 100
+sum.genes <- summarizeGeneComboCounts(se.genes[,has.tcr])
+sum.genes
+```
+
+```{r, echo=FALSE}
+stopifnot(
+    which.max(sum.genes[,"gini"])==which(rownames(sum.genes)==greedy.bastard)
+)
+```
+
+Note that the `summarizeGeneComboCounts()` function will first downsample all groups to have the same total number of cells.
+The diversity indices are sensitive to the sample size, especially at small values, meaning that it is difficult to compare indices computed from different total numbers of cells.
+Here, we only consider clusters with at least 100 cells to ensure that we have enough cells after downsampling.
+(Otherwise, we would not obtain meaningful comparisons after downsampling to, say, 10 cells per cluster.)
+We also need to set the seed to obtain reproducible results when downsampling..
+
+The obvious next step is to identify significant differences in the expression frequency of each gene combination between clusters.
+Here, the `testGeneComboCountsBetweenGroups()` function performs a one-sided Fisher's exact test on each gene combination to detect differences in the proportion of expressing cells between pairs of clusters.
+We then arrange the results into a single list of combinations per cluster, equivalent to the marker detection methods described in Chapter \@ref(marker-detection).
+We see that cluster `r greedy.bastard` has a number of gene combinations that are not expressed in any other cluster; upregulation of TRAV1-2--TRAJ33 suggests that this cluster contains mucosal-associated invariant T cells [@reantragoon2013antigen].
+
+```{r}
+# Only using TCR-containing clusters for simplicity:
+test.out <- testGeneComboCountsBetweenGroups(se.genes[,has.tcr])
+test.out[["2"]]
+```
+
+```{r, echo=FALSE}
+# Checking my smack:
+stopifnot(grepl("TRAV1-2", rownames(test.out)[1:5]))
+stopifnot(grepl("TRAJ33", rownames(test.out)[1:5]))
+```
+
 ### Quantifying clonal expansion
 
 Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
@@ -293,77 +358,6 @@ ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), sce.pbmc$cluster,
     exprs_values="logcounts", average=TRUE)
 stopifnot(diff(ave.markers["CD8a", c(tclust.1, tclust.2)]) < -4)
 stopifnot(diff(ave.markers["CD4", c(tclust.1, tclust.2)]) > 5)
-```
-
-### Quantifying gene expression and properties
-
-We may also be interested in the expression of specific TCR genes, which can provide some insight into the type of antigens being targeted [@shugay2018vdjdb].
-We again use Fisher's exact test to test if our two T cell clusters of interest differ in the proportion of TCR sequences containing each gene.
-This yields a number of significant differences that may or may not be interesting, I don't know.
-As usual, composition effects apply here.
-
-```{r}
-# This should DEFINITELY use countGenes().
-gene.id.A <- sce.pbmc$TRA[,"v_gene"]
-expanded.cluster <- rep(sce.pbmc$cluster, lengths(gene.id.A))
-gene.tab.A <- table(unlist(gene.id.A), expanded.cluster)
-
-# Testing for differences between our clusters.
-collected <- list()
-totals <- colSums(gene.tab.A)
-for (i in rownames(gene.tab.A)) {
-    mat <- cbind(
-        Gene=gene.tab.A[i,],
-        Other=totals - gene.tab.A[i,])[c(tclust.1, tclust.2),]
-    stats <- fisher.test(mat)
-    collected[[i]] <- DataFrame(OR=stats$estimate, p.value=stats$p.value,
-        row.names=i)
-}
-
-collected <- do.call(rbind, collected)
-collected$FDR <- p.adjust(collected$p.value, method="BH")
-collected <- collected[order(collected$p.value),]
-head(collected)
-```
-
-The same philosophy can be applied to detect significant differences in biophysical properties.
-I have no idea what to say about this.
-I can only assume that gravy refers to hydrophobicity, and not the sauce.
-(One 300g can of gravy gives me a quarter of my daily fat, according to Google.
-And half my sodium as well. What a bargain!)
-And maybe basic TCRs will prefer to bind acidic pepties?
-Now we just have to find all those acidic antigens out there - how hard can it be?
-What kind of pathogen uses acidic residues, anyway?
-Prolines, now that's a sign of class.
-
-```{r}
-# TODO: move this somewhere else.
-extractDataFrame <- function(splitted, ...) {
-    thing <- data.frame(...)
-    thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
-    cbind(as.data.frame(unlist(splitted)), thing)
-}
-df.A <- extractDataFrame(sce.pbmc$TRA, cluster=sce.pbmc$cluster)
-
-library(alakazam)
-aap <- aminoAcidProperties(df.A, seq="cdr3")
-properties <- grep("_AA_", colnames(aap))
-head(aap[,properties])
-
-collected <- list()
-for (i in properties) {
-    prop <- colnames(aap)[i]
-    current <- split(aap[,prop], aap$cluster)
-    left <- current[[tclust.1]]
-    right <- current[[tclust.2]]
-    stats <- wilcox.test(left, right)
-    collected[[prop]] <- DataFrame(Delta=median(left, na.rm=TRUE) - 
-        median(right, na.rm=TRUE), p.value=stats$p.value,
-        row.names=prop)
-}
-
-collected <- do.call(rbind, collected)
-collected
 ```
 
 ## Analyzing the immunoglobulin repertoire
