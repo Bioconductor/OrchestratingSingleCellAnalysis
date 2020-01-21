@@ -159,7 +159,7 @@ hist(read.umi, col="grey",
     ylab="Number of cells")
 ```
 
-### Complex diagnostics
+### Custom diagnostics with `List` grammar
 
 At this point, it is worth spending some time on the sheer power of the `List` grammar in the `r Biocpkg("IRanges")` package.
 We can easily assemble complex queries on the table of contig sequence information by using nothing more than basic R syntax.
@@ -179,15 +179,14 @@ head(max.umi)
 keep <- tra[,"umis"] >= max.umi/2
 keep
 
-# Examine the distribution of the proportion of sequences in each cell
-# that satisfied our requirements.
-summary(mean(keep))
+# Count the number of sequences satisfying this requirement per cell.
+head(sum(keep))
 ```
 
 Boolean statements are easily accommodated with standard methods.
 For example, we can identify sequences that are full-length, productive and have the largest UMI count in the cell.
-Another useful aspect of the `SplitDataFrameList`'s behavior is that we can use a `LogicalList` as an argument for subsetting, which will then subset at the sequence level, i.e., the rows of each per-cell `DataFrame`.
-(This contrasts with more conventional uses of a logical vector as the subset argument, which will simply subset at the cell level, i.e., the elements of the `SplitDataFrameList` itself.)
+Another useful aspect of the `SplitDataFrameList`'s behavior is that we can use a `LogicalList` as a subsetting argument, which will apply the subsetting at the sequence level, i.e., the rows of each per-cell `DataFrame`.
+(This contrasts with more conventional uses of a logical subsetting vector that simply subsets at the cell level, i.e., the elements of the `SplitDataFrameList` itself.)
 
 ```{r}
 keep <- tra[,"full_length"]=="True" &
@@ -215,7 +214,7 @@ head(sort(combo.freq, decreasing=TRUE))
 
 If an operation must be performed on the original sequence-level data frame, 
 we can efficiently recover the latter by calling `unlist()` on our `SplitDataFrameList`.
-It is similarly straightforward to regenerate our `SplitDataFrameList` from the data frame by using the little-known `relist()` command. 
+It is similarly straightforward to regenerate our `SplitDataFrameList` from the data frame by using the `relist()` command. 
 This framework permits users to quickly switch between sequence level and cell level perspectives of the repertoire data depending on which is most convenient at any given point in the analysis.
 
 ```{r}
