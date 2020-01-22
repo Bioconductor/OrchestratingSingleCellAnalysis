@@ -295,30 +295,52 @@ stopifnot(grepl("TRAV1-2", rownames(test.out)[1:5]))
 stopifnot(grepl("TRAJ33", rownames(test.out)[1:5]))
 ```
 
+
 ### Quantifying clonal expansion
 
-Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
-Cells with the same T cell clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for T cell activation and proliferation upon stimulation by the corresponding antigen.
-Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes in each cluster, as shown below for the $\alpha$-chain.
+Quantification of clonal expansion is an obvious application of repertoire sequencing data.
+Cells with the same clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for activation and proliferation upon stimulation by the corresponding antigen.
+We can gain some insights into the immune activity of each cluster by counting the number of expanded clonotypes as shown below for the $\alpha$-chain.
 (We do not exclude clonotypes containing cells in different clusters, which can arise for various genuine biological reasons, e.g., differences in the microenvironment.) 
 
-```{r, fig.cap="Proportion of cells in each cluster that have multiple clonotypes, based on the TCR $\\alpha$ or $\\beta$-chains."}
-# TODO: shovel this inside a package somewhere:
-clone.id.A <- unlist(unique(sce.pbmc$TRA[,"raw_clonotype_id"]))
-expanded.id.A <- setdiff(clone.id.A[duplicated(clone.id.A)], "None")
-length(expanded.id.A) # number of expanded clonotypes for TRA
+```{r}
+clono.tra <- countCellsPerClonotype(sce.pbmc$TRA,
+    clone.field="raw_clonotype_id",
+    group=sce.pbmc$cluster,
+    cov.field="umis"
+)
+clono.tra
+```
 
-clone.id.B <- unlist(unique(sce.pbmc$TRB[,"raw_clonotype_id"]))
-expanded.id.B <- setdiff(clone.id.B[duplicated(clone.id.B)], "None")
-length(expanded.id.B) # number of expanded clonotypes for TRB
+It is then a simple matter to examine the distribution of clonotype frequencies using rank abundance curves (Figure \@ref(fig:tcra-pbmc-abundance-rank)).
+This yields clear evidence of clonal expansion in one cluster, possibly indicating that it contains cells responding to an immune stimulus.
 
-is.clone.A <- any(sce.pbmc$TRA[,"raw_clonotype_id"] %in% expanded.id.A)
-tra.counts.clonal <- table(sce.pbmc$cluster[is.clone.A])
-is.clone.B <- any(sce.pbmc$TRB[,"raw_clonotype_id"] %in% expanded.id.B)
-trb.counts.clonal <- table(sce.pbmc$cluster[is.clone.B])
+```{r tcra-pbmc-abundance-rank, fig.cap="Abundance rank curves of clonotype frequencies in each cluster of the PBMC dataset."}
+tmp <- data.frame(
+    rank=sequence(lengths(clono.tra)),
+    frequency=unlist(clono.tra),
+    cluster=rep(names(clono.tra), lengths(clono.tra)),
+    stringsAsFactors=FALSE
+)
+ggplot(tmp, aes(x=rank, y=frequency, col=cluster)) + 
+    geom_line(size=1.5) +
+    scale_x_log10()
+```
 
-barplot(rbind(TRA=tra.counts.clonal/ncells, TRB=trb.counts.clonal/ncells), 
-    legend=TRUE, beside=TRUE)
+We can quantify this observation by computing diversity indices for clonotypes within each cluster.
+More clonal expansion should generally result in lower diversity indicates as most cells are represented by a few clonotypes.
+Again, we need to downsample each cluster to the same total number of cells, 
+so we restrict ourselves to the clusters with a large number of TCR-expressing cells.
+This analysis confirms that cluster `r greedy.bastard` contains the greatest number and extent of expanded clonotypes.
+
+```{r}
+set.seed(1000)
+clono.out <- summarizeClonotypeCounts(clono.tra[has.tcr])
+clono.out
+```
+
+```{r, echo=FALSE}
+stopifnot(rownames(clono.out)[which.max(clono.out$gini)]==greedy.bastard)
 ```
 
 We can use this information to determine whether a particular T cell cluster is enriched for expanding clonotypes.
