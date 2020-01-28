@@ -67,14 +67,14 @@ head(tcr)
 The challenge in incorporating all of these data structures into a single object lies in the fact that each cell may have zero, one or many TCR/immunoglobulin sequences.
 This precludes direct storage of repertoire information in the `colData()` of the `SingleCellExperiment`, which expects a 1:1 mapping from each cell to each repertoire sequence.
 Instead, we store the repertoire data as a `SplitDataFrameList` object where each cell is represented by a `DataFrame` and each row of that `DataFrame` represents a sequence for that cell.
-This is easily done using the `splitToCells()` utility function from the `r Githubpkg("LTLA/RepertoireUtils")` package, as shown below. 
+This is easily done using the `splitDataFrameByCell()` utility function from the `r Githubpkg("LTLA/RepertoireUtils")` package, as shown below. 
 (We set the `universe=` argument to ensure that the `SplitDataFrameList` has the same number and order of cells in our `sce.pbmc` object, even if some cells have no sequences, i.e., zero-row `DataFrame`s.)
 
 ```{r}
 library(RepertoireUtils)
 
 # For the alpha chain sequences:
-sce.pbmc$TRA <- splitToCells(tcr[tcr$chain=="TRA",], 
+sce.pbmc$TRA <- splitDataFrameByCell(tcr[tcr$chain=="TRA",], 
     field="barcode", universe=sce.pbmc$Barcode)
 
 # Inspecting the class:
@@ -82,7 +82,7 @@ class(sce.pbmc$TRA)
 length(sce.pbmc$TRA) # Now the same as the number of cells.
 
 # Repeating for the beta chain:
-sce.pbmc$TRB <- splitToCells(tcr[tcr$chain=="TRB",], 
+sce.pbmc$TRB <- splitDataFrameByCell(tcr[tcr$chain=="TRB",], 
     field="barcode", universe=sce.pbmc$Barcode)
 ```
 
@@ -90,7 +90,7 @@ sce.pbmc$TRB <- splitToCells(tcr[tcr$chain=="TRB",],
 
 We start by generating some basic diagnostics using the `countSequencesPerCell()` function.
 This returns the number of sequences for each cell, possibly after some simple filtering on the sequence characteristics.
-Here, we assemble a matrix indicating whether each cell has any TCR $\alpha$-chain sequence,
+Using the TCR $\alpha$-chain as an example, we assemble a matrix indicating whether each cell has any sequence,
 multiple sequences or productive, full-length or high-confidence sequences.
 We also determine whether each cell has an "awesome" sequence that is productive, full-length and high-confidence.
 We use this information to compute the proportion of cells in each cluster that are positive for each metric.
@@ -279,13 +279,13 @@ Here, we only consider clusters with at least 100 cells to ensure that we have e
 We also need to set the seed to obtain reproducible results when downsampling..
 
 The obvious next step is to identify significant differences in the expression frequency of each gene combination between clusters.
-Here, the `testGeneComboCountsBetweenGroups()` function performs a one-sided Fisher's exact test on each gene combination to detect differences in the proportion of expressing cells between pairs of clusters.
+Here, the `testGeneComboCountsPairwise()` function performs a one-sided Fisher's exact test on each gene combination to detect differences in the proportion of expressing cells between pairs of clusters.
 We then arrange the results into a single list of combinations per cluster, equivalent to the marker detection methods described in Chapter \@ref(marker-detection).
 We see that cluster `r greedy.bastard` has a number of gene combinations that are not expressed in any other cluster; upregulation of TRAV1-2--TRAJ33 suggests that this cluster contains mucosal-associated invariant T cells [@reantragoon2013antigen].
 
 ```{r}
 # Only using TCR-containing clusters for simplicity:
-test.out <- testGeneComboCountsBetweenGroups(se.genes[,has.tcr])
+test.out <- testGeneComboCountsPairwise(se.genes[,has.tcr])
 test.out[["2"]]
 ```
 
@@ -328,10 +328,10 @@ ggplot(tmp, aes(x=rank, y=frequency, col=cluster)) +
 ```
 
 We can quantify this observation by computing diversity indices for clonotypes within each cluster.
-More clonal expansion should generally result in lower diversity indicates as most cells are represented by a few clonotypes.
+More clonal expansion should generally result in lower diversity indices as most cells are represented by a few clonotypes.
 Again, we need to downsample each cluster to the same total number of cells, 
 so we restrict ourselves to the clusters with a large number of TCR-expressing cells.
-This analysis confirms that cluster `r greedy.bastard` contains the greatest number and extent of expanded clonotypes.
+The analysis below confirms that cluster `r greedy.bastard` contains the greatest number and extent of expanded clonotypes.
 
 ```{r}
 set.seed(1000)
@@ -343,44 +343,18 @@ clono.out
 stopifnot(rownames(clono.out)[which.max(clono.out$gini)]==greedy.bastard)
 ```
 
-We can use this information to determine whether a particular T cell cluster is enriched for expanding clonotypes.
-The example below uses Fisher's exact test to identify a significant increase in the proportion of expanded clonotypes in a cluster of putative CD8^+^ T cells compared to another cluster of CD4^+^ T cells (Figure \@ref(fig:expanded-t-clusters)).
-This provides some relative measure of the average immune activity of each cluster though, of course, further subclustering may reveal finer subpopulations with more or less activity than the average of the parent cluster.
+We could test the statistical significance of the differences in the diversity indices
+by performing pairwise comparisons between groups with a permutation test in `testClonotypeCountsPairwise()`.
+This yields a matrix of $p$-values for each comparison, adjusted for multiple testing across all pairs for a given index.
+In practice, this analysis is not particularly helpful as the large number of cells provides sufficient power to reject the null hypothesis with only small differences in the diversity indices.
 
-```{r expanded-t-clusters, fig.wide=TRUE, fig.asp=1, fig.cap="Distribution of log-abundance values for each antibody-derived tag in the PBMC dataset, across all cells in either T cell cluster (top and bottom panels)."}
-# Identifying the clusters:
-tclust.1 <- "2"
-tclust.2 <- "6"
-
-mat <- cbind(Expanded=tra.counts.clonal,
-    Unexpanded=tra.counts.any - tra.counts.clonal)[c(tclust.1, tclust.2),]
-mat 
-
-stats <- fisher.test(mat)
-stats
-
-# Checking the identities of the relevant clusters. Note that 'cluster' is also
-# present as a colData entry in 'altExp(sce.pbmc)', which is why the
-# 'other_fields="cluster"' argument works correctty.
-of.interest <- sce.pbmc$cluster %in% c(tclust.1, tclust.2)
-
-library(scater)
-plotExpression(altExp(sce.pbmc)[,of.interest], 
-    features=rownames(altExp(sce.pbmc)),
-    other_fields="cluster") + facet_wrap(~cluster, ncol=1)
+```{r}
+set.seed(1010010)
+test.out <- testClonotypeCountsPairwise(clono.tra[has.tcr])
+test.out$hill1 # significant differences in Hill index of order 1.
 ```
 
-```{r, echo=FALSE}
-# Checking identities of all relevant entities.
-stopifnot(all(mat[,2] > 100))
-stopifnot(any(mat[,1] > 100))
-stopifnot(stats$p.value <= 0.01)
-
-ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), sce.pbmc$cluster,
-    exprs_values="logcounts", average=TRUE)
-stopifnot(diff(ave.markers["CD8a", c(tclust.1, tclust.2)]) < -4)
-stopifnot(diff(ave.markers["CD4", c(tclust.1, tclust.2)]) > 5)
-```
+### Comments on the $\beta$ chain
 
 ## Analyzing the immunoglobulin repertoire
 
