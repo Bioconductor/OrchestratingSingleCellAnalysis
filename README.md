@@ -18,9 +18,10 @@ The repository subdirectories reflect the structure of the book:
 - `analysis`: the meat of the book, where each chapter focuses on a different step of a scRNA-seq analysis.
 - `workflows`: end-to-end analysis Rmarkdown reports with minimal explanatory text.
 - `about`: some bits and pieces about the contributors.
+- `sundries`: some **bookdown**-related bits and pieces.
+- `images`: various static images used throughout the book.
 
-In addition, there is the **OSCAUtils** package in `package`, which provides a number of utilities for book construction;
-and `sundries`, which provides some **bookdown**-related bits and pieces.
+In addition, there is the **OSCAUtils** package in `package`, which provides utilities for book construction.
 
 ## Using cached objects
 
@@ -42,7 +43,7 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
-Run the following code to create a book repository in `"OSCA"`.
+Run the following code to create a book repository in a new or existing directory `OSCA`:
 
 ```r
 library(OSCAUtils)
@@ -60,7 +61,7 @@ To compile the book in its entirety, the following code will create the book in 
 ```r
 setwd("OSCA") # process must be started in the book directory
 bookdown::render_book("index.Rmd", "bookdown::gitbook",
-                      quiet = FALSE, output_dir = "docs", new_session = TRUE)
+    quiet = FALSE, output_dir = "docs", new_session = TRUE)
 ```
 
 Note that for pushing figures to the main book repository, the `Cairo` library is required so that images are rendered as PNG files (see the `chapterPreamble()` function of the `OSCAUtils` package).
