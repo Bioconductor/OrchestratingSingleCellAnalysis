@@ -13,7 +13,7 @@ This chapter provides an overview of the framework of a typical scRNA-seq analys
 Subsequent chapters will describe each analysis step in more detail.
 
 ```{r scworkflow, fig.width=6, fig.asp=1.2, fig.cap="Schematic of a typical scRNA-seq analysis workflow. Each stage (separated by dashed lines) consists of a number of specific steps, many of which operate on and modify a `SingleCellExperiment` instance.", echo=FALSE}
-path <- fetchOSCAImage(name="Workflow.png")
+path <- fetchImage(name="Workflow.png")
 knitr::include_graphics(path)
 ```
 

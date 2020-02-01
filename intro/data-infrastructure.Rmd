@@ -43,7 +43,7 @@ More experienced readers may note the similarity with the `SummarizedExperiment`
 ```{r sce-structure, fig.wide=TRUE, echo=FALSE, fig.cap="Overview of the structure of the `SingleCellExperiment` class. Each row of the assays corresponds to a row of the `rowData` (pink shading), while each column of the assays corresponds to a column of the `colData` and `reducedDims` (yellow shading)."}
 library(OSCAUtils)
 knitr::include_graphics(
-    fetchOSCAImage("SingleCellExperiment.png")
+    fetchImage("SingleCellExperiment.png")
 )
 ```
 
