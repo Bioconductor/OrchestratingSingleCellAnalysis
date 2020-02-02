@@ -88,31 +88,15 @@ sce.pbmc$TRB <- splitDataFrameByCell(tcr[tcr$chain=="TRB",],
 
 ### Basic diagnostics
 
-We start by generating some basic diagnostics using the `countSequencesPerCell()` function.
-This returns the number of sequences for each cell, possibly after some simple filtering on the sequence characteristics.
-Using the TCR $\alpha$-chain as an example, we assemble a matrix indicating whether each cell has any sequence,
+We start by generating some basic diagnostics using the `summarizeSequenceStatus()` function.
+Using the TCR $\alpha$-chain as an example, we assemble a `DataFrame` indicating whether each cell has any sequence,
 multiple sequences or productive, full-length or high-confidence sequences.
 We also determine whether each cell has an "awesome" sequence that is productive, full-length and high-confidence.
 We use this information to compute the proportion of cells in each cluster that are positive for each metric.
 
 ```{r}
-status <- rbind(
-    HasAnySequence=countSequencesPerCell(sce.pbmc$TRA) > 0,
-    HasMultiSequence=countSequencesPerCell(sce.pbmc$TRA) > 1,
-    HasProductiveSequence=countSequencesPerCell(sce.pbmc$TRA,
-        filter.field="productive", filter.value="True") > 0,
-    HasFullLengthSequence=countSequencesPerCell(sce.pbmc$TRA,
-        filter.field="full_length", filter.value="True") > 0,
-    HasHighConfSequence=countSequencesPerCell(sce.pbmc$TRA,
-        filter.field="high_confidence", filter.value="True") > 0,
-    HasAwesomeSequence=countSequencesPerCell(sce.pbmc$TRA,
-        filter.field=c("productive", "full_length", "high_confidence"),
-        filter.value=c("True", "True", "True")) > 0
-)
-
-stats <- colsum(status+0, sce.pbmc$cluster)
-props <- t(t(stats)/as.numeric(table(sce.pbmc$cluster)))
-props[,1:10]
+props <- summarizeSequenceStatus(sce.pbmc$TRA, group=sce.pbmc$cluster)
+head(props)
 ```
 
 We then identify clusters of T cells as those with large proportions of TCR-expressing cells (Figure \@ref(fig:tcra-prop-cluster)).
@@ -122,9 +106,11 @@ We would also generally expect a high proportion of awesome sequences, as a larg
 ```{r tcra-prop-cluster, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express TCR $\\alpha$-chain sequences in the PBMC dataset."}
 library(reshape2)
 library(ggplot2)
-tmp <- melt(props)
-colnames(tmp) <- c("Type", "Cluster", "Proportion")
+
+tmp <- melt(as.matrix(props))
+colnames(tmp) <- c("Cluster", "Type", "Proportion")
 tmp$Cluster <- factor(tmp$Cluster)
+
 ggplot(tmp, aes(x=Cluster, y=Proportion, fill=factor(Type))) +
     geom_bar(stat="identity", position="dodge", colour="black") +
     scale_fill_brewer(type="qual", palette=1)
@@ -238,13 +224,13 @@ In this case, we stratify the counts by the cluster of origin such that each col
 For simplicity, we will also set `cov.field="umis"` so that only the most abundant sequence from each cell is considered during counting.
 
 ```{r}
-se.genes <- countCellsPerGeneCombo(sce.pbmc$TRA,
+se.tra <- countCellsPerGeneCombo(sce.pbmc$TRA,
     gene.field=c("v_gene", "d_gene", "j_gene", "c_gene"),
     group=sce.pbmc$cluster,
     cov.field="umis"
 )
-rowData(se.genes)
-head(assay(se.genes))
+rowData(se.tra)
+head(assay(se.tra))
 ```
 
 ```{r, echo=FALSE}
@@ -261,8 +247,8 @@ this is possibly interesting if it reflects an immune response to particular epi
 
 ```{r}
 set.seed(100)
-has.tcr <- colSums(assay(se.genes)) >= 100
-sum.genes <- summarizeGeneComboCounts(se.genes[,has.tcr])
+has.tcr <- colSums(assay(se.tra)) >= 100
+sum.genes <- summarizeGeneComboCounts(se.tra[,has.tcr])
 sum.genes
 ```
 
@@ -285,7 +271,7 @@ We see that cluster `r greedy.bastard` has a number of gene combinations that ar
 
 ```{r}
 # Only using TCR-containing clusters for simplicity:
-test.out <- testGeneComboCountsPairwise(se.genes[,has.tcr])
+test.out <- testGeneComboCountsPairwise(se.tra[,has.tcr])
 test.out[["2"]]
 ```
 
@@ -294,7 +280,6 @@ test.out[["2"]]
 stopifnot(grepl("TRAV1-2", rownames(test.out)[1:5]))
 stopifnot(grepl("TRAJ33", rownames(test.out)[1:5]))
 ```
-
 
 ### Quantifying clonal expansion
 
@@ -413,7 +398,94 @@ stopifnot(identical(clonotype.A[has.both], clonotype.B[has.both]))
 
 ## Analyzing the immunoglobulin repertoire
 
-Immunoglobulins are good.
+### Data processing
+
+We obtain the immunoglobulin contig annotations for the same set of cells.
+This follows a similar format to the TCR annotations and can be processed in the same manner.
+
+```{r}
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+ig.data <- bfcrpath(bfc, file.path(
+    "http://cf.10xgenomics.com/samples/cell-vdj/3.1.0",
+    "vdj_v1_hs_pbmc3/vdj_v1_hs_pbmc3_b_filtered_contig_annotations.csv"))
+ig <- read.csv(ig.data, stringsAsFactors=FALSE)
+nrow(ig)
+head(ig)
+```
+
+The main difference from TCRs is that there are a few more chains,
+namely the heavy chain (IGH) and the two light chains (IGL and IGK(.
+This simply requires us to repeat the `splitDataFrameByCell()` calls a few times to create more `SplitDataFrameList`s.
+
+```{r}
+sce.pbmc$IGH <- splitDataFrameByCell(ig[ig$chain=="IGH",],
+    field="barcode", universe=sce.pbmc$Barcode)
+sce.pbmc$IGL <- splitDataFrameByCell(ig[ig$chain=="IGL",],
+    field="barcode", universe=sce.pbmc$Barcode)
+sce.pbmc$IGK <- splitDataFrameByCell(ig[ig$chain=="IGK",],
+    field="barcode", universe=sce.pbmc$Barcode)
+```
+
+### Basic analysis
+
+Everything described previously for TCRs can be repeated verbatim for the immunoglobulins.
+For example, we can count the number of cells with any or multiple IGH sequences to identify clusters that likely contain B cells (Figure \@ref(fig:igh-prop-cluster)).
+
+```{r igh-prop-cluster, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express IGH sequences in the PBMC dataset."}
+props <- summarizeSequenceStatus(sce.pbmc$IGH, group=sce.pbmc$cluster)
+
+tmp <- melt(as.matrix(props))
+colnames(tmp) <- c("Cluster", "Type", "Proportion")
+tmp$Cluster <- factor(tmp$Cluster)
+
+ggplot(tmp, aes(x=Cluster, y=Proportion, fill=factor(Type))) +
+    geom_bar(stat="identity", position="dodge", colour="black") +
+    scale_fill_brewer(type="qual", palette=1)
+```
+
+We can count the number of cells for combinations of genes and test for differences in gene usage between clusters.
+In this case, we do not have many distinct B cell clusters and they do not exhibit clear differences in IgH gene usage.
+
+```{r}
+se.igh <- countCellsPerGeneCombo(sce.pbmc$IGH,
+    gene.field=c("v_gene", "j_gene", "d_gene"),
+    cov.field="umis",
+    group=sce.pbmc$cluster)
+
+has.igh <- colSums(assay(se.igh)) >= 40
+heavy.test <- testGeneComboCountsPairwise(heavy.counts[,has.igh])
+
+# Counting the number of DE genes in each pairwise comparison.
+has.de <- lapply(heavy.test, FUN=function(x) sum(x$FDR<=0.05))
+has.de
+```
+
+```{r, echo=FALSE}
+stopifnot(all(unlist(has.de)==0L))
+```
+
+Similarly, we can quantify clonal expansion using the `summarizeClonotypeCounts()` function.
+Here, we observe practically no clonal expansion in any of the B cell clusters -
+for example, a Gini index of 1 indicates that all cells have the same count (after downsampling) -
+suggesting that the B cells are not participating in any immune response in this dataset.
+
+```{r}
+clono.igh <- countCellsPerClonotype(sce.pbmc$IGH,
+    clone.field="raw_clonotype_id",
+    cov.field="umis",
+    group=sce.pbmc$cluster)
+
+set.seed(10010)
+clono.out <- summarizeClonotypeCounts(clono.igh[has.igh])
+clono.out
+```
+
+```{r, echo=FALSE}
+stopifnot(all(clono.out$gini >= 0.95))
+```
+
+### Lineage analyses
 
 ## Multi-sample analyses
 
