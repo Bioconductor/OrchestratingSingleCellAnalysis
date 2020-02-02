@@ -416,7 +416,7 @@ stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
 ```
 
 The obvious disadvantage of this approach is that not all genes in the set may exhibit the same pattern of differences.
-Non-DE genes will add noise to the per-set average, "diluting" the strength of any differences compared to an analysis that focuses directly on the DE genes (Figure \@ref(thrsp-violin)).
+Non-DE genes will add noise to the per-set average, "diluting" the strength of any differences compared to an analysis that focuses directly on the DE genes (Figure \@ref(fig:thrsp-violin)).
 At worst, a gene set may contain subsets of DE genes that change in opposite directions, cancelling out any differences in the per-set average.
 This is not uncommon for gene sets that contain both positive and negative regulators of a particular biological process or pathway.
 

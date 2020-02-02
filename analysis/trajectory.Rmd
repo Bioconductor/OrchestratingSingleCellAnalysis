@@ -12,7 +12,7 @@ chapterPreamble()
 ```
 
 ```{r dio-fail, fig.cap="Waiting for Stephanie to finish her PR.", echo=FALSE}
-path <- fetchOSCAImage("placeholder_dio.jpg")
+path <- fetchImage("placeholder_dio.jpg")
 knitr::include_graphics(path)
 ```
 

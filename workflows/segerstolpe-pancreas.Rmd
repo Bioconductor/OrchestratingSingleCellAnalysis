@@ -53,7 +53,7 @@ unfiltered <- sce.seger
 
 We remove low quality cells that were marked by the authors.
 We then perform additional quality control as some of the remaining cells still have very low counts and numbers of detected features.
-For some batches that seem to have a majority of low-quality cells (Figure \@ref(unref-seger-qc-dist)), we use the other batches to define an appropriate threshold via `subset=`.
+For some batches that seem to have a majority of low-quality cells (Figure \@ref(fig:unref-seger-qc-dist)), we use the other batches to define an appropriate threshold via `subset=`.
 
 ```{r quality-control}
 low.qual <- sce.seger$Quality == "low quality cell"

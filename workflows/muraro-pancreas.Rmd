@@ -39,7 +39,7 @@ unfiltered <- sce.muraro
 ```
 
 This dataset lacks mitochondrial genes so we will do without.
-For the one batch that seems to have a high proportion of low-quality cells, we compute an appropriate filter threshold using a shared median and MAD from the other batches (Figure \@ref(unref-muraro-qc-dist)).
+For the one batch that seems to have a high proportion of low-quality cells, we compute an appropriate filter threshold using a shared median and MAD from the other batches (Figure \@ref(fig:unref-muraro-qc-dist)).
 
 ```{r quality-control}
 library(scater)

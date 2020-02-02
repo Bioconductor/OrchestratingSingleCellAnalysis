@@ -37,14 +37,14 @@ However, the principles of interoperability are generally applicable and are wor
 ## Interchanging with _Seurat_
 
 ```{r elsie-fail, fig.cap="Need to add this at some point.", echo=FALSE}
-path <- fetchOSCAImage("placeholder_elsie.jpg")
+path <- fetchImage("placeholder_elsie.jpg")
 knitr::include_graphics(path)
 ```
 
 ## Interchanging with _scanpy_
 
 ```{r vegeta-fail, fig.cap="Need to add this at some point.", echo=FALSE}
-path <- fetchOSCAImage("placeholder_vegeta.jpg")
+path <- fetchImage("placeholder_vegeta.jpg")
 knitr::include_graphics(path)
 ```
 
