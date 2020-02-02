@@ -12,7 +12,7 @@ chapterPreamble()
 ```
 
 ```{r, fig.cap="This page is under construction.", echo=FALSE}
-path <- fetchOSCAImage("placeholder_yuno.jpg")
+path <- fetchImage("placeholder_yuno.jpg")
 knitr::include_graphics(path)
 ```
 
@@ -343,10 +343,9 @@ clono.out
 stopifnot(rownames(clono.out)[which.max(clono.out$gini)]==greedy.bastard)
 ```
 
-We could test the statistical significance of the differences in the diversity indices
-by performing pairwise comparisons between groups with a permutation test in `testClonotypeCountsPairwise()`.
+We could test the statistical significance of the differences in the diversity indices by performing pairwise comparisons between groups with a permutation test in `testClonotypeCountsPairwise()`.
 This yields a matrix of $p$-values for each comparison, adjusted for multiple testing across all pairs for a given index.
-In practice, this analysis is not particularly helpful as the large number of cells provides sufficient power to reject the null hypothesis with only small differences in the diversity indices.
+In practice, this analysis is not particularly helpful as the large number of cells means that the null hypothesis can be consistently rejected even when there are only small differences in the diversity indices.
 
 ```{r}
 set.seed(1010010)
@@ -354,7 +353,63 @@ test.out <- testClonotypeCountsPairwise(clono.tra[has.tcr])
 test.out$hill1 # significant differences in Hill index of order 1.
 ```
 
-### Comments on the $\beta$ chain
+In practice, it is often better to perform the clonotype analysis on the $\beta$ chain as this is the preferred source of information regarding clonotype identity (see the next Section for more details).
+
+### Combining with the $\beta$ chain
+
+The analysis above has focused on the $\alpha$ chain, but it is straightforward to repeat the steps on data for the $\beta$ chain.
+We will omit this for brevity as it simply involves replacing `sce.pbmc$TRA` with `sce.pbmc$TRB` in each of the above functions.
+
+Instead, here we will demonstrate how to analyze both chains together.
+This is probably more important than the analysis of each chain in isolation,
+given that both chains are required to form the TCR for binding to peptide-MHC complexes.
+The first step is to collapse the data for each chain into a `DataFrame` with one row per cell;
+we do so by selecting the most abundant sequence per cell with the `createPerCellDataFrame()` function.
+
+```{r}
+per.cell.A <- createPerCellDataFrame(sce.pbmc$TRA) 
+nrow(per.cell.A)
+per.cell.B <- createPerCellDataFrame(sce.pbmc$TRB)
+nrow(per.cell.B)
+```
+
+It is then trivial to `cbind()` the two `DataFrame`s together to combine information from both chains for each cell.
+We prefix the column names with `A` or `B` in the `cbind()` call in order to distinguish between fields for the different chains.
+
+```{r}
+per.cell.tcr <- cbind(A=per.cell.A, B=per.cell.B)
+colnames(per.cell.tcr)
+```
+
+Once we have this combined `DataFrame`, we can re-use the same functions for counting gene combinations.
+In this case, `countCellsPerGeneCombo()` will automatically ignore cells without both chains,
+allowing us to directly use the output in functions like `testGeneComboCountsPairwise()`.
+
+```{r}
+v.combined <- countCellsPerGeneCombo(per.cell.tcr,
+    gene.field=c("A.v_gene", "B.v_gene"),
+    group=sce.pbmc$cluster)
+head(assay(v.combined))
+```
+
+For the clonotype analysis, there is little benefit from using `per.cell.tcr` as the clonotypes have already been defined based on information from both chains.
+Typically, clonotypes are defined based on identity in the $\beta$ chains, either in the CDR3 region only or across the entire sequence.
+The $\beta$ chain is used because the combinatorial space of possible sequences is larger than that for the $\alpha$ chain, thus providing finer discrimination between different clones.
+If available, the $\alpha$ chain is used only as a "tie-breaker" if the $\beta$ chain sequences match between two cells or as a fallback if the $\beta$ chains are not available.
+Regardless of the exact algorithm, this means that the clonotype calls will be the same in both chains for all cells that have sequences for both chains.
+As such, it is often sufficient to perform the clonotype analysis on `sce.pbmc$TRB`, given that this is the main source of data used to define the clonotypes in the first place.
+
+```{r}
+# Demonstrating that they are, in fact, the same.
+clonotype.A <- per.cell.tcr$A.raw_clonotype_id
+clonotype.B <- per.cell.tcr$B.raw_clonotype_id
+has.both <- !is.na(clonotype.A) & !is.na(clonotype.B)
+identical(clonotype.A[has.both], clonotype.B[has.both])
+```
+
+```{r, echo=FALSE}
+stopifnot(identical(clonotype.A[has.both], clonotype.B[has.both]))
+```
 
 ## Analyzing the immunoglobulin repertoire
 
