@@ -283,10 +283,12 @@ stopifnot(grepl("TRAJ33", rownames(test.out)[1:5]))
 
 ### Quantifying clonal expansion
 
+#### For comparisons between clusters
+
 Quantification of clonal expansion is an obvious application of repertoire sequencing data.
 Cells with the same clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for activation and proliferation upon stimulation by the corresponding antigen.
 We gain some insights into the immune activity of each cluster by counting the number of expanded clonotypes, as shown below for the $\alpha$-chain.
-(We do not exclude clonotypes containing cells in different clusters, which can arise for various genuine biological reasons, e.g., differences in the microenvironment.) 
+(In practice, it is often better to perform the clonotype analysis on the calls in the $\beta$ chain's `SplitDataFrameList`, as this is the preferred source of information regarding clonotype identity - see the next Section for more details - but we will persist with `sce.pbmc$TRA` here for consistency.)
 
 ```{r}
 clono.tra <- countCellsPerClonotype(sce.pbmc$TRA,
@@ -338,7 +340,59 @@ test.out <- testClonotypeCountsPairwise(clono.tra[has.tcr])
 test.out$hill1 # significant differences in Hill index of order 1.
 ```
 
-In practice, it is often better to perform the clonotype analysis on the $\beta$ chain as this is the preferred source of information regarding clonotype identity (see the next Section for more details).
+#### Shared clonotypes across clusters
+
+The previous analysis does not consider the possibility of clonotypes with cells in different clusters.
+This might arise for various genuine biological reasons - for example, if a single T cell clone is captured at varying activation states, we may observe the same clonotype in naive, effector and memory populations.
+To quantify sharing, we use the `countSharedClonotypes()` function to compute the Jaccard index for the number of shared clonotypes (weighted by the number of cells exhibiting each clonotype) between all pairs of T cell clusters.
+
+```{r}
+shared <- countSharedClonotypes(sce.pbmc$TRA,
+    clone.field="raw_clonotype_id",
+    cov.field="umis",
+    group=sce.pbmc$cluster)
+
+# Only caring about the TCR-expressing clusters:
+shared[has.tcr,has.tcr]
+```
+
+```{r, echo=FALSE}
+first.sharing <- '2'
+second.sharing <- '16'
+stopifnot(identical(first.sharing, greedy.bastard))
+stopifnot(shared[second.sharing,first.sharing] > 40)
+```
+
+We see that clusters `r first.sharing` and `r second.sharing` contain quite a few cells that share a clonotype.
+This is potentially interesting as it provides some evidence that the two cell subtypes (for which the clusters are proxies) originated from the same underlying population.
+Indeed, further investigation indicates that this sharing is driven by clonal expansion within cluster `r greedy.bastard`, suggesting that there was a change in cell state upon activation and proliferation for a subset of clones. 
+
+```{r}
+common <- intersect(names(clono.tra[["2"]]), names(clono.tra[["16"]]))
+clono.tra[["2"]][common]
+clono.tra[["16"]][common]
+```
+
+```{r, echo=FALSE}
+# Checking that the above result is what we expected it to be.
+stopifnot(identical(
+    intersect(names(clono.tra[["2"]]), names(clono.tra[["16"]])),
+    intersect(names(clono.tra[[first.sharing]]), names(clono.tra[[second.sharing]]))
+))
+```
+
+Of course, the relevance of this result depends on whether the two clusters actually represent distinct cell subtypes.
+Some sharing is to be expected between neighboring clusters where a few cells of a clonotype in one cluster may be inadvertently assigned to another cluster.
+In fact, given the general ambiguity of clustering, it may be advisable to verify that the difference between clusters persist in the subset of cells with shared clonotypes, e.g., by checking that the relevant marker genes are DE with `findMarkers()` (Chapter \@ref(marker-detection)).
+
+```{r}
+is.shared <- any(sce.pbmc$TRA[,"raw_clonotype_id"] %in% common)
+sce.sub <- sce.pbmc[,is.shared]
+
+library(scran)
+marker.out <- findMarkers(sce.sub, sce.sub$cluster,
+    restrict=c("2", "16"), direction="up", test.type="wilcox")
+```
 
 ### Combining with the $\beta$ chain
 
