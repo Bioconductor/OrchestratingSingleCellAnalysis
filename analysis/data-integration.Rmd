@@ -204,9 +204,9 @@ This is subject to the same assumptions as described above for `rescaleBatches()
 
 ### Algorithm overview
 
-Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
-Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
-Mutual nearest neighbours are pairs of cells from different batches that belong in each other's set of nearest neighbours.
+Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbors to $a$ in the expression space defined by the selected features.
+Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbors in $A$.
+Mutual nearest neighbors are pairs of cells from different batches that belong in each other's set of nearest neighbors.
 The reasoning is that MNN pairs represent cells from the same biological state prior to the application of a batch effect - see @haghverdi2018batch for full theoretical details.
 Thus, the difference between cells in MNN pairs can be used as an estimate of the batch effect, the subtraction of which yields batch-corrected values.
 
@@ -254,7 +254,7 @@ We do not recommend using this for anything other than visualization (Section \@
 assay(mnn.out, "reconstructed")
 ```
 
-The most relevant parameter for tuning `fastMNN()` is `k`, which specifies the number of nearest neighbours to consider when defining MNN pairs.
+The most relevant parameter for tuning `fastMNN()` is `k`, which specifies the number of nearest neighbors to consider when defining MNN pairs.
 This can be interpreted as the minimum anticipated frequency of any shared cell type or state in each batch.
 Increasing `k` will generally result in more aggressive merging as the algorithm is more generous in matching subpopulations across batches.
 It can occasionally be desirable to increase `k` if one clearly sees that the same cell types are not being adequately merged across batches.
