@@ -232,7 +232,7 @@ For example, regression would potentially remove interesting signal if cell cycl
 We suggest only performing cell cycle adjustment on an as-needed basis in populations with clear cell cycle effects.
 
 Alternatively, users may consider just excluding cell cycle-related genes from downstream analysis.
-This should remove most of the cell cycle effect without making strong assumptions about 
+This should remove most of the cell cycle effect without making strong assumptions about orthogonality.
 Of course, this will not remove the effect of the cell cycle in genes with no annotated role in the cell cycle, but in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle.
 
 ```{r}
