@@ -72,7 +72,7 @@ library(scran)
 stopifnot(all(getMarkerEffects(markers[[4]][c("Ccnb1"),]) > 0.5))
 ```
 
-Direct examination of cyclin expression is easily to understand, interprete and experimentally validate.
+Direct examination of cyclin expression is easily to understand, interpret and experimentally validate.
 However, it is best suited for statements about relative cell cycle activity; for example, we would find it difficult to assign cell cycle phase in Figure \@ref(fig:heat-cyclin) without the presence of clusters spanning all phases to provide benchmarks for "high" and "low" expression of each cyclin.
 We also assume that cyclin expression is not affected by biological processes other than the cell cycle, which may be a strong assumption in some cases, e.g., malignant cells.
 This strategy is strongly dependent on having good sequencing coverage of the cyclins, which is less of an issue for the whole-of-transcriptome methods described below that use information from more genes.
@@ -232,7 +232,7 @@ For example, regression would potentially remove interesting signal if cell cycl
 We suggest only performing cell cycle adjustment on an as-needed basis in populations with clear cell cycle effects.
 
 Alternatively, users may consider just excluding cell cycle-related genes from downstream analysis.
-This should remove most of the cell cycle effect without making strong assumptions about orthogonality.
+This should remove most of the cell cycle effect without making strong assumptions about 
 Of course, this will not remove the effect of the cell cycle in genes with no annotated role in the cell cycle, but in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle.
 
 ```{r}
