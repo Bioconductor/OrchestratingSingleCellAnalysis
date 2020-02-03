@@ -41,7 +41,7 @@ sce.mam
 
 ## Doublet detection with clusters
 
-The `doubletCluster()` function identifes clusters with expression profiles lying between two other clusters [@bach2017differentiation].
+The `doubletCluster()` function identifies clusters with expression profiles lying between two other clusters [@bach2017differentiation].
 We consider every possible triplet of clusters consisting of a query cluster and two putative "source" clusters.
 Under the null hypothesis that the query consists of doublets from the two sources, we then compute a number of statistics:
 
@@ -82,7 +82,7 @@ stopifnot(length(chosen.doublet)==1L)
 Examination of the output of `doubletCluster()` indicates that cluster `r chosen.doublet` has the fewest unique genes and library sizes that are comparable to or greater than its sources.
 We see that every gene detected in this cluster is also expressed in either of the two proposed source clusters (Figure \@ref(fig:heatclust)).
 
-```{r heatclust, fig.cap=sprintf("Heatmap of mean-centred and normalized log-expression values for the top set of markers for cluster %s in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
+```{r heatclust, fig.cap=sprintf("Heatmap of mean-centered and normalized log-expression values for the top set of markers for cluster %s in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
 markers <- findMarkers(sce.mam, sce.mam$cluster, direction="up")
 dbl.markers <- markers[[chosen.doublet]]
 
@@ -125,8 +125,8 @@ The other doublet detection strategy involves _in silico_ simulation of doublets
 This is performed using the `doubletCells()` function from `r Biocpkg("scran")`, which will:
 
 1. Simulate thousands of doublets by adding together two randomly chosen single-cell profiles.
-2. For each original cell, compute the density of simulated doublets in the surrounding neighbourhood.
-3. For each original cell, compute the density of other observed cells in the neighbourhood.
+2. For each original cell, compute the density of simulated doublets in the surrounding neighborhood.
+3. For each original cell, compute the density of other observed cells in the neighborhood.
 4. Return the ratio between the two densities as a "doublet score" for each cell.
 
 This approach assumes that the simulated doublets are good approximations for real doublets.
@@ -147,7 +147,7 @@ dbl.dens <- doubletCells(sce.mam, subset.row=top.mam,
 summary(dbl.dens)
 ```
 
-The highest doublet scores are concentrated in a single cluster of cells in the centre of Figure \@ref(fig:denstsne).
+The highest doublet scores are concentrated in a single cluster of cells in the center of Figure \@ref(fig:denstsne).
 
 ```{r denstsne, fig.cap="t-SNE plot of the mammary gland data set. Each point is a cell coloured according to its doublet density."}
 sce.mam$DoubletScore <- log10(dbl.dens+1)
@@ -172,7 +172,7 @@ In fact, even defining a threshold on the doublet score is difficult as the inte
 There is no general definition for a fixed threshold above which libraries are to be considered doublets.
 
 We recommend interpreting the `doubletCells()` scores in the context of cluster annotation.
-All cells from a cluster with a large average doublet score should be considered suspect, and close neighbours of problematic clusters should also be treated with caution.
+All cells from a cluster with a large average doublet score should be considered suspect, and close neighbors of problematic clusters should also be treated with caution.
 In contrast, a cluster containing a small proportion of high-scoring cells is probably safe provided that any interesting results are not being driven by those cells (e.g., checking that DE in an interesting gene is not driven solely by cells with high doublet scores).
 While clustering is still required, this approach is more robust than `doubletClusters()` to the quality of the clustering as the scores are computed on a per-cell basis.
 

@@ -53,7 +53,7 @@ It takes advantage of the well-studied theoretical properties of the PCA - namel
 It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.
 
 When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner.
-This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
+This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behavior of many genes.
 By comparison, random technical or biological noise is expected to affect each gene independently.
 There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs.
 This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise. 
@@ -317,7 +317,7 @@ This serves a separate purpose to the PCA-based dimensionality reduction describ
 Algorithms are more than happy to operate on 10-50 PCs, but these are still too many dimensions for human comprehension.
 Further dimensionality reduction strategies are required to pack the most salient features of the data into 2 or 3 dimensions, which we will discuss below.
 
-### Visualizating with PCA
+### Visualizing with PCA
 
 The simplest visualization approach is to plot the top 2 PCs (Figure \@ref(fig:zeisel-pca)):
 
@@ -345,8 +345,8 @@ However, as shown above, PCA is usually not satisfactory for visualization of co
 
 ### $t$-stochastic neighbor embedding
 
-The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbour embedding ($t$-SNE) method [@van2008visualizing].
-This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbours in the high-dimensional space. 
+The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbor embedding ($t$-SNE) method [@van2008visualizing].
+This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbors in the high-dimensional space. 
 Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distance populations.
 This means that it has much more freedom in how it arranges cells in low-dimensional space, enabling it to separate many distinct clusters in a complex population (Figure \@ref(fig:tsne-brain)).
 
@@ -366,7 +366,7 @@ It is possible to run $t$-SNE on the original expression matrix but this is less
 Another issue with $t$-SNE is that it requires the user to be aware of additional parameters (discussed [here](http://distill.pub/2016/misread-tsne/) in some depth).
 It involves a random initialization so we need to (i) repeat the visualization several times to ensure that the results are representative and (ii) set the seed to ensure that the chosen results are reproducible.
 The "perplexity" is another important parameter that determines the granularity of the visualization (Figure \@ref(fig:tsne-perplexity)).
-Low perplexities will favour resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
+Low perplexities will favor resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
 Thus, it is advisable to test different perplexity values to ensure that the choice of perplexity does not drive the interpretation of the plot.
 
 ```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.3}
@@ -416,8 +416,8 @@ From a practical perspective, UMAP is much faster than $t$-SNE, which may be an 
 UMAP also involves a series of randomization steps so setting the seed is critical.
 
 Like $t$-SNE, UMAP has its own suite of hyperparameters that affect the visualization.
-Of these, the number of neighbours (`n_neighbors`) and the minimum distance between embedded points (`min_dist`) have the greatest effect on the granularity of the output.
-If these values are too low, random noise will be incorrectly treated as high-resolution structure, while values that are too high will discard fine structure altogether in favour of obtaining an accurate overview of the entire dataset.
+Of these, the number of neighbors (`n_neighbors`) and the minimum distance between embedded points (`min_dist`) have the greatest effect on the granularity of the output.
+If these values are too low, random noise will be incorrectly treated as high-resolution structure, while values that are too high will discard fine structure altogether in favor of obtaining an accurate overview of the entire dataset.
 Again, it is a good idea to test a range of values for these parameters to ensure that they do not compromise any conclusions drawn from a UMAP plot.
 
 It is arguable whether the UMAP or $t$-SNE visualizations are more useful or aesthetically pleasing.
