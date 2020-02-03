@@ -49,8 +49,8 @@ sce.pbmc$cluster <- altExp(sce.pbmc)$cluster
 ### Data processing
 
 First, we obtain the filtered TCR contig annotations for the same set of cells.
-Each row of the resulting data frame contains information about a single TCR component sequence in one cell, broken down into the alleles of the V(D)J genes making up that component (`v_gene`, `d_gene`, `j_gene`) where possible. 
-The number of reads and UMIs supporting the set of allele assignments for a cell is also shown, though only the UMI count should be used for quantifying expression of a particular TCR sequence.
+Each row of the resulting data frame contains information about a single TCR component sequence in one cell, broken down into the alleles of the V(D)J genes making up that sequence (`v_gene`, `d_gene`, `j_gene`).
+The number of reads and UMIs supporting the set of allele assignments for a cell is also shown, though only the UMI count should be used for quantifying expression of a particular sequence.
 Each cell is assigned to a clonotype (`raw_clonotype_id`) based on the combination of the $\alpha$-chain (TRA) and $\beta$-chain (TRB) sequences in that cell.
 
 ```{r}
@@ -64,8 +64,8 @@ nrow(tcr)
 head(tcr)
 ```
 
-The challenge in incorporating all of these data structures into a single object lies in the fact that each cell may have zero, one or many TCR/immunoglobulin sequences.
-This precludes direct storage of repertoire information in the `colData()` of the `SingleCellExperiment`, which expects a 1:1 mapping from each cell to each repertoire sequence.
+The challenge with this data lies in the fact that each cell may have zero, one or many $\alpha$ chain sequences.
+This precludes direct storage of repertoire information in the `colData()` of the `SingleCellExperiment`, which expects a 1:1 mapping from each cell to its sequence information.
 Instead, we store the repertoire data as a `SplitDataFrameList` object where each cell is represented by a `DataFrame` and each row of that `DataFrame` represents a sequence for that cell.
 This is easily done using the `splitDataFrameByCell()` utility function from the `r Githubpkg("LTLA/RepertoireUtils")` package, as shown below. 
 (We set the `universe=` argument to ensure that the `SplitDataFrameList` has the same number and order of cells in our `sce.pbmc` object, even if some cells have no sequences, i.e., zero-row `DataFrame`s.)
@@ -285,7 +285,7 @@ stopifnot(grepl("TRAJ33", rownames(test.out)[1:5]))
 
 Quantification of clonal expansion is an obvious application of repertoire sequencing data.
 Cells with the same clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for activation and proliferation upon stimulation by the corresponding antigen.
-We can gain some insights into the immune activity of each cluster by counting the number of expanded clonotypes as shown below for the $\alpha$-chain.
+We gain some insights into the immune activity of each cluster by counting the number of expanded clonotypes, as shown below for the $\alpha$-chain.
 (We do not exclude clonotypes containing cells in different clusters, which can arise for various genuine biological reasons, e.g., differences in the microenvironment.) 
 
 ```{r}
@@ -312,7 +312,7 @@ ggplot(tmp, aes(x=rank, y=frequency, col=cluster)) +
     scale_x_log10()
 ```
 
-We can quantify this observation by computing diversity indices for clonotypes within each cluster.
+We quantify this observation by computing diversity indices for clonotypes within each cluster.
 More clonal expansion should generally result in lower diversity indices as most cells are represented by a few clonotypes.
 Again, we need to downsample each cluster to the same total number of cells, 
 so we restrict ourselves to the clusters with a large number of TCR-expressing cells.
@@ -377,15 +377,15 @@ v.combined <- countCellsPerGeneCombo(per.cell.tcr,
 head(assay(v.combined))
 ```
 
-For the clonotype analysis, there is little benefit from using `per.cell.tcr` as the clonotypes have already been defined based on information from both chains.
-Typically, clonotypes are defined based on identity in the $\beta$ chains, either in the CDR3 region only or across the entire sequence.
+For the clonotype analysis, there is little benefit from using `per.cell.tcr` as the definition of the clonotypes is already based on information from both chains.
+Clonotypes are typically defined based on identity in the $\beta$ chains, either in the complementarity determining region (CDR, typically CDR3) only or across the entire sequence.
 The $\beta$ chain is used because the combinatorial space of possible sequences is larger than that for the $\alpha$ chain, thus providing finer discrimination between different clones.
 If available, the $\alpha$ chain is used only as a "tie-breaker" if the $\beta$ chain sequences match between two cells or as a fallback if the $\beta$ chains are not available.
 Regardless of the exact algorithm, this means that the clonotype calls will be the same in both chains for all cells that have sequences for both chains.
 As such, it is often sufficient to perform the clonotype analysis on `sce.pbmc$TRB`, given that this is the main source of data used to define the clonotypes in the first place.
 
 ```{r}
-# Demonstrating that they are, in fact, the same.
+# Demonstrating that the clonotype calls are, in fact, the same.
 clonotype.A <- per.cell.tcr$A.raw_clonotype_id
 clonotype.B <- per.cell.tcr$B.raw_clonotype_id
 has.both <- !is.na(clonotype.A) & !is.na(clonotype.B)
@@ -444,7 +444,7 @@ ggplot(tmp, aes(x=Cluster, y=Proportion, fill=factor(Type))) +
     scale_fill_brewer(type="qual", palette=1)
 ```
 
-We can count the number of cells for combinations of genes and test for differences in gene usage between clusters.
+We can count the number of cells exhibiting each combination of genes and test for differences in gene usage between clusters.
 In this case, we do not have many distinct B cell clusters and they do not exhibit clear differences in IgH gene usage.
 
 ```{r}
@@ -454,7 +454,7 @@ se.igh <- countCellsPerGeneCombo(sce.pbmc$IGH,
     group=sce.pbmc$cluster)
 
 has.igh <- colSums(assay(se.igh)) >= 40
-heavy.test <- testGeneComboCountsPairwise(heavy.counts[,has.igh])
+heavy.test <- testGeneComboCountsPairwise(se.igh[,has.igh])
 
 # Counting the number of DE genes in each pairwise comparison.
 has.de <- lapply(heavy.test, FUN=function(x) sum(x$FDR<=0.05))
@@ -486,6 +486,17 @@ stopifnot(all(clono.out$gini >= 0.95))
 ```
 
 ### Lineage analyses
+
+The major difference for immunoglobulins compared to TCRs is that the former undergoes somatic hypermutation in its CDRs.
+This means that, for a given clonotype, it is possible to construct lineage trees involving the member cells.
+Examination of this tree provides some insight into the history of that clonotype;
+this becomes especially interesting when combined with single-cell resolution of 
+as we can identify trees that contain members at different stages of maturity (e.g., naive B cells, memory B cells, plasmablasts).
+
+```{r}
+# TODO: need a demonstration B cell dataset 
+# with lots of clonal expansion.
+```
 
 ## Multi-sample analyses
 
