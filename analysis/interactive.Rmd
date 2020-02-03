@@ -85,7 +85,7 @@ Depending on the experimental context, such observations may result from technic
 For instance, it may indicate that normalization was not completely effective at removing cell biases.
 Alternatively, it could also indicate the presence of multiple cell types or states that differ in total RNA content.
 
-In the example below, we demonstrate that an `iSEE` app can be preconfigured to immediately display the views described above, after compute the apropriate per-cell quality control metrics.
+In the example below, we demonstrate that an `iSEE` app can be preconfigured to immediately display the views described above, after compute the appropriate per-cell quality control metrics.
 
 In addition, we also preconfigure the app to automatically highlight in the _Reduced dimension plot_ panel any point selection made in the _Column data plot_ panel.
 For instance, select the cells with either large or small library sizes, to inspect their distribution in reduced dimensions.
@@ -287,7 +287,7 @@ Another modal window will show the R code the user would need to use to reproduc
 
 ## Additional resources
 
-For demontration and inspiration, we refer readers to the following examples of deployed applications:
+For demonstration and inspiration, we refer readers to the following examples of deployed applications:
 
 - Use cases accompanying the published article: https://marionilab.cruk.cam.ac.uk/ (source code: https://github.com/LTLA/iSEE2018)
 - Examples of `iSEE` in production: http://www.teichlab.org/singlecell-treg 
