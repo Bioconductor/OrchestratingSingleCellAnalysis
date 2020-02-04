@@ -229,13 +229,11 @@ This is faster than the per-cell approaches described in Chapter \@ref(cell-type
 Nonetheless, it is often sufficient for a quick assignment of cluster identity, and indeed, cluster `r cluster.choice` is also identified as consisting of monocytes from this analysis.
 
 ```{r cell-type-classification}
-# TODO: have SingleR use sumCountsAcrossCells to benefit from 
-# parallelized summation as well.
-aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
+se.aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
 
 library(SingleR)
 hpc <- HumanPrimaryCellAtlasData()
-anno.single <- SingleR(aggregated, ref = hpc, labels = hpc$label.main)
+anno.single <- SingleR(se.aggregated, ref = hpc, labels = hpc$label.main)
 anno.single
 ```
 

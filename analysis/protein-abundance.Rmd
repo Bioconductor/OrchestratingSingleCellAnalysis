@@ -236,10 +236,11 @@ For this experiment, we can easily identify B cells (CD19^+^), various subsets o
 More detailed examination of the distribution of abundances within each cluster is easily performed with `plotExpression()` where strong bimodality may indicate that finer clustering is required to resolve cell subtypes.
 
 ```{r heat-tags, fig.cap="Heatmap of the average log-normalized abundance of each ADT in each cluster of the PBMC dataset. Colors represent the log~2~-fold change from the grand average across all clusters."}
-averaged <- sumCountsAcrossCells(altExp(sce), clusters.adt,
+se.averaged <- sumCountsAcrossCells(altExp(sce), clusters.adt,
     exprs_values="logcounts", average=TRUE)
 
 library(pheatmap)
+averaged <- assay(se.averaged)
 pheatmap(averaged - rowMeans(averaged),
     breaks=seq(-3, 3, length.out=101))
 ```

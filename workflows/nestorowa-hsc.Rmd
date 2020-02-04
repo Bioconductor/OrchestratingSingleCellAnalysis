@@ -203,10 +203,11 @@ this is perhaps unsurprising given that all cells should be HSCs of some sort.
 Y <- colData(sce.nest)$FACS
 keep <- rowSums(is.na(Y))==0 # Removing NA intensities.
 
-averages <- sumCountsAcrossCells(t(Y[keep,]), 
+se.averaged <- sumCountsAcrossCells(t(Y[keep,]), 
     sce.nest$cluster[keep], average=TRUE)
+averaged <- assay(se.averaged)
 
-log.intensities <- log2(averages+1)
+log.intensities <- log2(averaged+1)
 centered <- log.intensities - rowMeans(log.intensities)
 pheatmap(centered, breaks=seq(-1, 1, length.out=101))
 ```
