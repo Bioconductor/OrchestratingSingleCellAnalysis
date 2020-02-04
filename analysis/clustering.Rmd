@@ -50,7 +50,7 @@ This iterative approach is entirely permissible for data exploration, which cons
 ### Background
 
 Popularized by its use in `r CRANpkg("Seurat")`, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets.
-We first build a graph where each node is a cell that is connected to its nearest neighbours in the high-dimensional space.
+We first build a graph where each node is a cell that is connected to its nearest neighbors in the high-dimensional space.
 Edges are weighted based on the similarity between the cells involved, with higher weight given to cells that are more closely related.
 We then apply algorithms to identify "communities" of cells that are more connected to cells in the same community than they are to cells of different communities.
 Each community represents a cluster that we can use for downstream interpretation.
@@ -60,7 +60,7 @@ It only requires a $k$-nearest neighbor search that can be done in log-linear ti
 Graph construction avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster, compared to other methods like $k$-means (that favor spherical clusters) or Gaussian mixture models (that require normality).
 From a practical perspective, each cell is forcibly connected to a minimum number of neighboring cells, which reduces the risk of generating many uninformative clusters consisting of one or two outlier cells.
 
-The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighbouring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
+The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighboring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
 This has some practical consequences in datasets that exhibit differences in cell density, as more steps through the graph are required to move the same distance through a region of higher cell density.
 From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause formation of subclusters.
 The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if it overstates the heterogeneity in the data.
@@ -133,7 +133,7 @@ stopifnot(length(unique(clust)) > length(unique(clust.50)))
 The graph itself can be visualized using a force-directed layout (Figure \@ref(fig:pbmc-force)).
 This yields a dimensionality reduction result that is closely related to $t$-SNE and UMAP, though which of these is the most aesthetically pleasing is left to the eye of the beholder.
 
-```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbour graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
+```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbor graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
 set.seed(2000)
 reducedDim(sce.pbmc, "force") <- igraph::layout_with_fr(g)
 plotReducedDim(sce.pbmc, colour_by="cluster", dimred="force")
@@ -192,7 +192,7 @@ stopifnot(length(unique(clust.infomap)) > length(unique(clust)))
 
 Some community detection algorithms operate by agglomeration and thus can be used to construct a hierarchical dendrogram based on the pattern of merges between clusters.
 The dendrogram itself is not particularly informative as it simply describes the order of merge steps performed by the algorithm; unlike the dendrograms produced by hierarchical clustering (Section \@ref(hierarchical-clustering)), it does not capture the magnitude of differences between subpopulations.
-However, it does provide a convenient avenue for manually tuning the clustering resolution by generatig nested clusterings using the `cut_at()` function, as shown below.
+However, it does provide a convenient avenue for manually tuning the clustering resolution by generating nested clusterings using the `cut_at()` function, as shown below.
 
 ```{r}
 community.walktrap <- igraph::cluster_walktrap(g)
@@ -259,7 +259,7 @@ Each cell is assigned to the cluster with the closest centroid, which is done by
 The main advantage of this approach lies in its speed, given the simplicity and ease of implementation of the algorithm.
 However, it suffers from a number of serious shortcomings that reduce its appeal for obtaining interpretable clusters:
 
-- It implicitly favours spherical clusters of equal radius.
+- It implicitly favors spherical clusters of equal radius.
 This can lead to unintuitive partitionings on real datasets that contain groupings with irregular sizes and shapes.
 - The number of clusters $k$ must be specified beforehand and represents a hard cap on the resolution of the clustering..
 For example, setting $k$ to be below the number of cell types will always lead to co-clustering of two cell types, regardless of how well separated they are.
@@ -292,7 +292,7 @@ plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
 If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
 This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributing cells within the minimum bounding box of the original data.
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
-Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters drives a large $k$ to capture different cluster shapes.
+Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favor spherical clusters drives a large $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
 
 ```{r kmeans-gap, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
@@ -459,7 +459,7 @@ plot(dend)
 
 This generally corresponds well to the grouping of cells on a $t$-SNE plot (Figure \@ref(fig:tsne-416b)).
 The exception is cluster 2, which is split across two visual clusters in the plot.
-We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behaviour of the clustering algorithm, based on the examination of some later diagnostics.
+We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behavior of the clustering algorithm, based on the examination of some later diagnostics.
 
 ```{r tsne-416b, fig.cap="$t$-SNE plot of the 416B dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from hierarchical clustering."}
 sce.416b$cluster <- factor(clust.416b)

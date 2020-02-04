@@ -471,7 +471,7 @@ m.out <- findMarkers(sce.416b, sce.416b$cluster,
     block=sce.416b$block, direction="up") 
 ```
 
-For each gene, each pairwise comparion between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
+For each gene, each pairwise comparison between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
 The function will then combine $p$-values from different plates using Stouffer's Z method to obtain a single $p$-value per pairwise comparison.
 (These $p$-values are further combined across comparisons to obtain a single $p$-value per gene, using either Simes' method or an intersection-union test depending on the value of `pval.type=`.)
 This approach favours genes that exhibit consistent DE in the same direction in each plate.
@@ -536,7 +536,7 @@ hist(out[[1]]$p.value, col="grey80", xlab="p-value")
 
 For marker gene detection, this effect is largely harmless as the $p$-values are used only for ranking.
 However, it becomes an issue when the $p$-values are used to define "significant differences" between clusters with respect to an error rate threshold.
-Meaningful interpretation of error rates require consideration of the long-run behaviour, i.e., the rate of incorrect rejections if the experiment were repeated many times.
+Meaningful interpretation of error rates require consideration of the long-run behavior, i.e., the rate of incorrect rejections if the experiment were repeated many times.
 The concept of statistical significance for differences between clusters is not applicable if clusters and their interpretations are not stably reproducible across (hypothetical) replicate experiments.
 
 ### Nature of replication {#false-replicates}
