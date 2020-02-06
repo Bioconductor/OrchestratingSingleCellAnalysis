@@ -347,7 +347,7 @@ However, as shown above, PCA is usually not satisfactory for visualization of co
 
 The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbor embedding ($t$-SNE) method [@van2008visualizing].
 This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbors in the high-dimensional space. 
-Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distance populations.
+Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distant populations.
 This means that it has much more freedom in how it arranges cells in low-dimensional space, enabling it to separate many distinct clusters in a complex population (Figure \@ref(fig:tsne-brain)).
 
 ```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
