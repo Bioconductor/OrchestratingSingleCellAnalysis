@@ -340,7 +340,7 @@ Another evaluation approach is to compute the coassignment probabilities (Sectio
 High probabilities off the diagonal in Figure \@ref(fig:coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
 We would generally expect low off-diagonal probabilities for most pairs of clusters, though this may not be reasonably possible if the within-batch clusters were poorly separated in the first place.
 
-```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilites for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
+```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilities for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
 # For the first batch.
 tab <- coassignProb(pbmc3k$cluster, clusters.mnn[rescaled$batch==1])
 heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
