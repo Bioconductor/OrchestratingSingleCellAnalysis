@@ -434,14 +434,15 @@ Perhaps this perspective is not entirely invalid, but we suggest that there is s
 To illustrate, consider the interaction between clustering and $t$-SNE.
 As a general rule, we would not perform clustering on the $t$-SNE coordinates.
 Rather, we would cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on the $t$-SNE plot.
-This ensures that clustering makes use of the information that was lost during compression into two dimensions.
-The $t$-SNE plot can then be used for a diagnostic inspection of the clustering output.
-In particular, the plot is most useful for checking whether two clusters are actually neighboring subclusters or whether a cluster can be split into further subclusters, which are generally safe interpretations of $t$-SNE coordinates.
+This ensures that clustering makes use of the information that was lost during compression into two dimensions for visualization.
+The plot can then be used for a diagnostic inspection of the clustering output, e.g., to check which clusters are close neighbors or whether a cluster can be split into further subclusters; such interpretations of $t$-SNE coordinates are generally safe.
 
-It is worth elaborating on why we should not perform downstream analyses directly on the $t$-SNE or UMAP coordinates.
-Let us put aside the fact that operating on the high-dimensional representations preserves more information; from a naive perspective, using the $t$-SNE coordinates is very tempting as it ensures that any results are immediately consistent with the visualizations (regardless of whether they are right).
-However, this can actually be considered a disservice as it masks the uncertainty of the results, leading us to place more confidence in them than is warranted.
-Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the more ambiguous parts of the dataset; conversely, the lack of discrepancies increases trust in the results.
+From a naive perspective, using the $t$-SNE coordinates directly for clustering is tempting as it ensures that any results are immediately consistent with the visualization.
+Given that clustering is rather arbitrary anyway, there is nothing inherently wrong with this strategy - it can be treated as a rather circuitous implementation of graph-based clustering (Section \@ref(clustering-graph)).
+However, the enforced consistency can actually be considered a disservice as it masks the ambiguity of the conclusions, either due to the loss of information from dimensionality reduction or the uncertainty of the clustering.
+Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the less obvious aspects of the dataset; conversely, the lack of discrepancies increases trust in the conclusions.
+
+Or perhaps more bluntly: do not let the tail (of visualization) wag the dog (of quantitative analysis).
 
 ## Session Info {-}
 
