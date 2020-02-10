@@ -60,9 +60,9 @@ This motivates the use of the earlier PCs in our downstream analyses, which conc
 
 We perform the PCA on the log-normalized expression values using the `runPCA()` function from `r Biocpkg("scater")`.
 By default, `runPCA()` will compute the first 50 PCs and store them in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
-Here, we use only the top 2000 genes with the largest biological components to reduce computational work and noise.
-Specifically, PCA is generally robust to random noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
-This effect can be avoided - or at least mitigated - by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter \@ref(feature-selection).
+Here, we use only the top 2000 genes with the largest biological components to reduce both computational work and high-dimensional random noise.
+In particular, while PCA is robust to random noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure [@johnstone2009consistency].
+This effect can be mitigated by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter \@ref(feature-selection).
 
 ```{r}
 library(scran)
