@@ -397,9 +397,8 @@ To avoid the pitfalls mentioned previously for the AUCs, we simply compute the a
 This is less sensitive to the behavior of other genes in that cell (aside from composition biases, as discussed in Chapter \@ref(normalization)).
 
 ```{r}
-se.aggregated <- sumCountsAcrossFeatures(sce.mam, by.go,
+aggregated <- sumCountsAcrossFeatures(sce.mam, by.go,
     exprs_values="logcounts", average=TRUE)
-aggregated <- assay(se.aggregated)
 dim(aggregated) # rows are gene sets, columns are cells
 aggregated[1:10,1:5]
 ```
