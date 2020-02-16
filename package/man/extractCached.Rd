@@ -54,6 +54,9 @@ under the assumption that it is being called from a file in \code{analysis/}.
 
 If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
 This is relevant for the final compilation of the book.
+
+If the discovered file does not have a cache, 
+\code{extractCached} will compile it (and thus generated the cache) using \code{\link{compileWorkflows}}.
 }
 
 \seealso{

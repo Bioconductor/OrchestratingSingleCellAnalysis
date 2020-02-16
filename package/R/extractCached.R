@@ -37,6 +37,9 @@
 #' 
 #' If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
 #' This is relevant for the final compilation of the book.
+#'
+#' If the discovered file does not have a cache, 
+#' \code{extractCached} will compile it (and thus generated the cache) using \code{\link{compileWorkflows}}.
 #' 
 #' @return Variables with names \code{objects} are created in the global environment.
 #' An markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
@@ -51,23 +54,12 @@
 #' @importFrom knitr opts_knit load_cache
 extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
     if (flexible) {
-        if (!file.exists(paste0(prefix, ".Rmd"))) {
-            tmp <- file.path("../workflows", prefix)
-
-            if (file.exists(paste0(tmp, ".Rmd"))) {
-                prefix <- tmp
-            } else {
-                potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
-                if (length(potential)) {
-                    prefix <- sub("\\.Rmd$", "", potential[1])
-                }
-            }
-        }
+        prefix <- .flexible_location_finder(prefix)
     }
-
-    all.lines <- readLines(paste0(prefix, ".Rmd"))
+    fname <- paste0(prefix, ".Rmd")
 
     # Extracting chunks until we get to the one with 'chunk'.
+    all.lines <- readLines(fname)
     named.pattern <- "^```\\{r ([^,]+).*\\}"
     opens <- grep(named.pattern, all.lines)
 
@@ -98,13 +90,19 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
     }
     chunks <- chunks[seq_len(m)]
 
-    # Collecting all variable names and loading them into the global namespace.
+    cache_path <- file.path(paste0(prefix, "_cache"), "html/")
+    if (!file.exists(cache_path)) {
+        compileWorkflows(files=fname) 
+    }
+
+    # This is required so that the cache_path is interpreted correctly,
+    # as load_cache will just slap output.dir in front of cache_path.
     if (is.null(old <- opts_knit$get("output.dir"))) {
         opts_knit$set(output.dir=".")
         on.exit(opts_knit$set(output.dir=old))
     }
-    cache_path <- file.path(paste0(prefix, "_cache"), "html/")
 
+    # Collecting all variable names and loading them into the global namespace.
     for (obj in objects) {
         assign.pattern <- paste0(obj, ".*<-")
         found <- FALSE
@@ -143,4 +141,20 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
 
 </div>\n")
     invisible(NULL)
+}
+
+.flexible_location_finder <- function(prefix) {
+    if (!file.exists(paste0(prefix, ".Rmd"))) {
+        tmp <- file.path("../workflows", prefix)
+
+        if (file.exists(paste0(tmp, ".Rmd"))) {
+            prefix <- tmp
+        } else {
+            potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
+            if (length(potential)) {
+                prefix <- sub("\\.Rmd$", "", potential[1])
+            }
+        }
+    }
+    prefix
 }

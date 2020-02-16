@@ -5,9 +5,12 @@
 #' @param dir String containing the path to the directory of book chapters.
 #' Usually the same as \code{dir} in \code{\link{setupBookChapters}}.
 #' @param fresh Logical scalar indicating whether or not to delete old caches.
+#' @param files Character vector containing the path to individual workflow files.
+#' If this is set, \code{dir} is ignored.
 #'
 #' @return
-#' All workflow chapters are (re)compiled to generate the corresponding \code{*_cache} directories.
+#' All workflow chapters in \code{dir} are (re)compiled to generate the corresponding \code{*_cache} directories.
+#' (If \code{files} is specified, only those files are compiled.)
 #' \code{NULL} is invisibly returned.
 #'
 #' @details
@@ -22,9 +25,12 @@
 #' @export
 #' @importFrom callr r
 #' @importFrom rmarkdown render
-compileWorkflows <- function(dir=".", fresh=TRUE) {
-    all.files <- list.files(dir, pattern=sprintf("^P%i_W.*\\.Rmd", .workflow_part), full.names=TRUE)
-    for (f in all.files) {
+compileWorkflows <- function(dir=".", fresh=TRUE, files=NULL) {
+    if (is.null(files)) {
+        files <- list.files(dir, pattern=sprintf("^P%i_W.*\\.Rmd", .workflow_part), full.names=TRUE)
+    }
+
+    for (f in files) {
         if (fresh) {
             cache.loc <- sub("\\.Rmd$", "_cache", f)
             unlink(cache.loc, recursive=TRUE)
@@ -33,5 +39,6 @@ compileWorkflows <- function(dir=".", fresh=TRUE) {
         r(function(input) { rmarkdown::render(input) }, args = list(input = f), 
             show=TRUE, spinner=FALSE)
     }
+
     invisible(NULL)
 }

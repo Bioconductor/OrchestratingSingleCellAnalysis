@@ -1,5 +1,5 @@
 Package: OSCAUtils
-Version: 0.0.1
+Version: 0.0.2
 Title: Utilities to Compile the OSCA Book
 Authors@R:
     person("Aaron", "Lun", email="infinite.monkeys.with.keyboards@gmail.com", role=c("aut", "cre", "cph"))

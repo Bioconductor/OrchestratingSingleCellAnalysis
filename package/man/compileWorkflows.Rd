@@ -4,16 +4,20 @@
 \alias{compileWorkflows}
 \title{Compile workflow chapters}
 \usage{
-compileWorkflows(dir = ".", fresh = TRUE)
+compileWorkflows(dir = ".", fresh = TRUE, files = NULL)
 }
 \arguments{
 \item{dir}{String containing the path to the directory of book chapters.
 Usually the same as \code{dir} in \code{\link{setupBookChapters}}.}
 
 \item{fresh}{Logical scalar indicating whether or not to delete old caches.}
+
+\item{files}{Character vector containing the path to individual workflow files.
+If this is set, \code{dir} is ignored.}
 }
 \value{
-All workflow chapters are (re)compiled to generate the corresponding \code{*_cache} directories.
+All workflow chapters in \code{dir} are (re)compiled to generate the corresponding \code{*_cache} directories.
+(If \code{files} is specified, only those files are compiled.)
 \code{NULL} is invisibly returned.
 }
 \description{
