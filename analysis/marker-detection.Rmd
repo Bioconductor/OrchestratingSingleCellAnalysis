@@ -233,7 +233,7 @@ One practical advantage of the WMW test over the Welch $t$-test is that it is sy
 This means that, all else being equal, the top-ranked genes on each side of a DE comparison will have similar expression profiles regardless of the number of cells in each group.
 In contrast, the $t$-test will favor genes where the larger group has the higher relative variance as this increases the estimated degrees of freedom and decreases the resulting $p$-value.
 This can lead to unappealing rankings when the aim is to identify genes upregulated in smaller groups.
-The WMW test is not completely immune the variance effects - for example, it will slightly favor detection of DEGs at low average abundance where the greater number of ties at zero deflates the approximate variance of the rank sum statistic - but this is relatively benign as the selected genes are still fairly interesting.
+The WMW test is not completely immune to variance effects - for example, it will slightly favor detection of DEGs at low average abundance where the greater number of ties at zero deflates the approximate variance of the rank sum statistic - but this is relatively benign as the selected genes are still fairly interesting.
 We observe both of these effects in a comparison between alpha and gamma cells in the human pancreas data set from @lawlor2017singlecell (Figure \@ref(fig:comparative-markers-tw)).
 
 ```{r, eval=FALSE, echo=FALSE}
@@ -271,8 +271,6 @@ marker.lawlor.w <- findMarkers(sce.lawlor, groups=sce.lawlor$`cell type`,
 # Upregulated in alpha:
 marker.alpha.t <- marker.lawlor.t$Alpha
 marker.alpha.w <- marker.lawlor.w$Alpha
-marker.alpha.t <- marker.alpha.t[order(marker.alpha.t$p.value),]
-marker.alpha.w <- marker.alpha.w[order(marker.alpha.w$p.value),]
 chosen.alpha.t <- rownames(marker.alpha.t)[1:20]
 chosen.alpha.w <- rownames(marker.alpha.w)[1:20]
 u.alpha.t <- setdiff(chosen.alpha.t, chosen.alpha.w)
@@ -281,8 +279,6 @@ u.alpha.w <- setdiff(chosen.alpha.w, chosen.alpha.t)
 # Upregulated in gamma:
 marker.gamma.t <- marker.lawlor.t$`Gamma/PP`
 marker.gamma.w <- marker.lawlor.w$`Gamma/PP`
-marker.gamma.t <- marker.gamma.t[order(marker.gamma.t$p.value),]
-marker.gamma.w <- marker.gamma.w[order(marker.gamma.w$p.value),]
 chosen.gamma.t <- rownames(marker.gamma.t)[1:20]
 chosen.gamma.w <- rownames(marker.gamma.w)[1:20]
 u.gamma.t <- setdiff(chosen.gamma.t, chosen.gamma.w)

@@ -392,7 +392,7 @@ sum(tcr.discard)
 
 In practice, we tend to err on the side of caution and abstain from preemptive filtering on biological function until these genes are demonstrably problematic in downstream analyses.
 
-## Putting it all together
+## Putting it all together {#feature-selection-subsetting}
 
 The few lines of code below will select the top 10% of genes with the highest biological components.
 

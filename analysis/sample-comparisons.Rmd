@@ -297,7 +297,7 @@ up.de <- is.de > 0 & !is.na(is.de)
 head(sort(rowMeans(up.de), decreasing=TRUE), 10)
 
 # Downregulated across cell types.
-down.de <- is.de > 0 & !is.na(is.de)
+down.de <- is.de < 0 & !is.na(is.de)
 head(sort(rowMeans(down.de), decreasing=TRUE), 10)
 ```
 
@@ -314,9 +314,9 @@ We further identify label-specific DE genes that are significant in our label of
 As hypothesis tests are not typically geared towards identifying genes that are not DE,
 we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
 if it fails to be detected even at a generous FDR threshold of 50%.
-We demonstrate below to identify injection-induced DE genes that are unique to the allantois,
+We demonstrate this approach below by identifying injection-induced DE genes that are unique to the allantois,
 though differences in power between labels suggest that this should be interpreted with some caution;
-for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked unique gene exhibits some evidence of DE in other labels but was not detected for various reasons like too low abundance or insufficient replicates.
+for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked allantois-specific gene exhibits some evidence of DE in other labels but was not detected for various reasons like low abundance or insufficient replicates.
 
 ```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
 remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
@@ -331,6 +331,8 @@ unique.degs
 de.allantois <- de.results$Allantois
 de.allantois <- de.allantois[order(de.allantois$PValue),]
 de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
+
+sizeFactors(summed.filt) <- NULL
 plotExpression(logNormCounts(summed.filt), features=rownames(de.allantois)[1],
     x="tomato", colour_by="tomato", other_fields="label") + facet_wrap(~label)
 ```
