@@ -6,7 +6,7 @@ bibliography: ../ref.bib
 
 # Interactive data exploration {#interactive-sharing}
 
-```{r setup, echo=FALSE, results="asis"}
+```{r setup, echo=FALSE, results="asis", message=FALSE}
 library(OSCAUtils)
 chapterPreamble()
 library(iSEE)
@@ -20,7 +20,7 @@ The need for flexible and interactive platforms to explore those data from vario
 
 In this chapter, we illustrate how the Bioconductor package `r Biocpkg("iSEE")` can be used to perform some common exploratory tasks during single-cell analysis workflows.
 We note that these are examples only; in practice, EDA is often context-dependent and driven by distinct motivations and hypotheses for every new data set.
-To this end, `iSEE` provides a flexible framework immediately compatible with a wide range of genomics data modalities and offers tools for building custom interactive interfaces configured to draw special attention to key aspects of individual data sets.
+To this end, `iSEE` provides a flexible framework that is immediately compatible with a wide range of genomics data modalities and can be easily customized to focus on key aspects of individual data sets.
 
 ## Quick start {#interactive-quickstart}
 
@@ -171,39 +171,36 @@ Once the application is launched, we sort the table by ascending value of "clust
 Then, users may select the first row in the _Row statistics table_ and watch the second and third panel automatically update to display the most significant marker gene on the y-axis (_Feature assay plot_) or as a color scale overlaid on the data points (_Reduced dimension plot_).
 Alternatively, users can simply search the table for arbitrary gene names and select known markers for visualization.
 
-## Interactive sharing
+## Reproducibile visualizations
 
-### Collaborative analysis
+The state of the `iSEE` application can be saved at any point to provide a snapshot of the current view of the dataset.
+This is achieved by clicking on the "Display panel settings" button under the "Export" dropdown menu in the top right corner and saving an RDS file containing a serialized list of panel parameters.
+Anyone with access to this file and the original `SingleCellExperiment` can then run `iSEE` to recover the same application state. 
+Alternatively, the code required to construct the panel parameters can be returned, which is more transparent and amenable to further modification.
+This facility is most obviously useful for reproducing a perspective on the data that leads to a particular scientific conclusion;
+it is also helpful for collaborations whereby different views of the same dataset can be easily transferred between analysts.
 
-Analysis and interpretation of complex data sets typically involves multiple analysts.
-Rather than sharing analysis results via multiple versions of static figures and reports, it is often helpful to share interactive plots, allowing the other involved parties to independently explore the data in further depth.
+`iSEE` also keeps a record of the R commands used to generate each figure and table in the app.
+This information is readily available via the "Extract the R code" button under the "Export" dropdown menu.
+By copying the code displayed in the modal window and executing it in the R session from which the `iSEE` app was launched, a user can exactly reproduce all plots currently displayed in the GUI.
+In this manner, a user can use `iSEE` to rapidly prototype plots of interest without having to write the associated boilerplate, after which they can then copy the code in an R script for fine-tuning.
+Of course, the user can also save the plots and tables directly for further adjustment with other tools.
 
-With `iSEE`, this can be achieved at any time by clicking on the "Display panel settings" button under the "Diagnostics" tab in the top right corner, copying the displayed code into an R script, and sharing this chunk of code with collaborators.
-However, note that they will also need to have access to a copy of the original `sce` object used for the analysis.
-In that setup, executing the code in the script and launching `iSEE` with the following command will open an instance mimicking what was shown on the screen when the "Display panel settings" button was clicked.
+## Dissemination of analysis results {#dissemination}
 
-It is important to note that all `iSEE` applications remain interactive irrespective of their initial configuration; only the initial layout and state of the application is modified from the default setup.
-
-### Dissemination of analysis results {#dissemination}
-
-Typically, results from single-cell data are disseminated as static figures in published papers and reports.
-However, those are unlikely to capture the full information content of a complex scRNA-seq data set, and do not allow further exploration by the reader.
-To complement this traditional mode of dissemination, it is becoming increasingly common to deploy web-based interactive data browsers, allowing interested readers to investigate their respective hypotheses using the published data.
-
-With `iSEE`, such interactive exploration is facilitated by small guided tours - step-by-step walkthroughs of the different panels with pointers to facilitate their interpretation, from the authors' point of view.
-At any time, the viewer is still free to leave the interactive tour and explore the data from their own perspective.
+`iSEE` provides a powerful avenue for disseminating results through a "guided tour" of the dataset.
+This involves writing a step-by-step walkthrough of the different panels with explanations to facilitate their interpretation.
 All that is needed to add a tour to an `iSEE` instance is a data frame with two columns named "element" and "intro"; the first column declares the UI element to highlight in each step of the tour, and the second one contains the text to display at that step.
 This data frame must then be provided to the `iSEE()` function via the `tour` argument.
-
 In the code chunk below, we demonstrate the implementation of a simple tour taking through the two panels that compose a GUI, and interactively train users to use the collapsible boxes.
 
 ```{r}
 tour <- data.frame(
     element = c(
         "#Welcome",
-        "#redDimPlot1",
-        "#colDataPlot1",
-        "#colDataPlot1_DataBoxOpen",
+        "#ReducedDimPlot1",
+        "#ColumnDataPlot1",
+        "#ColumnDataPlot1_DataBoxOpen",
         "#Conclusion"),
     intro = c(
         "Welcome to this tour!",
@@ -220,30 +217,22 @@ initial.state <- list(
 ```
 
 The preconfigured Shiny app can then be loaded with the tour and launched as show below.
+Note that the viewer is free to leave the interactive tour at any time and explore the data from their own perspective.
+Examples of advanced tours showcasing a selection of published data sets can be found at https://github.com/iSEE/iSEE2018.
 
 ```{r, eval=FALSE}
 iSEE(sce.pbmc, initial = initial.state, tour = tour)
 ```
 
-Examples of advanced tours showcasing a selection of published data sets can be found at https://github.com/LTLA/iSEE2018.
-
-### Reproducibility
-
-Although this chapter focuses on interactive exploration of data, we note that it is important to retain reproducibility, and to have a record of how each figure was generated.
-With `iSEE`, this information is readily available via the "Extract the R code" button under the "Diagnostics" dropdown menu in the top-right corner of the GUI.
-At any time, copying the code displayed in the modal window and executing it in the R session from which the `iSEE` app was launched exactly reproduces all plots currently displayed in the GUI.
-Similarly, the information on the panel setup is available by clicking on "Display panel settings" in the same dropdown menu.
-Another modal window will show the R code the user would need to use to reproduce the exact panel settings; copying and pasting this into an R script or a RMarkdown report will store this information in a permanent way.
-
 ## Additional resources
 
 For demonstration and inspiration, we refer readers to the following examples of deployed applications:
 
-- Use cases accompanying the published article: https://marionilab.cruk.cam.ac.uk/ (source code: https://github.com/LTLA/iSEE2018)
+- Use cases accompanying the published article: https://marionilab.cruk.cam.ac.uk/ (source code: https://github.com/iSEE/iSEE2018)
 - Examples of `iSEE` in production: http://www.teichlab.org/singlecell-treg 
 - Other examples as source code:
-    - Gallery of examples notebooks to reproduce analyses on public data: https://github.com/federicomarini/iSEE_instances
-    - Gallery of example custom panels: https://github.com/kevinrue/iSEE_custom 
+    - Gallery of examples notebooks to reproduce analyses on public data: https://github.com/iSEE/iSEE_instances
+    - Gallery of example custom panels: https://github.com/iSEE/iSEE_custom 
 
 ## Session Info {-}
 
