@@ -8,7 +8,7 @@ chapterPreamble(use_cache = TRUE)
 ## Introduction
 
 This performs an analysis of the @pijuansala2019single dataset on mouse gastrulation.
-Here, we examine chimeric embryos at the E7.5 stage of development 
+Here, we examine chimeric embryos at the E8.5 stage of development 
 where td-Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
 
 ## Data loading
