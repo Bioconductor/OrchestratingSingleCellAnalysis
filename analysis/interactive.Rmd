@@ -69,15 +69,14 @@ In addition, by setting the `ColumnSelectionSource` parmaeter, any point selecti
 A user can then select the cells with either large or small library sizes to inspect their distribution in low-dimensional space.
 
 ```{r}
-# Compute per-cell QC metrics
+copy.pbmc <- sce.pbmc
+
+# Computing various QC metrics; in particular, the log10-transformed library
+# size for each cell and the log-rank by decreasing library size
 library(scater)
-sce.pbmc <- addPerCellQC(sce.pbmc, exprs_values="counts")
-
-# Compute the log10-transformed library size
-sce.pbmc$log10_total_counts <- log10(sce.pbmc$total)
-
-# Compute the rank of each cell by decreasing library size
-sce.pbmc$total_counts_rank <- rank(-sce.pbmc$total)
+copy.pbmc <- addPerCellQC(copy.pbmc, exprs_values="counts")
+copy.pbmc$log10_total_counts <- log10(copy.pbmc$total)
+copy.pbmc$total_counts_rank <- rank(-copy.pbmc$total)
 
 initial.state <- list(
     # Configure a "Column data plot" panel
@@ -99,7 +98,7 @@ initial.state <- list(
 )
 
 # Prepare the app
-app <- iSEE(sce.pbmc, initial=initial.state)
+app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
 The configured Shiny app can then be launched as shown below, or by simply printing the `app` object.
@@ -119,8 +118,10 @@ We identify upregulated markers in each cluster (Chapter \@ref(marker-detection)
 These are stored in the `rowData` slot of the `SingleCellExperiment` object for access by `iSEE`.
 
 ```{r}
+copy.pbmc <- sce.pbmc
+
 library(scran)
-markers.pbmc.up <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
+markers.pbmc.up <- findMarkers(copy.pbmc, copy.pbmc$cluster, 
     direction="up", log.p=TRUE, sorted=FALSE)
 
 # Collate the log-p-value for each marker in a single table
@@ -129,17 +130,17 @@ all.p <- DataFrame(all.p, check.names=FALSE)
 colnames(all.p) <- paste0("cluster", colnames(all.p))
 
 # Store the table of results as row metadata
-rowData(sce.pbmc) <- cbind(rowData(sce.pbmc), all.p)
+rowData(copy.pbmc) <- cbind(rowData(copy.pbmc), all.p)
 ```
 
-The next code chunk sets up an app that shows:
+The next code chunk sets up an app that contains:
 
-1. A table of feature statistics (including the log-transformed FDR of cluster markers computed above),
-2. A plot showing the distribution of expression values for a chosen gene in each cluster,
+1. A table of feature statistics, including the log-transformed FDR of cluster markers computed above.
+2. A plot showing the distribution of expression values for a chosen gene in each cluster.
 3. A plot showing the result of the UMAP dimensionality reduction method overlaid with the expression value of a chosen gene.
 
-Moreover, the code chunk below configures the second and third panel to use the gene (i.e., row) selected in the first panel.
-This functionality is particularly convenient once the table is sorted by decreasing significance of the markers for a cluster of interest.
+Moreover, we configure the second and third panel to use the gene (i.e., row) selected in the first panel.
+This enables convenient examination of important markers when combined with sorting by $p$-value for a cluster of interest.
 
 ```{r}
 initial.state <- list(
@@ -164,14 +165,97 @@ initial.state <- list(
 )
 
 # Prepare the app
-app <- iSEE(sce.pbmc, initial=initial.state)
+app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
 Once the application is launched, we sort the table by ascending value of "cluster1" to identify genes that are strong markers for cluster 1.
 Then, users may select the first row in the _Row statistics table_ and watch the second and third panel automatically update to display the most significant marker gene on the y-axis (_Feature assay plot_) or as a color scale overlaid on the data points (_Reduced dimension plot_).
 Alternatively, users can simply search the table for arbitrary gene names and select known markers for visualization.
 
-## Reproducibile visualizations
+### Querying features of interest
+
+So far, the plots that we have examined have represented each column (i.e., cell) as a point.
+However, it is straightforward to instead represent rows as points that can be selected and transmitted to eligible panels.
+This is useful for more gene-centric exploratory analyses.
+To illustrate, we will add variance modelling statistics to the `rowData()` of our `SingleCellExperiment` object.
+
+```{r}
+copy.pbmc <- sce.pbmc
+
+# Adding some mean-variance information.
+dec <- modelGeneVarByPoisson(copy.pbmc)
+rowData(copy.pbmc) <- cbind(rowData(copy.pbmc), dec) 
+```
+
+The next code chunk sets up an app that contains:
+
+1. A plot showing the mean-variance trend, where each point represents a cell.
+2. A table of feature statistics, similar to that generated in the previous example.
+3. A heatmap for the genes in the first plot.
+
+We again configure the second and third panels to respond to the selection of points in the first panel.
+This allows the user to select several highly variable genes at once and examine their statistics or expression profiles.
+More advanced users can even configure the app to start with a brush or lasso to define a selection of genes at initialization.
+
+```{r}
+initial.state <- list(
+    # Configure a "Feature assay plot" panel
+    RowDataPlot(
+        YAxis="total",
+        XAxis="Row data",
+        XAxisRowData="mean",
+        PanelId=1L
+    ),
+
+    RowDataTable(
+        RowSelectionSource="RowDataPlot1"
+    ),
+
+    # Configure a "ComplexHeatmap" panel
+    ComplexHeatmapPlot(
+        RowSelectionSource="RowDataPlot1",
+        CustomRows=FALSE,
+        ColumnData="cluster",
+        Assay="logcounts",
+        ClusterRows=TRUE,
+        PanelHeight=800L,
+        AssayCenterRows=TRUE
+    )
+)
+
+# Prepare the app
+app <- iSEE(copy.pbmc, initial=initial.state)
+```
+
+It is entirely possible for these row-centric panels to exist alongside the column-centric panels discussed previously.
+The only limitation is that row-based panels cannot transmit multi-row selections to column-based panels and vice versa.
+That said, a row-based panel can still transmit a single row selection to a column-based panel for, e.g., coloring by expression;
+this allows us to set up an app where selecting a single HVG in the mean-variance plot causes the neighboring $t$-SNE to be colored by the expression of the selected gene.
+
+```{r}
+initial.state <- list(
+    # Configure a "Feature assay plot" panel
+    RowDataPlot(
+        YAxis="total",
+        XAxis="Row data",
+        XAxisRowData="mean",
+        PanelId=1L
+    ),
+
+    # Configure a "Reduced dimension plot" panel
+    ReducedDimPlot(
+        Type="TSNE",
+        ColorBy="Feature name",
+        ColorByFeatureSource="RowDataPlot1",
+        ColorByFeatureNameAssay="logcounts"
+    )
+)
+
+# Prepare the app
+app <- iSEE(copy.pbmc, initial=initial.state)
+```
+
+## Reproducible visualizations
 
 The state of the `iSEE` application can be saved at any point to provide a snapshot of the current view of the dataset.
 This is achieved by clicking on the "Display panel settings" button under the "Export" dropdown menu in the top right corner and saving an RDS file containing a serialized list of panel parameters.
