@@ -88,11 +88,10 @@ counts(sce)
 
 What makes the `assays` slot especially powerful is that it can hold multiple representations of the primary data. 
 This is especially useful for storing the raw count matrix as well as a normalized version of the data. 
-We can do just that as shown below, using the `r Biocpkg("scran")` and `r Biocpkg("scater")` packages to compute a normalized and log-transformed representation of the initial primary data.
+We can do just that as shown below, using the `r Biocpkg("scater")` package to compute a normalized and log-transformed representation of the initial primary data.
 
 ```{r, message=FALSE}
-sce <- computeSumFactors(sce)
-sce <- logNormCounts(sce)
+sce <- scater::logNormCounts(sce)
 ```
 
 Note that, at each step, we overwrite our previous `sce` by reassigning the results back to `sce`.
@@ -172,7 +171,7 @@ For example, the `r Biocpkg("scater")` package contains the `addPerCellQC()` fun
 Here, we show the first five columns of `colData(sce)` with the quality control metrics appended to it.
 
 ```{r}
-sce <- addPerCellQC(sce)
+sce <- scater::addPerCellQC(sce)
 colData(sce)[, 1:5]
 ```
 
@@ -208,7 +207,7 @@ Currently the `rowData` slot is also empty.
 However, analogous to our call to `addPerCellQC()` in the prior section, the `addPerFeatureQC()` function will insert values in the `rowData` slot of our `sce` object:
 
 ```{r}
-sce <- addPerFeatureQC(sce)
+sce <- scater::addPerFeatureQC(sce)
 rowData(sce)
 ```
 
@@ -269,15 +268,15 @@ In our example, we can calculate a PCA representation of our data using the `run
 We see that the `sce` now shows a new `reducedDim` that can be retrieved with the accessor `reducedDim()`.
 
 ```{r}
-sce <- logNormCounts(sce)
-sce <- runPCA(sce)
+sce <- scater::logNormCounts(sce)
+sce <- scater::runPCA(sce)
 reducedDim(sce, "PCA")
 ```
 
 We can also calculate a tSNE representation using the `scater` package function `runTSNE()`:
 
 ```{r}
-sce <- runTSNE(sce, perplexity = 0.1)
+sce <- scater::runTSNE(sce, perplexity = 0.1)
 reducedDim(sce, "TSNE")
 ```
 
@@ -340,17 +339,17 @@ This allows power users to perform tricks like those described in Section \@ref(
 ### Size factors 
 
 The `sizeFactors` slot contains a numeric vector of per-cell normalization factors used to normalize the expression data (see Chapter \@ref(normalization) for more details).
-This is typically automatically added by normalization functions, as shown below:
+This is typically automatically added by normalization functions, as shown below for `r Biocpkg("scran")`'s deconvolution-based size factors:
 
 ```{r}
 sce <- scran::computeSumFactors(sce)
 sizeFactors(sce)
 ```
 
-Alternatively, we can manually add the size factors, as shown below:
+Alternatively, we can manually add the size factors, as shown below for library size-derived factors:
 
 ```{r}
-sizeFactors(sce) <- librarySizeFactors(sce)
+sizeFactors(sce) <- scater::librarySizeFactors(sce)
 sizeFactors(sce)
 ```
 
