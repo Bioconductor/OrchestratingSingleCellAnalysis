@@ -225,7 +225,7 @@ stopifnot(c("LYZ", "VCAN", "S100A8", "CTSS") %in% rownames(best))
 ## Cell type classification
 
 We perform automated cell type classification using a reference dataset to annotate each cluster based on its pseudo-bulk profile. 
-This is faster than the per-cell approaches described in Chapter \@ref(cell-type-annotation), but sacrifices resolution for detecting heterogeneity inside a cluster.
+This is faster than the per-cell approaches described in Chapter \@ref(cell-type-annotation) at the cost of the resolution required to detect heterogeneity inside a cluster.
 Nonetheless, it is often sufficient for a quick assignment of cluster identity, and indeed, cluster `r cluster.choice` is also identified as consisting of monocytes from this analysis.
 
 ```{r cell-type-classification}
@@ -233,7 +233,8 @@ se.aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
 
 library(SingleR)
 hpc <- HumanPrimaryCellAtlasData()
-anno.single <- SingleR(se.aggregated, ref = hpc, labels = hpc$label.main)
+anno.single <- SingleR(se.aggregated, ref = hpc, labels = hpc$label.main,
+    assay.type.test="sum")
 anno.single
 ```
 
