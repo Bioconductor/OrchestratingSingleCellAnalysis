@@ -267,8 +267,8 @@ stopifnot(stats$p.value <= 0.01)
 
 ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), sce.pbmc$cluster,
     exprs_values="logcounts", average=TRUE)
-stopifnot(diff(ave.markers["CD8a", c(tclust.1, tclust.2)]) < -4)
-stopifnot(diff(ave.markers["CD4", c(tclust.1, tclust.2)]) > 5)
+stopifnot(diff(assay(ave.markers)["CD8a", c(tclust.1, tclust.2)]) < -4)
+stopifnot(diff(assay(ave.markers)["CD4", c(tclust.1, tclust.2)]) > 5)
 ```
 
 ### Quantifying gene expression and properties
