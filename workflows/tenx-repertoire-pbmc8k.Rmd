@@ -1,6 +1,6 @@
 # Human PBMC 10X dataset (surface proteins)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```

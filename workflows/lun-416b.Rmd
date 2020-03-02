@@ -2,7 +2,7 @@
 
 # Lun 416B cell line (Smart-seq2)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```

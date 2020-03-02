@@ -1,6 +1,6 @@
 # Filtered human PBMCs (10X Genomics)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -134,7 +134,7 @@ do.call(gridExtra::grid.arrange, c(all.tsne, list(ncol=2)))
 
 With the per-dataset analyses out of the way, we will now repeat the analysis after merging together the three batches.
 
-```{r}
+```{r data-integration}
 # Intersecting the common genes.
 universe <- Reduce(intersect, lapply(all.sce, rownames))
 all.sce2 <- lapply(all.sce, "[", i=universe,)
@@ -161,7 +161,7 @@ metadata(merged.pbmc)$merge.info$lost.var
 
 We proceed to clustering:
 
-```{r}
+```{r merged-clustering}
 g <- buildSNNGraph(merged.pbmc, use.dimred="corrected")
 merged.pbmc$cluster <- factor(igraph::cluster_louvain(g)$membership)
 table(merged.pbmc$cluster, merged.pbmc$batch)
