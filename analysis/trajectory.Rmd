@@ -16,7 +16,106 @@ path <- fetchImage("placeholder_dio.jpg")
 knitr::include_graphics(path)
 ```
 
-## Session Info {-}
+## Overview
+
+Many biological processes manifest as a continuum of dynamic changes in the cellular state.
+The most obvious example is that of differentiation into increasingly specialized cell subtypes, but we might also consider phenomena like the cell cycle or immune cell activation that are accompanied by gradual changes in the cellular transcriptome.
+Such smooth transitions are not easily represented by discrete clusters (Section \@ref(clustering-graph)); instead, we characterize them by identifying a "trajectory" from the single-cell expression data.
+This refers to the path through the high-dimensional expression space that traverses the various cellular states associated with a continuous process like differentiation.
+In this section, we will demonstrate several different approaches to trajectory analysis using the haematopoietic stem cell (HSC) dataset from @nestorowa2016singlecell.
+
+```{r, results='asis', echo=FALSE}
+extractCached("nestorowa-hsc", "clustering", "sce.nest")
+```
+
+```{r}
+sce.nest
+```
+
+## Cluster-based path reconstruction
+
+`r Biocpkg("TSCAN")` 
+
+
+```{r}
+library(TSCAN)
+```
+
+## Using principal curves
+
+To identify a trajectory, one might imagine simply "fitting" a one-dimensional curve so that it passes through the cloud of cells in the high-dimensional expression space.
+This is the idea behind principal curves [@hastie1989principal], effectively a non-linear generalization of PCA where the axes of most variation are allowed to bend.
+We use the `r Biocpkg("slingshot")` package [@street2018slingshot] to fit a principal curve to the PC coordinates,
+which yields a pseudotime ordering of cells based on their relative positions when projected onto the curve.
+
+```{r}
+library(slingshot)
+sce.sling <- slingshot(sce.nest, reducedDim='PCA')
+head(sce.sling$slingPseudotime_1)
+```
+
+Here, we have fitted the principal curve to a (relatively) low-dimensional space after PCA to take advantage of compaction and denoising (Chapter \@ref(reduced-dimension)).
+This allows us to visualize the literal path taken by the fitted curve in that space (Figure \@ref(fig:traj-princurve-pca-nest)). 
+
+```{r traj-princurve-pca-nest, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where each point is a cell and is colored by the _slingshot_ pseudotime ordering. The path taken by the fitted principal curve is shown in black."}
+# Setting up the colors.
+library(RColorBrewer)
+colors <- colorRampPalette(brewer.pal(11,'Spectral')[-6])(100)
+plotcol <- colors[cut(sce.sling$slingPseudotime_1, breaks=100)]
+
+# Creating a PCA plot.
+plot(reducedDim(sce.sling, "PCA"), col = plotcol, pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling), lwd=2, col='black')
+```
+
+For other dimensionality reduction results, we color by the pseudotime ordering to identify the direction of the trajectory (Figure \@ref(traj-princurve-umap-nest)).
+This is effectively a continuous generalization of the coloring by cluster assignment observed in other chapters.
+
+```{r traj-princurve-umap-nest, fig.cap="UMAP plot of the Nestorowa HSC dataset, where each point is a cell and is colored by the _slingshot_ pseudotime ordering."}
+library(scater)
+sce.sling <- runUMAP(sce.sling, dimred="PCA")
+
+# TODO: make ggcells robust to random crap in the colData().
+# Also need to add a function to auto-generate a path.
+sce.sling$cell.type <- sce.sling$FACS <- NULL
+
+library(viridis)
+gg <- ggcells(sce.sling, mapping=aes(x=UMAP.1, 
+        y=UMAP.2, col=slingPseudotime_1)) +
+     geom_point() + scale_color_viridis()
+```
+
+The previous `slingshot()` call assumed that all cells in the dataset were part of a single one-dimensional trajectory,
+which fails to consider more complex events like bifurcations.
+To accommodate this, we use our previously computed cluster assignments to build a rough sketch for the global structure in the form of a MST across the cluster centroids.
+Each path through the MST from a designated root node is treated as a lineage;
+principal curves are then simultaneously fitted to all lineages, with some averaging across curves to encourage consistency in regions that are common to multiple lineages.
+This allows `slingshot()` to capture branching events based on divergence in the principal curves (Figure \@ref(fig:traj-princurve-clustered-nest)).
+
+```{r traj-princurve-clustered-nest, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
+sce.sling2 <- slingshot(sce.nest, cluster=sce.nest$cluster, reducedDim='PCA')
+
+plot(reducedDim(sce.sling2, "PCA"), col="grey80", pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling2), lwd=2, col='black')
+```
+
+When operating in this mode, `slingshot()` produces one pseudotime ordering for each principal curve.
+Cells not assigned to a particular curve will be assigned `NA` values for that curve's ordering.
+It is subsequently straightforward to determine whether a particular cell is shared across multiple curves or is unique to one curve (i.e., occurs after branching).
+
+```{r}
+curve.data <- colData(sce.sling2)
+curve.data <- curve.data[,grepl("slingPseudotime", colnames(curve.data))]
+
+# Converting to integer codes: 1 for present, 0 for absent.
+is.present <- lapply(curve.data, function(x) as.integer(!is.na(x)))
+assignments <- do.call(paste0, is.present)
+table(assignments)
+```
+
+## Using a minimal spanning tree
+
+## Session information {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()
