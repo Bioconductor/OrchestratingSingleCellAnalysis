@@ -87,7 +87,7 @@ initial.state <- list(
         PanelId=1L),
 
     # Configure a "Reduced dimension plot " panel
-    ReducedDimPlot(
+    ReducedDimensionPlot(
         Type="TSNE",
         VisualBoxOpen=TRUE,
         DataBoxOpen=TRUE,
@@ -156,7 +156,7 @@ initial.state <- list(
     ),
 
     # Configure a "Reduced dimension plot" panel
-    ReducedDimPlot(
+    ReducedDimensionPlot(
         Type="UMAP",
         ColorBy="Feature name",
         ColorByFeatureSource="RowDataTable1",
@@ -243,7 +243,7 @@ initial.state <- list(
     ),
 
     # Configure a "Reduced dimension plot" panel
-    ReducedDimPlot(
+    ReducedDimensionPlot(
         Type="TSNE",
         ColorBy="Feature name",
         ColorByFeatureSource="RowDataPlot1",
@@ -282,7 +282,7 @@ In the code chunk below, we demonstrate the implementation of a simple tour taki
 tour <- data.frame(
     element = c(
         "#Welcome",
-        "#ReducedDimPlot1",
+        "#ReducedDimensionPlot1",
         "#ColumnDataPlot1",
         "#ColumnDataPlot1_DataBoxOpen",
         "#Conclusion"),
@@ -295,7 +295,7 @@ tour <- data.frame(
     stringsAsFactors = FALSE)
 
 initial.state <- list(
-    ReducedDimPlot(PanelWidth=6L), 
+    ReducedDimensionPlot(PanelWidth=6L), 
     ColumnDataPlot(PanelWidth=6L)
 )
 ```
