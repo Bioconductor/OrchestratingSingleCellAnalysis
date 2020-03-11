@@ -26,7 +26,7 @@ The third part, _Workflows_, provides primarily code detailing the analysis of v
 
 Finally, the _Appendix_ highlights our contributors.
 
-If you would like to cite this work, please use the reference [__"Orchestrating Single-Cell Analysis with Bioconductor"__](https://www.biorxiv.org/content/10.1101/590562v1). 
+If you would like to cite this work, please use the reference [__"Orchestrating Single-Cell Analysis with Bioconductor"__](https://www.nature.com/articles/s41592-019-0654-x). 
 
 ---
 
