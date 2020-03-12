@@ -41,7 +41,9 @@ extractCached("nestorowa-hsc", "clustering", "sce.nest")
 sce.nest
 ```
 
-## Cluster-based minimum spanning tree
+## Obtaining pseudo-times
+
+### Cluster-based minimum spanning tree
 
 The `r Biocpkg("TSCAN")` package employs a simple yet effective approach to trajectory reconstruction.
 It clusters cells to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the cell coordinates and then forms the minimum spanning tree (MST) across centroids.
@@ -103,7 +105,7 @@ If the clusters are not sufficiently granular, it is possible for `r Biocpkg("TS
 In addition, the MST does poorly at handling more complex events like cycles (e.g., the cell cycle, obviously) or bubbles (e.g., multiple differentation paths to the same terminal cell type).
 Whether or not this is a problem depends on the complexity of the global structure of the population of interest. 
 
-## Using principal curves
+### Principal curves
 
 To identify a trajectory, one might imagine simply "fitting" a one-dimensional curve so that it passes through the cloud of cells in the high-dimensional expression space.
 This is the idea behind principal curves [@hastie1989principal], effectively a non-linear generalization of PCA where the axes of most variation are allowed to bend.
@@ -163,7 +165,7 @@ lines(SlingshotDataSet(sce.sling2), lwd=2, col='black')
 
 When operating in this mode, `slingshot()` produces one pseudotime ordering for each principal curve.
 Cells not assigned to a particular curve will be assigned `NA` values for that curve's ordering.
-It is subsequently straightforward to determine whether a particular cell is shared across multiple curves or is unique to one curve (i.e., occurs after branching).
+It is straightforward to determine whether a particular cell is shared across multiple curves or is unique to a subset of curves (i.e., occurs after branching).
 
 ```{r}
 curve.data <- colData(sce.sling2)
@@ -175,7 +177,33 @@ assignments <- do.call(paste0, is.present)
 table(assignments)
 ```
 
-## Using a minimal spanning tree
+For larger datasets, we can speed up the algorithm by approximating each principal curve with a fixed number of points.
+By default, `slingshot()` uses one point per cell to define the curve, which is unnecessarily precise when the number of cells is large.
+Indeed, the approximated curves in Figure \@ref(fig:traj-princurve-clustered-nest-approx) are quite similar to those in Figure \@ref(fig:traj-princurve-clustered-nest).
+
+```{r traj-princurve-clustered-nest-approx, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
+sce.sling3 <- slingshot(sce.nest, cluster=sce.nest$cluster, 
+    reducedDim='PCA', approx_points=100)
+
+plot(reducedDim(sce.sling3, "PCA"), col="grey80", pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling3), lwd=2, col='black')
+```
+
+### Whatever monocle does nowadays
+
+## Characterizing trajectories
+
+### Changes along a trajectory
+
+### Changes between lineages
+
+## Finding the root
+
+### Overview
+
+### Entropy-based methods
+
+### RNA velocity
 
 ## Session information {-}
 
