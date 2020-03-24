@@ -20,6 +20,9 @@
 #' The default \code{fresh=TRUE} is recommended for a rigorous recompilation,
 #' but setting it to \code{FALSE} may be more convenient for quick debugging cycles.
 #'
+#' If an error is encountered during compilation of any Rmarkdown file,
+#' the standard output of \code{\link{render}} leading up to the error is printed out before the function exists.
+#'
 #' @author Aaron Lun
 #'
 #' @export
@@ -36,8 +39,17 @@ compileWorkflows <- function(dir=".", fresh=TRUE, files=NULL) {
             unlink(cache.loc, recursive=TRUE)
         }
 
-        r(function(input) { rmarkdown::render(input) }, args = list(input = f), 
-            show=TRUE, spinner=FALSE)
+        logfile <- tempfile(fileext=".log")
+        E <- try(
+            r(function(input) { rmarkdown::render(input) }, args = list(input = f), 
+                stdout=logfile, stderr=logfile, spinner=FALSE),
+            silent=TRUE
+        )
+
+        if (is(E, "try-error")) {
+            message(sprintf("%s> %s\n", target, readLines(logfile)))
+            stop(sprintf("failed to compile '%s'", script))
+        }
     }
 
     invisible(NULL)
