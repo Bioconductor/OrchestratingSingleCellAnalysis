@@ -29,6 +29,9 @@ This ensures that settings from one chapter do not affect the next chapter.
 
 The default \code{fresh=TRUE} is recommended for a rigorous recompilation,
 but setting it to \code{FALSE} may be more convenient for quick debugging cycles.
+
+If an error is encountered during compilation of any Rmarkdown file,
+the standard output of \code{\link{render}} leading up to the error is printed out before the function exists.
 }
 \author{
 Aaron Lun
