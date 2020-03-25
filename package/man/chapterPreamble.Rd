@@ -7,7 +7,7 @@
 chapterPreamble(use_cache = FALSE)
 }
 \arguments{
-\item{use_cache}{knitr setting for whether to cache code chunks}
+\item{use_cache}{Logical indicating whether to cache code chunks.}
 }
 \description{
 Execute code to set up knitr compilation flags, HTML content, load required packages, etc. at the start of every chapter.
