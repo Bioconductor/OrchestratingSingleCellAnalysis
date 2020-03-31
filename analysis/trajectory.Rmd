@@ -55,7 +55,7 @@ We demonstrate below on the Nestorowa dataset (Figure \@ref(fig:tscan-nest-mst))
 # dimensionality reduction and clustering results, rather than
 # forcing users to go along with their defaults.
 library(scater)
-by.cluster <- aggregateAcrossCells(sce.nest, ids=sce.nest$cluster)
+by.cluster <- aggregateAcrossCells(sce.nest, ids=colLabels(sce.nest))
 centroids <- reducedDim(by.cluster, "PCA")
 
 dmat <- dist(centroids)
@@ -79,7 +79,7 @@ coords <- reducedDim(by.cluster, "TSNE")
 group <- rep(seq_len(nrow(pairs)), 2)
 stuff <- data.frame(rbind(coords[pairs[,1],], coords[pairs[,2],]), group)
 
-plotTSNE(sce.nest, colour_by="cluster") + 
+plotTSNE(sce.nest, colour_by="label") + 
     geom_line(data=stuff, mapping=aes(x=X1, y=X2, group=group))
 ```
 
@@ -157,7 +157,7 @@ principal curves are then simultaneously fitted to all lineages, with some avera
 This allows `slingshot()` to capture branching events based on divergence in the principal curves (Figure \@ref(fig:traj-princurve-clustered-nest)).
 
 ```{r traj-princurve-clustered-nest, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
-sce.sling2 <- slingshot(sce.nest, cluster=sce.nest$cluster, reducedDim='PCA')
+sce.sling2 <- slingshot(sce.nest, cluster=colLabels(sce.nest), reducedDim='PCA')
 
 plot(reducedDim(sce.sling2, "PCA"), col="grey80", pch=16, asp = 1)
 lines(SlingshotDataSet(sce.sling2), lwd=2, col='black')
@@ -182,7 +182,7 @@ By default, `slingshot()` uses one point per cell to define the curve, which is 
 Indeed, the approximated curves in Figure \@ref(fig:traj-princurve-clustered-nest-approx) are quite similar to those in Figure \@ref(fig:traj-princurve-clustered-nest).
 
 ```{r traj-princurve-clustered-nest-approx, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
-sce.sling3 <- slingshot(sce.nest, cluster=sce.nest$cluster, 
+sce.sling3 <- slingshot(sce.nest, cluster=colLabels(sce.nest), 
     reducedDim='PCA', approx_points=100)
 
 plot(reducedDim(sce.sling3, "PCA"), col="grey80", pch=16, asp = 1)

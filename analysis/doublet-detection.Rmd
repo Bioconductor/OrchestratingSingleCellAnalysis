@@ -90,7 +90,7 @@ dbl.markers <- markers[[chosen.doublet]]
 
 library(scater)
 chosen <- rownames(dbl.markers)[dbl.markers$Top <= 10]
-plotHeatmap(sce.mam, order_columns_by="cluster", features=chosen, 
+plotHeatmap(sce.mam, order_columns_by="label", features=chosen, 
     center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
 ```
 
@@ -111,7 +111,7 @@ Indeed, no cell type is known to strongly express both of these genes at the sam
 
 ```{r markerexprs, fig.asp=0.5, fig.width=10, fig.cap="Distribution of log-normalized expression values for _Acta2_ and _Csn2_ in each cluster. Each point represents a cell."}
 plotExpression(sce.mam, features=c("Acta2", "Csn2"), 
-    x="cluster", colour_by="cluster")
+    x="label", colour_by="label")
 ```
 
 The strength of `doubletCluster()` lies in its simplicity and ease of interpretation.
@@ -159,7 +159,7 @@ plotTSNE(sce.mam, colour_by="DoubletScore")
 From the clustering information, we see that the affected cells belong to the same cluster that was identified using `doubletCluster()` (Figure \@ref(fig:densclust)), which is reassuring.
 
 ```{r densclust, fig.cap="Distribution of doublet scores for each cluster in the mammary gland data set. Each point is a cell."}
-plotColData(sce.mam, x="cluster", y="DoubletScore", colour_by="cluster")
+plotColData(sce.mam, x="label", y="DoubletScore", colour_by="label")
 ```
 
 The advantage of `doubletCells()` is that it does not depend on clusters, reducing the sensitivity of the results to clustering quality.

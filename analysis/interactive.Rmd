@@ -150,7 +150,7 @@ initial.state <- list(
     FeatureAssayPlot(
         YAxisFeatureSource="RowDataTable1",
         XAxis="Column data",
-        XAxisColumnData="cluster",
+        XAxisColumnData="label",
         Assay="logcounts",
         DataBoxOpen=TRUE
     ),
@@ -215,7 +215,7 @@ initial.state <- list(
     ComplexHeatmapPlot(
         RowSelectionSource="RowDataPlot1",
         CustomRows=FALSE,
-        ColumnData="cluster",
+        ColumnData="label",
         Assay="logcounts",
         ClusterRows=TRUE,
         PanelHeight=800L,

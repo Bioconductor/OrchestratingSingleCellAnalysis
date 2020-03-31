@@ -50,17 +50,17 @@ A brief inspection of the results indicates that clusters contain similar contri
 
 ```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
 library(scater)
-table(merged$cluster, merged$tomato)
-table(merged$cluster, merged$pool)
+table(colLabels(merged), merged$tomato)
+table(colLabels(merged), merged$pool)
 gridExtra::grid.arrange(
-    plotTSNE(merged, colour_by="tomato", text_by="cluster"),
+    plotTSNE(merged, colour_by="tomato", text_by="label"),
     plotTSNE(merged, colour_by=data.frame(pool=factor(merged$pool))),
     ncol=2
 )
 ```
 
 ```{r, echo=FALSE}
-tab <- table(merged$cluster, merged$pool)
+tab <- table(colLabels(merged), merged$pool)
 stopifnot(mean(rowMeans(tab > 0)==1) > 0.9) 
 # almost all clusters have entries in all samples,
 # indicating that things are truly well-mixed.
@@ -72,7 +72,7 @@ These were obtained by mapping the cells in this dataset to a larger, pre-annota
 While broadly consistent, many of our clusters map to multiple labels (Figure \@ref(fig:heat-cluster-label}), which reflects the difficulties in unambiguously resolving cell types undergoing differentiation.
 
 ```{r heat-cluster-label, fig.cap="Heatmap showing the abundance of cells with each combination of cluster (row) and cell type label (column). The color scale represents the log~2~-count for each combination."}
-by.label <- table(merged$cluster, merged$celltype.mapped)
+by.label <- table(colLabels(merged), merged$celltype.mapped)
 pheatmap::pheatmap(log2(by.label+1), cluster_cols=FALSE, cluster_rows=FALSE,
     color=viridis::viridis(101))
 ```

@@ -105,8 +105,8 @@ This allows us to conveniently visualize the distribution of clusters in a $t$-S
 
 ```{r tsne-clust-graph, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from graph-based clustering."}
 library(scater)
-sce.pbmc$cluster <- factor(clust)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+colLabels(sce.pbmc) <- factor(clust)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="label")
 ```
 
 One of the most important parameters is `k`, the number of nearest neighbors used to construct the graph.
@@ -136,7 +136,7 @@ This yields a dimensionality reduction result that is closely related to $t$-SNE
 ```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbor graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
 set.seed(2000)
 reducedDim(sce.pbmc, "force") <- igraph::layout_with_fr(g)
-plotReducedDim(sce.pbmc, colour_by="cluster", dimred="force")
+plotReducedDim(sce.pbmc, colour_by="label", dimred="force")
 ```
 
 ### Other parameters
@@ -285,8 +285,8 @@ set.seed(100)
 clust.kmeans <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=10)
 table(clust.kmeans$cluster)
 
-sce.pbmc$cluster <- factor(clust.kmeans$cluster)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+colLabels(sce.pbmc) <- factor(clust.kmeans$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="label")
 ```
 
 If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
@@ -322,8 +322,8 @@ set.seed(100)
 clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=20)
 table(clust.kmeans2$cluster)
 
-sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
-plotTSNE(sce.pbmc, colour_by="cluster", text_by="cluster")
+colLabels(sce.pbmc) <- factor(clust.kmeans2$cluster)
+plotTSNE(sce.pbmc, colour_by="label", text_by="label")
 ```
 
 ### Assessing cluster separation
@@ -462,14 +462,14 @@ The exception is cluster 2, which is split across two visual clusters in the plo
 We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behavior of the clustering algorithm, based on the examination of some later diagnostics.
 
 ```{r tsne-416b, fig.cap="$t$-SNE plot of the 416B dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from hierarchical clustering."}
-sce.416b$cluster <- factor(clust.416b)
-plotReducedDim(sce.416b, "TSNE", colour_by="cluster")
+colLabels(sce.416b) <- factor(clust.416b)
+plotReducedDim(sce.416b, "TSNE", colour_by="label")
 ```
 
 ```{r, echo=FALSE}
 fault <- 2L
 visual <- kmeans(reducedDim(sce.416b, "TSNE"), 4)
-xtab <- table(sce.416b$cluster, visual$cluster)
+xtab <- table(colLabels(sce.416b), visual$cluster)
 stopifnot(sum(xtab[fault,] > 0) == 2)
 stopifnot(sum(xtab[fault,]==0) == 2)
 ```

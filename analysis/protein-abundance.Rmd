@@ -227,8 +227,8 @@ clusters.adt <- igraph::cluster_walktrap(g.adt)$membership
 # Generating a t-SNE plot.
 set.seed(1010010)
 altExp(sce) <- runTSNE(altExp(sce))
-altExp(sce)$cluster <- factor(clusters.adt)
-plotTSNE(altExp(sce), colour_by="cluster", text_by="cluster", text_col="red")
+colLabels(altExp(sce)) <- factor(clusters.adt)
+plotTSNE(altExp(sce), colour_by="label", text_by="label", text_col="red")
 ```
 
 With only a few ADTs, characterization of each cluster is most efficiently achieved by creating a heatmap of the average log-abundance of each tag (Figure \@ref(fig:heat-tags)).
@@ -361,7 +361,7 @@ table(clusters.com)
 
 ```{r, echo=FALSE}
 # Checking that resolution is indeed higher.
-stopifnot(length(unique(clusters.com)) > length(unique(altExp(sce)$cluster)))
+stopifnot(length(unique(clusters.com)) > length(unique(colLabels(altExp(sce)))))
 ```
 
 A more sophisticated approach uses the UMAP algorithm [@mcInnes2018umap] to integrate information from the two sets of features.
@@ -389,9 +389,9 @@ reducedDim(sce.main, "combinedUMAP") <- runMultiUMAP(
     list(reducedDim(sce.main, "PCA"), 
         t(logcounts(altExp(sce.main))))
 )
-sce.main$cluster <- clusters.com2
+colLabels(sce.main) <- clusters.com2
 plotReducedDim(sce.main, "combinedUMAP", 
-    colour_by="cluster", text_by="cluster")
+    colour_by="label", text_by="label")
 ```
 
 ```{r, echo=FALSE}
@@ -429,11 +429,11 @@ sce <- runPCA(sce, subset_row=top, ncomponents=25)
 
 g <- buildSNNGraph(sce, use.dimred="PCA")
 clusters <- igraph::cluster_walktrap(g)$membership
-sce$cluster <- factor(clusters)
+colLabels(sce) <- factor(clusters)
 
 set.seed(1000010)
 sce <- runTSNE(sce, dimred="PCA")
-plotTSNE(sce, colour_by="cluster", text_by="cluster")
+plotTSNE(sce, colour_by="label", text_by="label")
 ```
 
 ```{r, echo=FALSE}
@@ -445,7 +445,7 @@ For example, if the PD-1 level was a readout for some interesting phenotype - sa
 Methods from Chapter \@ref(multi-sample-comparisons) can be similarly used to test for differences between conditions based on pseudo-bulk ADT counts.
 
 ```{r heat-pd-1, fig.cap=sprintf("Heatmap of log-fold changes in tag abundances in cluster %s compared to all other clusters identified from transcript data in the PBMC data set.", chosen.cluster)}
-markers <- findMarkers(altExp(sce), sce$cluster)
+markers <- findMarkers(altExp(sce), colLabels(sce))
 of.interest <- markers[[16]]
 pheatmap(getMarkerEffects(of.interest), breaks=seq(-3, 3, length.out=101))
 ```

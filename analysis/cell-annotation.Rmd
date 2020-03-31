@@ -90,7 +90,7 @@ Interestingly, our clustering does not effectively distinguish between CD4^+^ an
 We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
 
 ```{r singler-cluster, fig.cap="Heatmap of the distribution of cells across labels and clusters in the 10X PBMC dataset. Color scale is reported in the log~10~-number of cells for each cluster-label combination."}
-tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+tab <- table(Assigned=pred$pruned.labels, Cluster=colLabels(sce.pbmc))
 
 # Adding a pseudo-count of 10 to avoid strong color jumps with just 1 cell.
 library(pheatmap)
@@ -366,7 +366,7 @@ stopifnot(all(as.matrix(milk)>0))
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
-    x="cluster", colour_by="cluster")
+    x="label", colour_by="label")
 ```
 
 Further inspection of interesting GO terms is achieved by extracting the relevant genes. 
@@ -407,11 +407,11 @@ We can then identify "differential gene set activity" between clusters by lookin
 For example, we observe that cluster `r chosen.text` has the highest average expression for the triacylglycerol biosynthesis GO term (Figure \@ref(fig:lipid-synth-violin)), consistent with the proposed identity of those cells.
 
 ```{r lipid-synth-violin, fig.cap="Distribution of average log-normalized expression for genes involved in triacylglycerol biosynthesis, for all cells in each cluster of the mammary gland dataset."}
-plotColData(sce.mam, y=I(aggregated["GO:0019432",]), x="cluster")
+plotColData(sce.mam, y=I(aggregated["GO:0019432",]), x="label")
 ```
 
 ```{r, echo=FALSE}
-maxed <- vapply(split(aggregated["GO:0019432",], sce.mam$cluster), median, 0)
+maxed <- vapply(split(aggregated["GO:0019432",], colLabels(sce.mam)), median, 0)
 stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
 ```
 
@@ -422,11 +422,11 @@ This is not uncommon for gene sets that contain both positive and negative regul
 
 ```{r thrsp-violin, fig.cap="Distribution of log-normalized expression values for _Thrsp_ across all cells in each cluster of the mammary gland dataset."}
 # Choose the top-ranking gene in GO:0019432.
-plotExpression(sce.mam, "Thrsp", x="cluster")
+plotExpression(sce.mam, "Thrsp", x="label")
 ```
 
 ```{r, echo=FALSE}
-maxed <- vapply(split(logcounts(sce.mam)["Thrsp",], sce.mam$cluster), median, 0)
+maxed <- vapply(split(logcounts(sce.mam)["Thrsp",], colLabels(sce.mam)), median, 0)
 stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
 ```
 

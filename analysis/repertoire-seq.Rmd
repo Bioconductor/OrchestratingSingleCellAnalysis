@@ -41,7 +41,7 @@ extractCached("tenx-repertoire-pbmc8k", "clustering", "sce.pbmc")
 sce.pbmc
 
 # Moving ADT-based clustering to the top level for convenience.
-sce.pbmc$cluster <- altExp(sce.pbmc)$cluster
+colLabels(sce.pbmc) <- colLabels(altExp(sce.pbmc))
 ```
 
 ## Analyzing the T cell receptor repertoire
@@ -86,15 +86,15 @@ For each cluster, we determine the proportion of cells that have at least one se
 Clusters with large counts are most likely to be T cells, though some background level of TCR expression may be observed in other clusters due to a mixture of clustering uncertainty, ambient contamination, doublet formation and potential expression in other cell types.
 
 ```{r tcr-prop-cluster-all, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express at least one sequence of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
-ncells <- table(sce.pbmc$cluster)
+ncells <- table(colLabels(sce.pbmc))
 ncells
 
 # `lengths()` returns the number of sequences per cell.
 at.least.one.A <- lengths(sce.pbmc$TRA) > 0
-tra.counts.any <- table(sce.pbmc$cluster[at.least.one.A])
+tra.counts.any <- table(colLabels(sce.pbmc)[at.least.one.A])
 
 at.least.one.B <- lengths(sce.pbmc$TRB) > 0
-trb.counts.any <- table(sce.pbmc$cluster[at.least.one.B])
+trb.counts.any <- table(colLabels(sce.pbmc)[at.least.one.B])
 
 barplot(rbind(TRA=tra.counts.any/ncells, TRB=trb.counts.any/ncells), beside=TRUE)
 ```
@@ -116,11 +116,11 @@ has.prod.A <- any(is.prod.A)
 head(has.prod.A)
 
 # And then we simply count the number of cells in each cluster.
-tra.counts.prod <- table(sce.pbmc$cluster[has.prod.A])
+tra.counts.prod <- table(colLabels(sce.pbmc)[has.prod.A])
 
 is.prod.B <- sce.pbmc$TRB[,"productive"]=="True"
 has.prod.B <- any(is.prod.B)
-trb.counts.prod <- table(sce.pbmc$cluster[has.prod.B])
+trb.counts.prod <- table(colLabels(sce.pbmc)[has.prod.B])
 
 barplot(rbind(TRA=tra.counts.prod/ncells, TRB=trb.counts.prod/ncells),
     legend=TRUE, beside=TRUE)
@@ -130,8 +130,8 @@ For completeness, we also count the number of cells in each cluster that have mu
 The percentages are clearly lower but this phenomenon is still surprisingly common.
 
 ```{r tcr-prop-cluster-multi, fig.width=10, fig.wide=TRUE, fig.cap="Proportion of cells in each cluster that express two or more sequences of the TCR $\\alpha$ (dark) or $\\beta$-chains (light)."}
-tra.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRA) > 1])
-trb.counts.multi <- table(sce.pbmc$cluster[lengths(sce.pbmc$TRB) > 1])
+tra.counts.multi <- table(colLabels(sce.pbmc)[lengths(sce.pbmc$TRA) > 1])
+trb.counts.multi <- table(colLabels(sce.pbmc)[lengths(sce.pbmc$TRB) > 1])
 barplot(rbind(TRA=tra.counts.multi/ncells, TRB=trb.counts.multi/ncells), 
     beside=TRUE)
 ```
@@ -224,9 +224,9 @@ expanded.id.B <- setdiff(clone.id.B[duplicated(clone.id.B)], "None")
 length(expanded.id.B) # number of expanded clonotypes for TRB
 
 is.clone.A <- any(sce.pbmc$TRA[,"raw_clonotype_id"] %in% expanded.id.A)
-tra.counts.clonal <- table(sce.pbmc$cluster[is.clone.A])
+tra.counts.clonal <- table(colLabels(sce.pbmc)[is.clone.A])
 is.clone.B <- any(sce.pbmc$TRB[,"raw_clonotype_id"] %in% expanded.id.B)
-trb.counts.clonal <- table(sce.pbmc$cluster[is.clone.B])
+trb.counts.clonal <- table(colLabels(sce.pbmc)[is.clone.B])
 
 barplot(rbind(TRA=tra.counts.clonal/ncells, TRB=trb.counts.clonal/ncells), 
     legend=TRUE, beside=TRUE)
@@ -250,13 +250,13 @@ stats
 
 # Checking the identities of the relevant clusters. Note that 'cluster' is also
 # present as a colData entry in 'altExp(sce.pbmc)', which is why the
-# 'other_fields="cluster"' argument works correctty.
-of.interest <- sce.pbmc$cluster %in% c(tclust.1, tclust.2)
+# 'other_fields="label"' argument works correctty.
+of.interest <- colLabels(sce.pbmc) %in% c(tclust.1, tclust.2)
 
 library(scater)
 plotExpression(altExp(sce.pbmc)[,of.interest], 
     features=rownames(altExp(sce.pbmc)),
-    other_fields="cluster") + facet_wrap(~cluster, ncol=1)
+    other_fields="label") + facet_wrap(~cluster, ncol=1)
 ```
 
 ```{r, echo=FALSE}
@@ -265,7 +265,7 @@ stopifnot(all(mat[,2] > 100))
 stopifnot(any(mat[,1] > 100))
 stopifnot(stats$p.value <= 0.01)
 
-ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), sce.pbmc$cluster,
+ave.markers <- sumCountsAcrossCells(altExp(sce.pbmc), colLabels(sce.pbmc),
     exprs_values="logcounts", average=TRUE)
 stopifnot(diff(assay(ave.markers)["CD8a", c(tclust.1, tclust.2)]) < -4)
 stopifnot(diff(assay(ave.markers)["CD4", c(tclust.1, tclust.2)]) > 5)
@@ -281,7 +281,7 @@ As usual, composition effects apply here.
 ```{r}
 # This should DEFINITELY use countGenes().
 gene.id.A <- sce.pbmc$TRA[,"v_gene"]
-expanded.cluster <- rep(sce.pbmc$cluster, lengths(gene.id.A))
+expanded.cluster <- rep(colLabels(sce.pbmc), lengths(gene.id.A))
 gene.tab.A <- table(unlist(gene.id.A), expanded.cluster)
 
 # Testing for differences between our clusters.
@@ -319,7 +319,7 @@ extractDataFrame <- function(splitted, ...) {
     thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
     cbind(as.data.frame(unlist(splitted)), thing)
 }
-df.A <- extractDataFrame(sce.pbmc$TRA, cluster=sce.pbmc$cluster)
+df.A <- extractDataFrame(sce.pbmc$TRA, cluster=colLabels(sce.pbmc))
 
 library(alakazam)
 aap <- aminoAcidProperties(df.A, seq="cdr3")
@@ -329,7 +329,7 @@ head(aap[,properties])
 collected <- list()
 for (i in properties) {
     prop <- colnames(aap)[i]
-    current <- split(aap[,prop], aap$cluster)
+    current <- split(aap[,prop], colLabels(aap))
     left <- current[[tclust.1]]
     right <- current[[tclust.2]]
     stats <- wilcox.test(left, right)
@@ -362,8 +362,8 @@ for (i in sort(unique(pretend.samples))) {
     clone.id.A <- unlist(unique(current.sample$TRA[,"raw_clonotype_id"]))
     expanded.id.A <- setdiff(clone.id.A[duplicated(clone.id.A)], "None")
     is.clone.A <- any(current.sample$TRA[,"raw_clonotype_id"] %in% expanded.id.A)
-    clone.counts[[i]] <- table(current.sample$cluster[is.clone.A])
-    any.counts[[i]] <- table(current.sample$cluster[lengths(current.sample$TRA) > 0])
+    clone.counts[[i]] <- table(colLabels(current.sample)[is.clone.A])
+    any.counts[[i]] <- table(colLabels(current.sample)[lengths(current.sample$TRA) > 0])
 }
 
 clone.counts <- do.call(cbind, clone.counts)

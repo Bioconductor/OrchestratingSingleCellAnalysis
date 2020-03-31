@@ -127,7 +127,7 @@ sce <- runUMAP(sce, dimred = 'PCA', external_neighbors=TRUE)
 
 # Clustering.
 g <- buildSNNGraph(sce, use.dimred = 'PCA')
-sce$clusters <- factor(igraph::cluster_louvain(g)$membership)
+colLabels(sce) <- factor(igraph::cluster_louvain(g)$membership)
 
 # Visualization.
 plotUMAP(sce, colour_by="clusters")

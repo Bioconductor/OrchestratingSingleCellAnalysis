@@ -340,7 +340,7 @@ Figure \@ref(fig:viol-de-binom) confirms that the top genes exhibit strong diffe
 ```{r viol-de-binom, fig.cap=sprintf("Distribution of log-normalized expression values for the top 10 DE genes involving cluster %s with the binomial test, stratified by cluster assignment and coloured by the plate of origin for each cell.", chosen)}
 library(scater)
 top.genes <- head(rownames(interesting.binom))
-plotExpression(sce.pbmc, x="cluster", features=top.genes)
+plotExpression(sce.pbmc, x="label", features=top.genes)
 ```
 
 The disadvantage of the binomial test is that its increased stringency can lead to the loss of good candidate markers.

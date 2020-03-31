@@ -39,7 +39,7 @@ cyclin.genes <- rownames(sce.416b)[cyclin.genes]
 cyclin.genes
 
 library(scater)
-plotHeatmap(sce.416b, order_columns_by="cluster", 
+plotHeatmap(sce.416b, order_columns_by="label", 
     cluster_rows=FALSE, features=sort(cyclin.genes))
 ```
 
@@ -119,7 +119,7 @@ rownames(test.data) <- rowData(sce.416b)$ENSEMBL
 library(SingleR)
 assignments <- SingleR(test.data, ref=sce.ref,
     label=sce.ref$phase, genes=cycle.markers)
-tab <- table(assignments$labels, sce.416b$cluster)
+tab <- table(assignments$labels, colLabels(sce.416b))
 tab
 ```
 
@@ -138,7 +138,7 @@ However, it is not difficult to find routine violations of this assumption - for
 ```{r dist-lef1, fig.cap="Distribution of log-normalized expression values for _Lef1_ in the reference dataset (left) and in the 416B dataset (right).", fig.wide=TRUE}
 gridExtra::grid.arrange(
     plotExpression(sce.ref, features="ENSMUSG00000027985", x="phase"),
-    plotExpression(sce.416b, features="Lef1", x="cluster"),
+    plotExpression(sce.416b, features="Lef1", x="label"),
     ncol=2)
 ```
 
@@ -188,11 +188,11 @@ Cells are classified as being in G1 phase if the G1 score is above 0.5 and great
 We see that the results are quite similar to those from `SingleR()`, which is reassuring.
 
 ```{r}
-table(assignments$phases, sce.416b$cluster)
+table(assignments$phases, colLabels(sce.416b))
 ```
 
 ```{r, echo=FALSE, results="hide"}
-tab <- table(assignments$phases, sce.416b$cluster)
+tab <- table(assignments$phases, colLabels(sce.416b))
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
 stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
 stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
