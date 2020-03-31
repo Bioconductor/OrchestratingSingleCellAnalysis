@@ -138,17 +138,17 @@ merged.muraro <- runTSNE(merged.muraro, dimred="corrected")
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(merged.muraro, use.dimred="corrected")
-merged.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(merged.muraro) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r unref-seger-heat, fig.cap="Heatmap of the frequency of cells from each cell type label in each cluster."}
-tab <- table(Cluster=merged.muraro$cluster, CellType=sce.muraro$label)
+tab <- table(Cluster=colLabels(merged.muraro), CellType=sce.muraro$label)
 library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
 ```{r}
-table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
+table(Cluster=colLabels(merged.muraro), Donor=merged.muraro$batch)
 ```
 
 ```{r unref-muraro-tsne, fig.cap="Obligatory $t$-SNE plots of the Muraro pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}

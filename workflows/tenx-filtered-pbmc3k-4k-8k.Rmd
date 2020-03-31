@@ -114,12 +114,12 @@ all.sce <- lapply(all.sce, runUMAP, dimred="PCA")
 for (n in names(all.sce)) {
     g <- buildSNNGraph(all.sce[[n]], k=10, use.dimred='PCA')
     clust <- igraph::cluster_walktrap(g)$membership
-    all.sce[[n]]$cluster <- factor(clust)
+    colLabels(all.sce[[n]])  <- factor(clust)
 }
 ```
 
 ```{r}
-lapply(all.sce, function(x) table(x$cluster))
+lapply(all.sce, function(x) table(colLabels(x)))
 ```
 
 ```{r unref-filtered-pbmc-tsne, fig.asp=1, fig.cap="Obligatory $t$-SNE plots of each PBMC dataset, where each point represents a cell in the corresponding dataset and is colored according to the assigned cluster."}
@@ -163,8 +163,8 @@ We proceed to clustering:
 
 ```{r merged-clustering}
 g <- buildSNNGraph(merged.pbmc, use.dimred="corrected")
-merged.pbmc$cluster <- factor(igraph::cluster_louvain(g)$membership)
-table(merged.pbmc$cluster, merged.pbmc$batch)
+colLabels(merged.pbmc) <- factor(igraph::cluster_louvain(g)$membership)
+table(colLabels(merged.pbmc), merged.pbmc$batch)
 ```
 
 And visualization:

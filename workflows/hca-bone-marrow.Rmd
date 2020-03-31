@@ -154,13 +154,13 @@ Some parameter fiddling is required to improve convergence with a large number o
 set.seed(1000)
 kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
     centers=40, iter.max=1000, algorithm="MacQueen") 
-sce.bone$cluster <- factor(kout.bone$cluster)
+colLabels(sce.bone) <- factor(kout.bone$cluster)
 ```
 
 We observe mostly balanced contributions from different samples to each cluster (Figure \@ref(fig:unref-hca-bone-ab)), consistent with the expectation that all samples are replicates from different donors.
 
 ```{r unref-hca-bone-ab, fig.asp=1, fig.cap="Heatmap of log~10~-number of cells in each cluster (row) from each sample (column)."}
-tab <- table(Cluster=sce.bone$cluster, Donor=sce.bone$Donor)
+tab <- table(Cluster=colLabels(sce.bone), Donor=sce.bone$Donor)
 library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
@@ -193,10 +193,8 @@ plot(bone.clust)
 We identify marker genes for each cluster while blocking on the donor.
 
 ```{r differential-expression}
-markers.bone <- findMarkers(sce.bone, sce.bone$cluster,
-    block = sce.bone$Donor, 
-    direction = 'up', lfc = 1,
-    BPPARAM=bpp)
+markers.bone <- findMarkers(sce.bone, block = sce.bone$Donor, 
+    direction = 'up', lfc = 1, BPPARAM=bpp)
 ```
 
 We visualize the top markers for a randomly chosen cluster using a "dot plot" in Figure \@ref(fig:unref-hca-bone-dotplot).
@@ -229,7 +227,7 @@ This is faster than the per-cell approaches described in Chapter \@ref(cell-type
 Nonetheless, it is often sufficient for a quick assignment of cluster identity, and indeed, cluster `r cluster.choice` is also identified as consisting of monocytes from this analysis.
 
 ```{r cell-type-classification}
-se.aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
+se.aggregated <- sumCountsAcrossCells(sce.bone, id=colLabels(sce.bone))
 
 library(SingleR)
 hpc <- HumanPrimaryCellAtlasData()

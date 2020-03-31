@@ -100,13 +100,13 @@ metadata(merged)$merge.info$lost.var
 ```{r clustering}
 g <- buildSNNGraph(merged, use.dimred="corrected")
 clusters <- igraph::cluster_louvain(g)
-merged$cluster <- factor(clusters$membership)
+colLabels(merged) <- factor(clusters$membership)
 ```
 
 We examine the distribution of cells across clusters and samples.
 
 ```{r}
-table(Cluster=merged$cluster, Sample=merged$sample)
+table(Cluster=colLabels(merged), Sample=merged$sample)
 ```
 
 ## Dimensionality reduction

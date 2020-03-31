@@ -147,11 +147,11 @@ ncol(reducedDim(sce.zeisel, "PCA"))
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.zeisel, use.dimred="PCA")
-sce.zeisel$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(sce.zeisel) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r}
-table(sce.zeisel$cluster)
+table(colLabels(sce.zeisel))
 ```
 
 ```{r unref-zeisel-tsne, fig.cap="Obligatory $t$-SNE plot of the Zeisel brain dataset, where each point represents a cell and is colored according to the assigned cluster."}
@@ -171,7 +171,7 @@ We examine the table for cluster `r chosen.inter.cluster`, in which log-fold cha
 The same output is provided for each cluster in order to identify genes that discriminate between clusters.
 
 ```{r}
-markers <- findMarkers(sce.zeisel, sce.zeisel$cluster, direction="up")
+markers <- findMarkers(sce.zeisel, direction="up")
 marker.set <- markers[["1"]]
 head(marker.set[,1:8], 10) # only first 8 columns, for brevity
 ```

@@ -176,21 +176,21 @@ my.tree <- hclust(my.dist, method="ward.D2")
 library(dynamicTreeCut)
 my.clusters <- unname(cutreeDynamic(my.tree, distM=as.matrix(my.dist),
     minClusterSize=10, verbose=0))
-sce.416b$cluster <- factor(my.clusters)
+colLabels(sce.416b) <- factor(my.clusters)
 ```
 
 We compare the clusters to the plate of origin.
 Each cluster is comprised of cells from both batches, indicating that the clustering is not driven by a batch effect.
 
 ```{r}
-table(Cluster=sce.416b$cluster, Plate=sce.416b$block)
+table(Cluster=colLabels(sce.416b), Plate=sce.416b$block)
 ```
 
 We compare the clusters to the oncogene induction status.
 We observe differences in in the composition of each cluster, consistent with a biological effect of oncogene induction.
 
 ```{r}
-table(Cluster=sce.416b$cluster, Oncogene=sce.416b$phenotype)
+table(Cluster=colLabels(sce.416b), Oncogene=sce.416b$phenotype)
 ```
 
 ```{r unref-416b-tsne, fig.cap="Obligatory $t$-SNE plot of the 416B dataset, where each point represents a cell and is colored according to the assigned cluster."}

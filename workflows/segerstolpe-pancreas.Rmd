@@ -147,20 +147,20 @@ sce.seger <- runTSNE(sce.seger, dimred="PCA")
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.seger, use.dimred="PCA")
-sce.seger$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(sce.seger) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 We see a strong donor effect, which suggests that should have called `fastMNN()` at some point.
 (But hey, we already did that for the Muraro and Grun analyses, so where's the fun in doing that again?)
 
 ```{r unref-seger-heat-1, fig.cap="Heatmap of the frequency of cells from each donor in each cluster."}
-tab <- table(Cluster=sce.seger$cluster, Donor=sce.seger$Donor)
+tab <- table(Cluster=colLabels(sce.seger), Donor=sce.seger$Donor)
 library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
 ```{r unref-seger-heat-2, fig.cap="Heatmap of the frequency of cells from each cell type label in each cluster."}
-tab <- table(Cluster=sce.seger$cluster, Donor=sce.seger$CellType)
+tab <- table(Cluster=colLabels(sce.seger), Donor=sce.seger$CellType)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
