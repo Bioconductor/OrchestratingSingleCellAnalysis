@@ -194,7 +194,7 @@ table(Cluster=colLabels(sce.416b), Oncogene=sce.416b$phenotype)
 ```
 
 ```{r unref-416b-tsne, fig.cap="Obligatory $t$-SNE plot of the 416B dataset, where each point represents a cell and is colored according to the assigned cluster."}
-plotTSNE(sce.416b, colour_by="cluster")
+plotTSNE(sce.416b, colour_by="label")
 ```
 
 Most cells have relatively small positive widths in Figure \@ref(fig:unref-416b-silhouette), indicating that the separation between clusters is weak.
@@ -234,8 +234,8 @@ This is consistent with the potential induction of senescence as an anti-tumorig
 
 ```{r unref-416b-markers, fig.width=10, fig.asp=0.8, fig.cap="Heatmap of the top marker genes for cluster 1 in the 416B dataset, stratified by cluster. The plate of origin and oncogene induction status are also shown for each cell."}
 top.markers <- rownames(marker.set)[marker.set$Top <= 10]
-plotHeatmap(sce.416b, features=top.markers, order_columns_by="cluster",
-    colour_columns_by=c("cluster", "block", "phenotype"),
+plotHeatmap(sce.416b, features=top.markers, order_columns_by="label",
+    colour_columns_by=c("label", "block", "phenotype"),
     center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
 ```
 

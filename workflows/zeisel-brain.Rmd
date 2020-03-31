@@ -155,7 +155,7 @@ table(colLabels(sce.zeisel))
 ```
 
 ```{r unref-zeisel-tsne, fig.cap="Obligatory $t$-SNE plot of the Zeisel brain dataset, where each point represents a cell and is colored according to the assigned cluster."}
-plotTSNE(sce.zeisel, colour_by="cluster")
+plotTSNE(sce.zeisel, colour_by="label")
 ```
 
 ## Interpretation
@@ -191,7 +191,7 @@ A quick look at the markers suggest that cluster `r chosen.inter.cluster` repres
 
 ```{r unref-zeisel-heat-cell, fig.wide=TRUE, fig.asp=1.5, fig.cap=sprintf("Heatmap of the log-expression of the top markers for cluster %s compared to each other cluster. Cells are ordered by cluster and the color is scaled to the log-expression of each gene in each cell.", chosen.inter.cluster)}
 top.markers <- rownames(marker.set)[marker.set$Top <= 10]
-plotHeatmap(sce.zeisel, features=top.markers, order_columns_by="cluster")
+plotHeatmap(sce.zeisel, features=top.markers, order_columns_by="label")
 ```
 
 An alternative visualization approach is to plot the log-fold changes to all other clusters directly (Figure \@ref(fig:unref-zeisel-heat-lfc)).

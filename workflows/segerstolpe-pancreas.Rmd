@@ -166,7 +166,7 @@ pheatmap(log10(tab+10), color=viridis::viridis(100))
 
 ```{r unref-grun-tsne, fig.cap="Obligatory $t$-SNE plots of the Segerstolpe pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotTSNE(sce.seger, colour_by="cluster"),
+    plotTSNE(sce.seger, colour_by="label"),
     plotTSNE(sce.seger, colour_by="Donor"),
     ncol=2
 )

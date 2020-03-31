@@ -141,7 +141,7 @@ table(colLabels(sce.grun.hsc))
 ```{r unref-hgrun-tsne, fig.asp=0.5, fig.width=10, fig.cap="Obligatory $t$-SNE plot of the Grun HSC dataset, where each point represents a cell and is colored according to the assigned cluster (left) or extraction protocol (right)."}
 short <- ifelse(grepl("micro", sce.grun.hsc$protocol), "micro", "sorted")
 gridExtra:::grid.arrange(
-    plotTSNE(sce.grun.hsc, colour_by="cluster"),
+    plotTSNE(sce.grun.hsc, colour_by="label"),
     plotTSNE(sce.grun.hsc, colour_by=I(short)),
     ncol=2
 )

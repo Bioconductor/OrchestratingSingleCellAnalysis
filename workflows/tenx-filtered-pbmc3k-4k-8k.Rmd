@@ -125,7 +125,7 @@ lapply(all.sce, function(x) table(colLabels(x)))
 ```{r unref-filtered-pbmc-tsne, fig.asp=1, fig.cap="Obligatory $t$-SNE plots of each PBMC dataset, where each point represents a cell in the corresponding dataset and is colored according to the assigned cluster."}
 all.tsne <- list()
 for (n in names(all.sce)) {
-    all.tsne[[n]] <- plotTSNE(all.sce[[n]], colour_by="cluster") + ggtitle(n)
+    all.tsne[[n]] <- plotTSNE(all.sce[[n]], colour_by="label") + ggtitle(n)
 }
 do.call(gridExtra::grid.arrange, c(all.tsne, list(ncol=2)))
 ```
@@ -173,7 +173,7 @@ And visualization:
 set.seed(10101010)
 merged.pbmc <- runTSNE(merged.pbmc, dimred="corrected")
 gridExtra::grid.arrange(
-    plotTSNE(merged.pbmc, colour_by="cluster", text_by="cluster", text_colour="red"),
+    plotTSNE(merged.pbmc, colour_by="label", text_by="cluster", text_colour="red"),
     plotTSNE(merged.pbmc, colour_by="batch")
 )
 ```

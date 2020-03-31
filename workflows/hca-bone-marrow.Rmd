@@ -175,7 +175,7 @@ stopifnot(all(tab>10))
 scrambled <- sample(ncol(sce.bone))
 
 gridExtra::grid.arrange(
-    plotUMAP(sce.bone, colour_by="cluster"),
+    plotUMAP(sce.bone, colour_by="label"),
     plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 )
 ```

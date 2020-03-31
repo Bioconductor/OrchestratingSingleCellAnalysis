@@ -153,7 +153,7 @@ table(Cluster=colLabels(merged.muraro), Donor=merged.muraro$batch)
 
 ```{r unref-muraro-tsne, fig.cap="Obligatory $t$-SNE plots of the Muraro pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotTSNE(merged.muraro, colour_by="cluster"),
+    plotTSNE(merged.muraro, colour_by="label"),
     plotTSNE(merged.muraro, colour_by="batch"),
     ncol=2
 )

@@ -148,7 +148,7 @@ table(colLabels(sce.pbmc))
 ```
 
 ```{r unref-unfiltered-pbmc-tsne, fig.cap="Obligatory $t$-SNE plot of the PBMC dataset, where each point represents a cell and is colored according to the assigned cluster."}
-plotTSNE(sce.pbmc, colour_by="cluster")
+plotTSNE(sce.pbmc, colour_by="label")
 ```
 
 ## Interpretation
@@ -189,7 +189,7 @@ stopifnot(alt.marker.set["CD14",paste0("logFC.", chosen.mono)] < -1)
 
 ```{r, fig.wide=TRUE, fig.asp=0.8}
 plotExpression(sce.pbmc, features=c("CD14", "CD68",
-    "MNDA", "FCGR3A"), x="cluster", colour_by="cluster")
+    "MNDA", "FCGR3A"), x="label", colour_by="cluster")
 ```
 
 ## Session Info {-}
