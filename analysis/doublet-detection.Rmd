@@ -58,8 +58,10 @@ For each query cluster, the best pair of sources is identified based solely on t
 If more detail is necessary, the `all.pairs` field contains statistics on all possible source pairs for a given query cluster.
 
 ```{r}
+# Like 'findMarkers', this function will automatically
+# retrieve cluster assignments from 'colLabels'.
 library(scran)
-dbl.out <- doubletCluster(sce.mam, sce.mam$cluster)
+dbl.out <- doubletCluster(sce.mam)
 dbl.out
 ```
 
@@ -83,7 +85,7 @@ Examination of the output of `doubletCluster()` indicates that cluster `r chosen
 We see that every gene detected in this cluster is also expressed in either of the two proposed source clusters (Figure \@ref(fig:heatclust)).
 
 ```{r heatclust, fig.cap=sprintf("Heatmap of mean-centered and normalized log-expression values for the top set of markers for cluster %s in the mammary gland dataset. Column colours represent the cluster to which each cell is assigned, as indicated by the legend.", chosen.doublet)}
-markers <- findMarkers(sce.mam, sce.mam$cluster, direction="up")
+markers <- findMarkers(sce.mam, direction="up")
 dbl.markers <- markers[[chosen.doublet]]
 
 library(scater)

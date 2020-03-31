@@ -121,8 +121,8 @@ These are stored in the `rowData` slot of the `SingleCellExperiment` object for 
 copy.pbmc <- sce.pbmc
 
 library(scran)
-markers.pbmc.up <- findMarkers(copy.pbmc, copy.pbmc$cluster, 
-    direction="up", log.p=TRUE, sorted=FALSE)
+markers.pbmc.up <- findMarkers(copy.pbmc, direction="up", 
+    log.p=TRUE, sorted=FALSE)
 
 # Collate the log-p-value for each marker in a single table
 all.p <- lapply(markers.pbmc.up, FUN = "[[", i="log.p.value")

@@ -388,14 +388,16 @@ In this case, we use the top 10 marker genes but any value can be used depending
 We then take the union across all comparisons in all batches and use that in place of our HVG set in `fastMNN()`.
 
 ```{r}
-stats3 <- pairwiseWilcox(logcounts(pbmc3k), pbmc3k$cluster, direction="up")
+# Recall that groups for marker detection
+# are automatically defined from 'colLabels()'. 
+stats3 <- pairwiseWilcox(pbmc3k, direction="up")
 markers3 <- getTopMarkers(stats3[[1]], stats3[[2]], n=10)
 
-stats4 <- pairwiseWilcox(logcounts(pbmc4k), pbmc4k$cluster, direction="up")
+stats4 <- pairwiseWilcox(pbmc4k, direction="up")
 markers4 <- getTopMarkers(stats4[[1]], stats4[[2]], n=10)
 
 marker.set <- unique(unlist(c(unlist(markers3), unlist(markers4))))
-length(marker.set) # getting the number of genes selected in this manner.
+length(marker.set) # getting the total number of genes selected in this manner.
 
 set.seed(1000110)
 mnn.out2 <- fastMNN(pbmc3k, pbmc4k, subset.row=marker.set,

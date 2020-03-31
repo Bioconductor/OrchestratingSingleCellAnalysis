@@ -318,7 +318,7 @@ extractCached("bach-mammary", "clustering", "sce.mam")
 ```
 
 ```{r}
-markers.mam <- findMarkers(sce.mam, sce.mam$cluster, direction="up", lfc=1)
+markers.mam <- findMarkers(sce.mam, direction="up", lfc=1)
 ```
 
 ```{r, echo=FALSE}

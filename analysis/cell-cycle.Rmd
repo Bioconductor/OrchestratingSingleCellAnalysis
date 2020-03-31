@@ -45,7 +45,7 @@ plotHeatmap(sce.416b, order_columns_by="cluster",
 
 ```{r, echo=FALSE, results="hide"}
 library(scran)
-markers <- findMarkers(sce.416b, subset.row=cyclin.genes, group=sce.416b$cluster)
+markers <- findMarkers(sce.416b, subset.row=cyclin.genes) 
 lfc <- getMarkerEffects(markers[[1]])
 stopifnot(all(lfc[c("Ccnd1", "Ccnd2"),] > 0))
 stopifnot(all(lfc[c("Ccna2", "Ccnb1", "Ccne1"),] < 0))
@@ -60,7 +60,7 @@ The same logic applies to comparisons between treatment conditions, as described
 ```{r}
 library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
-    group=sce.416b$cluster, test.type="wilcox", direction="up")
+    test.type="wilcox", direction="up")
 
 # We can infer that cluster 4 has more cells in G2/M than the other clusters,
 # based on higher expression of the cyclin B's.
@@ -221,8 +221,7 @@ sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
 # Similar use in related functions that support blocking:
 dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", 
     block=assignments$phases)
-marker.nocycle <- findMarkers(sce.416b, sce.416b$cluster, 
-    block=assignments$phases)
+marker.nocycle <- findMarkers(sce.416b, block=assignments$phases)
 ```
 
 That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.
