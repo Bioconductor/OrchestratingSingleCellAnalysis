@@ -338,7 +338,7 @@ This allows power users to perform tricks like those described in Section \@ref(
 
 ### Size factors 
 
-The `sizeFactors` slot contains a numeric vector of per-cell normalization factors used to normalize the expression data (see Chapter \@ref(normalization) for more details).
+The `sizeFactors()` function allows us to get or set a numeric vector of per-cell scaling factors used for normalization (see Chapter \@ref(normalization) for more details).
 This is typically automatically added by normalization functions, as shown below for `r Biocpkg("scran")`'s deconvolution-based size factors:
 
 ```{r}
@@ -355,6 +355,20 @@ sizeFactors(sce)
 
 Technically speaking, the `sizeFactors` concept is not unique to single-cell analyses.
 Nonetheless, we mention it here as it is an extension beyond what is available in the `SummarizedExperiment` parent class.
+
+### Column labels
+
+The `colLabels()` function allows us to get or set a vector or factor of per-cell labels,
+typically corresponding to groupings assigned by unsupervised clustering (see Chapter \@ref(clustering))
+or predicted cell type identities from classification algorithms (Chapter \@ref(cell-type-annotation)).
+
+```{r}
+colLabels(sce) <- LETTERS[1:3]
+colLabels(sce)
+```
+
+This is a convenient field to set as several functions (e.g., `scran::findMarkers`) will attempt to automatically retrieve the labels via `colLabels()`.
+We can thus avoid the few extra keystrokes that would otherwise be necessary to specify, say, the cluster assignments in the function call.
 
 ## Conclusion 
 
