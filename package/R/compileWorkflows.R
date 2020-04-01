@@ -30,8 +30,8 @@ compileWorkflows <- function(files) {
         )
 
         if (is(E, "try-error")) {
-            message(sprintf("%s> %s\n", target, readLines(logfile)))
-            stop(sprintf("failed to compile '%s'", script))
+            message(sprintf("> %s\n", readLines(logfile)))
+            stop(sprintf("failed to compile '%s'", f))
         }
     }
 
