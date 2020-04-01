@@ -130,7 +130,7 @@ g <- buildSNNGraph(sce, use.dimred = 'PCA')
 colLabels(sce) <- factor(igraph::cluster_louvain(g)$membership)
 
 # Visualization.
-plotUMAP(sce, colour_by="clusters")
+plotUMAP(sce, colour_by="label")
 ```
 
 ## Session Info {-}

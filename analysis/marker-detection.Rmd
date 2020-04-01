@@ -363,7 +363,7 @@ We first process our `SingleCellExperiment` to obtain a `fit` object as shown be
 
 ```{r}
 library(limma)
-design <- model.matrix(~0 + cluster, data=colData(sce.pbmc))
+design <- model.matrix(~0 + label, data=colData(sce.pbmc))
 colnames(design)
 
 # Removing very low-abundance genes.
