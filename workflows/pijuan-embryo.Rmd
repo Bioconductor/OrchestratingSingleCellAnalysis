@@ -120,7 +120,7 @@ merged <- runUMAP(merged, dimred="corrected", external_neighbors=TRUE)
 
 ```{r unref-pijuan-tsne, fig.asp=1.5, fig.cap="Obligatory $t$-SNE plots of the Pijuan-Sala chimeric mouse embryo dataset, where each point represents a cell and is colored according to the assigned cluster (top) or sample of origin (bottom)."}
 gridExtra::grid.arrange(
-    plotTSNE(merged, colour_by="label", text_by="cluster", text_col="red"),
+    plotTSNE(merged, colour_by="label", text_by="label", text_col="red"),
     plotTSNE(merged, colour_by="batch")
 )
 ```

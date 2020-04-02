@@ -155,7 +155,7 @@ table(altExp(sce.pbmc)$cluster)
 ```
 
 ```{r}
-plotTSNE(altExp(sce.pbmc), colour_by="label", text_by="cluster", text_col="red")
+plotTSNE(altExp(sce.pbmc), colour_by="label", text_by="label", text_col="red")
 ```
 
 Counting the number of gene expression-derived subclusters in each ADT-derived parent cluster:
