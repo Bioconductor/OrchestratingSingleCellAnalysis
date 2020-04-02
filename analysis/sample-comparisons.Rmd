@@ -92,10 +92,7 @@ and combines it with the statistical rigor of existing methods for DE analyses i
 # Using 'label' and 'sample' as our two factors; each column of the output
 # corresponds to one unique combination of these two factors.
 summed <- aggregateAcrossCells(merged, 
-    id=DataFrame(
-        label=merged$celltype.mapped,
-        sample=merged$sample)
-)
+    id=colData(merged)[,c("celltype.mapped", "sample")])
 summed
 ```
 
@@ -128,7 +125,7 @@ Instead, we arbitrarily pick one of the labels to use for this demonstration.
 
 ```{r}
 label <- "Mesenchyme"
-current <- summed[,label==summed$label]
+current <- summed[,label==summed$celltype.mapped]
 
 # Creating up a DGEList object for use in edgeR:
 library(edgeR)
@@ -255,7 +252,7 @@ or are not represented in a sufficient number of replicate samples to enable mod
 library(scran)
 de.results <- pseudoBulkDGE(summed.filt, 
     sample=summed.filt$sample,
-    label=summed.filt$label,
+    label=summed.filt$celltype.mapped,
     design=design,
     coef=ncol(design),
 
