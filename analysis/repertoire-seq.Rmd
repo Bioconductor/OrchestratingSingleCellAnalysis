@@ -256,7 +256,7 @@ of.interest <- colLabels(sce.pbmc) %in% c(tclust.1, tclust.2)
 library(scater)
 plotExpression(altExp(sce.pbmc)[,of.interest], 
     features=rownames(altExp(sce.pbmc)),
-    other_fields="label") + facet_wrap(~cluster, ncol=1)
+    other_fields="label") + facet_wrap(~label, ncol=1)
 ```
 
 ```{r, echo=FALSE}
@@ -319,7 +319,7 @@ extractDataFrame <- function(splitted, ...) {
     thing <- thing[rep(seq_len(NROW(thing)), lengths(splitted)),,drop=FALSE]
     cbind(as.data.frame(unlist(splitted)), thing)
 }
-df.A <- extractDataFrame(sce.pbmc$TRA, cluster=colLabels(sce.pbmc))
+df.A <- extractDataFrame(sce.pbmc$TRA, label=colLabels(sce.pbmc))
 
 library(alakazam)
 aap <- aminoAcidProperties(df.A, seq="cdr3")
@@ -329,7 +329,7 @@ head(aap[,properties])
 collected <- list()
 for (i in properties) {
     prop <- colnames(aap)[i]
-    current <- split(aap[,prop], colLabels(aap))
+    current <- split(aap[,prop], aap$label)
     left <- current[[tclust.1]]
     right <- current[[tclust.2]]
     stats <- wilcox.test(left, right)
