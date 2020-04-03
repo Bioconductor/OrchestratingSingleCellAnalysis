@@ -49,63 +49,17 @@ discard <- high.mito | low.adt
 sce.pbmc <- sce.pbmc[,!discard]
 ```
 
-### Normalization
+We examine some of the statistics:
 
-Computing size factors for the gene expression and ADT counts.
-
-```{r normalization}
-library(scran)
-
-set.seed(1000)
-clusters <- quickCluster(sce.pbmc)
-sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
-
-# TODO: move into scran somewhere.
-library(DelayedMatrixStats)
-ambient <- rowMeans(counts(altExp(sce.pbmc)))
-sf.amb <- colMedians(DelayedArray(counts(altExp(sce.pbmc)))/ambient)
-sf.amb <- sf.amb/mean(sf.amb)
-sizeFactors(altExp(sce.pbmc)) <- sf.amb
-
-sce.pbmc <- logNormCounts(sce.pbmc, use_altexps=TRUE)
+```{r}
+summary(high.mito)
+summary(low.adt)
+summary(discard)
 ```
 
-### Dimensionality reduction
+We examine the distribution of each QC metric (Figure \@ref(fig:unref-pbmc-adt-qc)).
 
-```{r dimensionality-reduction}
-set.seed(100000)
-altExp(sce.pbmc) <- runTSNE(altExp(sce.pbmc))
-
-set.seed(1000000)
-altExp(sce.pbmc) <- runUMAP(altExp(sce.pbmc))
-```
-
-### Clustering
-
-```{r clustering}
-g.adt <- buildSNNGraph(altExp(sce.pbmc), k=10, d=NA)
-clust.adt <- igraph::cluster_walktrap(g.adt)$membership
-altExp(sce.pbmc)$cluster <- factor(clust.adt)
-
-set.seed(1010010)
-subclusters <- quickSubCluster(sce.pbmc, clust.adt,
-    prepFUN=function(x) {
-        dec <- modelGeneVarByPoisson(x)
-        top <- getTopHVGs(dec, prop=0.1)
-        denoisePCA(x, dec, subset.row=top)
-    }, 
-    clusterFUN=function(x) {
-        g.gene <- buildSNNGraph(x, k=10, use.dimred = 'PCA')
-        igraph::cluster_walktrap(g.gene)$membership
-    }
-)
-```
-
-## Results
-
-### Quality control statistics
-
-```{r, fig.wide=TRUE}
+```{r unref-pbmc-adt-qc, fig.wide=TRUE, fig.cap="Distribution of each QC metric in the PBMC dataset, where each point is a cell and is colored by whether or not it was discarded by the outlier-based QC approach."}
 colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- discard
 
@@ -122,24 +76,38 @@ gridExtra::grid.arrange(
 )
 ```
 
-```{r}
+We also plot the mitochondrial proportion against the total count for each cell, as one does (Figure \@ref(fig:unref-pbmc-adt-qc-mito)).
+
+```{r unref-pbmc-adt-qc-mito, fig.cap="Percentage of UMIs mapped to mitochondrial genes against the totalcount for each cell."}
 plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
     colour_by="discard") + scale_x_log10()
 ```
 
-```{r}
-summary(high.mito)
-summary(low.adt)
+### Normalization
+
+Computing size factors for the gene expression and ADT counts.
+
+```{r normalization}
+library(scran)
+
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
+altExp(sce.pbmc) <- computeMedianFactors(altExp(sce.pbmc))
+sce.pbmc <- logNormCounts(sce.pbmc, use_altexps=TRUE)
 ```
 
-### Normalization
+We generate some summary statistics for both sets of size factors:
 
 ```{r}
 summary(sizeFactors(sce.pbmc))
 summary(sizeFactors(altExp(sce.pbmc)))
 ```
 
-```{r}
+We also look at the distribution of size factors compared to the library size for each set of features (Figure \@ref(fig:unref-norm-pbmc-adt)).
+
+```{r unref-norm-pbmc-adt, fig.wide=TRUE, fig.cap="Plot of the deconvolution size factors for the gene expression values (left) or the median-based size factors for the ADT expression values (right) compared to the library size-derived factors for the corresponding set of features. Each point represents a cell."}
+par(mfrow=c(1,2))
 plot(librarySizeFactors(sce.pbmc), sizeFactors(sce.pbmc), pch=16,
     xlab="Library size factors", ylab="Deconvolution factors", 
     main="Gene expression", log="xy")
@@ -148,17 +116,66 @@ plot(librarySizeFactors(altExp(sce.pbmc)), sizeFactors(altExp(sce.pbmc)), pch=16
     main="Antibody capture", log="xy")
 ```
 
-### Clustering
+### Dimensionality reduction
 
-```{r}
-table(altExp(sce.pbmc)$cluster)
+We omit the PCA step for the ADT expression matrix, given that it is already so low-dimensional,
+and progress directly to $t$-SNE and UMAP visualizations.
+
+```{r dimensionality-reduction}
+set.seed(100000)
+altExp(sce.pbmc) <- runTSNE(altExp(sce.pbmc))
+
+set.seed(1000000)
+altExp(sce.pbmc) <- runUMAP(altExp(sce.pbmc))
 ```
 
+### Clustering
+
+We perform graph-based clustering on the ADT data and use the assignments as the column labels of the alternative Experiment.
+
+```{r clustering}
+g.adt <- buildSNNGraph(altExp(sce.pbmc), k=10, d=NA)
+clust.adt <- igraph::cluster_walktrap(g.adt)$membership
+colLabels(altExp(sce.pbmc)) <- factor(clust.adt)
+```
+
+We examine some basic statistics about the size of each cluster, 
+their separation (Figure \@ref(fig:unref-clustmod-pbmc-adt))
+and their distribution in our $t$-SNE plot (Figure \@ref(fig:unref-tsne-pbmc-adt)).
+
 ```{r}
+table(colLabels(altExp(sce.pbmc)))
+```
+
+```{r unref-clustmod-pbmc-adt, fig.cap="Heatmap of the pairwise cluster modularity scores in the PBMC dataset, computed based on the shared nearest neighbor graph derived from the ADT expression values."}
+mod <- clusterModularity(g.adt, clust.adt, as.ratio=TRUE)
+library(pheatmap)
+pheatmap::pheatmap(log10(mod + 10), cluster_row=FALSE, cluster_col=FALSE,
+    color=colorRampPalette(c("white", "blue"))(101))
+```
+
+```{r unref-tsne-pbmc-adt, fig.cap="Obligatory $t$-SNE plot of PBMC dataset based on its ADT expression values, where each point is a cell and is colored by the cluster of origin. Cluster labels are also overlaid at the median coordinates across all cells in the cluster."}
 plotTSNE(altExp(sce.pbmc), colour_by="label", text_by="label", text_col="red")
 ```
 
-Counting the number of gene expression-derived subclusters in each ADT-derived parent cluster:
+We perform some additional subclustering using the expression data to mimic an _in silico_ FACS experiment.
+
+```{r subclustering}
+set.seed(1010010)
+subclusters <- quickSubCluster(sce.pbmc, clust.adt,
+    prepFUN=function(x) {
+        dec <- modelGeneVarByPoisson(x)
+        top <- getTopHVGs(dec, prop=0.1)
+        denoisePCA(x, dec, subset.row=top)
+    }, 
+    clusterFUN=function(x) {
+        g.gene <- buildSNNGraph(x, k=10, use.dimred = 'PCA')
+        igraph::cluster_walktrap(g.gene)$membership
+    }
+)
+```
+
+We counting the number of gene expression-derived subclusters in each ADT-derived parent cluster.
 
 ```{r}
 data.frame(
