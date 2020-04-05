@@ -108,6 +108,7 @@ We can pick from a diverse range of parallelization backends depending on the av
 For example, we might use forking across 2 cores to parallelize the variance calculations on a Unix system:
 
 ```{r}
+library(BiocParallel)
 dec.pbmc.mc <- modelGeneVar(sce.pbmc, BPPARAM=MulticoreParam(2))
 dec.pbmc.mc
 ```
