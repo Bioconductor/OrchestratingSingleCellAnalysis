@@ -350,6 +350,37 @@ cent.tree <- hclust(dist(clust.kmeans2$centers), "ward.D2")
 plot(cent.tree)
 ```
 
+### In two-step procedures
+
+As previously mentioned, $k$-means is most effective in its role of vector quantization, 
+i.e., compressing adjacent cells into a single representative point.
+This allows $k$-means to be used as a prelude to more sophisticated and interpretable (but expensive) clustering algorithms.
+For example, the `clusterSNNGraph()` function from `r Biocpkg("scran")` can use $k$-means as an initial step to obtain representative centroids that are then subjected to graph-based clustering (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
+Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to.
+
+```{r tsne-kmeans-graph-pbmc, fig.cap="$t$-SNE plot of the PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from combined $k$-means/graph-based clustering."}
+# Setting the seed due to the randomness of k-means.
+set.seed(0101010)
+kgraph.clusters <- clusterSNNGraph(sce.pbmc, use.dimred="PCA", 
+    use.kmeans=TRUE, kmeans.centers=1000, k=5)
+table(kgraph.clusters)
+
+plotTSNE(sce.pbmc, colour_by=I(kgraph.clusters))
+```
+
+The obvious benefit of this approach over direct graph-based clustering is the speed improvement.
+We avoid the need to identifying nearest neighbors for each cell and the construction of a large intermediate graph,
+while benefiting from the relative interpretability of graph-based clusters compared to those from $k$-means.
+This approach also mitigates the "inflation" effect discussed in Section \@ref(fig:clustering-graph).
+Each centroid serves as a representative of a region of space that is roughly similar in volume,
+ameliorating differences in cell density that can cause (potentially undesirable) differences in resolution.
+
+The choice of the number of $k$-means clusters (defined here by the `kmeans.clusters=` argument) determines the trade-off between speed and fidelity.
+Larger values provide a more faithful representation of the underlying distribution of cells,
+at the cost of requiring more computational work by the second-stage clustering procedure.
+Note that the second step operates on the centroids, so increasing `kmeans.clusters=` may have further implications if the second-stage procedure is sensitive to the total number of input observations. 
+For example, increasing the number of centroids would require an concomitant increase in `k=` (the number of neighbors in graph construction) to maintain the same level of resolution in the final output.
+
 ## Hierarchical clustering
 
 ### Background
