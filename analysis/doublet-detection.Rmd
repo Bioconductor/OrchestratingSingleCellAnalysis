@@ -183,6 +183,95 @@ This will provide an accurate estimate of the total RNA content of each cell.
 To this end, spike-in-based size factors from Section \@ref(spike-norm) can be supplied to the `doubletCells()` function via the `size.factors.content=` argument.
 This will use the spike-in size factors to scale the contribution of each cell to a doublet library.)
 
+## Doublet detection in multiplexed experiments
+
+For multiplexed samples [@kang2018multiplexed;@stoekius2018hashing], we can identify doublet cells based on the cells that have multiple labels.
+The idea here is that cells from the same sample are labelled in a unique manner, either implicitly with genotype information or experimentally with hashing tag oligos (HTOs).
+Cells from all samples are then mixed together and the multiplexed pool is subjected to scRNA-seq, avoiding batch effects and simplifying the logistics of processing a large number of samples.
+Importantly, most per-cell libraries are expected to contain one label that can be used to assign that cell to its sample of origin.
+Cell libraries containing two labels are thus likely to be doublets of cells from different samples. 
+
+To demonstrate, we will use some data from the original cell hashing study [@stoekius2018hashing].
+Each sample's cells were stained with an antibody against a ubiquitous surface protein, where the antibody was conjugated to a sample-specific HTO.
+Sequencing of the HTO-derived cDNA library ultimately yields a count matrix where each row corresponds to a HTO and each column corresponds to a cell barcode.
+(We use `r Biocpkg("BiocFileCache")` to avoid repeated downloads of the same file.)
+
+```{r}
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+hash.tar <- bfcrpath(bfc, "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE108313&format=file")
+
+fname <- "GSM2895283_Hashtag-HTO-count.csv.gz"
+untar(hash.tar, files=fname, exdir=tempdir())
+hto.counts <- read.csv(file.path(tempdir(), fname), row.names=1)
+hto.counts <- as.matrix(hto.counts[1:8,])
+
+dim(hto.counts)
+hto.counts[,1:3]
+```
+
+Before we proceed to doublet detection, we simplify the problem by first identifying the barcodes that contain cells.
+This is most conventionally done using the gene expression matrix for the same set of barcodes, as shown in Section \@ref(qc-droplets).
+While we could extract the gene expression matrix from `hash.tar`, we will instead demonstrate an alternative approach that uses the HTO count matrix directly in the `emptyDrops()` function.
+This requires some adjustment of the `lower=` argument to obtain an appropriate value depending on the sequencing depth of the HTOs; otherwise, the barcode-rank plots are quite similar to what one might expect from gene expression data (Figure \@ref(fig:hash-barcode-rank)).
+
+```{r hash-barcode-rank, fig.wide=TRUE, fig.cap="Cell-calling statistics from running `emptyDrops()` on the HTO counts in the cell hashing study. Left: Barcode rank plot of the HTO counts in the cell hashing study. Right: distribution of log-total counts for libraries identified as cells."}
+library(DropletUtils)
+
+set.seed(101)
+hash.calls <- emptyDrops(hto.counts, lower=200)
+is.cell <- which(hash.calls$FDR <= 0.001)
+length(is.cell)
+
+r <- rank(-hash.calls$Total)
+plot(r, hash.calls$Total, log="xy", xlab="Rank", ylab="Total HTO count")
+hist(log10(hash.calls$Total[is.cell]), xlab="Log[10] HTO count")
+```
+
+We then run `hashedDrops()` on the subset of cell barcode libraries that actually contain cells.
+This returns the likely sample of origin for each cell barcode in the `Best` field, allowing us to demultiplex this dataset.
+It also returns the log-fold change between the first and second most abundant HTOs in each barcode libary (Figure \@ref(fig:hto-1to2-hist)), allowing us to quantify the certainty of each assignment.
+Ideally, we would see large log-fold changes consistent with unambiguous assignment to a single sample.
+(Note that the abundance of each HTO is adjusted for its estimated background level before computing log-fold changes;
+this accounts for differences in the relative concentration of HTOs in each sample.)
+
+```{r hto-1to2-hist, fig.cap="Distribution of log-fold changes from the first to second-most abundant HTO in each cell."}
+hash.stats <- hashedDrops(hto.counts[,is.cell],
+    prop=metadata(hash.calls)$ambient)
+
+# Raw assignments:
+table(hash.stats$Best)
+
+hist(hash.stats$LogFC.1to2, xlab="Log fold-change from best to second HTO")
+
+# Only trusting assignments with large log-fold changes.
+confident.assignment <- hash.stats$LogFC.1to2 > 2
+table(hash.stats$Best[confident.assignment])
+```
+
+Of greater interest here is how we can use the hashing information to detect doublets.
+This is achieved by reporting the log-fold change between the second and third most abundant HTO in each barcode library.
+A large log-fold change indicates that the second HTO still has an above-expected abundance, consistent with a doublet containing HTOs from two samples.
+We can then use outlier detection to define putative doublets as those barcode libraries that have an unusually large second-to-third log-fold change.
+Indeed, Figure \@ref(fig:hto-2to3-hash) shows a clear separation between singlets (bottom-right) and doublets (top-left).
+
+```{r hto-2to3-hash, fig.cap="Log-fold changes between the first, second and third most-abundant HTOs in each cell. Potential doublets are shown in red, confidently assigned singlets are shown in blue."}
+is.doublet <- hash.stats$NMAD.2to3 > 5
+
+colors <- rep("black", nrow(hash.stats))
+colors[confident.assignment] <- "blue"
+colors[is.doublet] <- "red"
+
+plot(hash.stats$LogFC.1to2, hash.stats$LogFC.2to3,
+    xlab="Log fold-change from best to second HTO",
+    ylab="Log fold-change from second to third HTO",
+    col=colors)
+```
+
+Again, we recommend _not_ removing the likely doublets but only marking them.
+This is because hashing will not identify all doublets, most obviously those formed between cells from the same sample.
+Marking allows us to use "guilt by association" to identify neighboring unlabelled doublets, avoiding problems with small residual clusters comprised solely of intra-sample doublets.
+
 ## Further comments 
 
 Doublet detection procedures should only be applied to libraries generated in the same experimental batch.
@@ -198,8 +287,6 @@ under the assumption that sudden spikes in RNA content are unlikely in a continu
 
 The best solution to the doublet problem is experimental - that is, to avoid generating them in the first place.
 This should be a consideration when designing scRNA-seq experiments, where the desire to obtain large numbers of cells at minimum cost should be weighed against the general deterioration in data quality and reliability when doublets become more frequent.
-If cell labelling information is available [@kang2018multiplexed;@stoekius2018hashing], we recommend using it to mark doublet cells for use in identification of problematic clusters or cellular states in downstream analyses.
-Direct removal fails to account for unlabelled intra-sample doublets that can still be present in sufficient numbers to drive misleading conclusions, while the marking approach uses "guilt by association" to identify neighboring unlabelled doublets.
 
 ## Session Info {-}
 
