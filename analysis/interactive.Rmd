@@ -12,6 +12,14 @@ chapterPreamble()
 library(iSEE)
 ```
 
+```{r, eval=!exists("SCREENSHOT"), include=FALSE}
+# Borrowing the methodology used by https://github.com/iSEE/screenshots
+SCREENSHOT <- function(x, ...) {
+    path <- fetchImage(x)
+    knitr::include_graphics(path)
+}
+```
+
 ## Motivation
 
 Exploratory data analysis (EDA) and visualization are crucial for many aspects of data analysis such as quality control, hypothesis generation and contextual result interpretation.
@@ -25,15 +33,19 @@ To this end, `iSEE` provides a flexible framework that is immediately compatible
 ## Quick start {#interactive-quickstart}
 
 An instance of an interactive `iSEE` application can be launched with any data set that is stored in an object of the `SummarizedExperiment` class (or any class that extends it, e.g., `SingleCellExperiment`, `DESeqDataSet`, `MethylSet`).
-In its simplest form, this is done simply by calling `iSEE(sce)` with the `sce` data object as the sole argument, as demonstrated here with the 10X PBMC dataset.
+In its simplest form, this is done simply by calling `iSEE(sce)` with the `sce` data object as the sole argument, as demonstrated here with the 10X PBMC dataset (Figure \@ref(fig:iSEE-default)).
 
 ```{r, results='asis', echo=FALSE}
 extractCached("tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
 ```
 
-```{r, eval=FALSE}
+```{r}
 library(iSEE)
-iSEE(sce.pbmc)
+app <- iSEE(sce.pbmc)
+```
+
+```{r iSEE-default, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application with its default initialization."}
+SCREENSHOT("iSEE_default.png")
 ```
 
 The default interface contains up to eight built-in panels, each displaying a particular aspect of the data set. 
@@ -46,10 +58,14 @@ This feature is particularly useful to disseminate new data sets with accompanyi
 
 It is also possible to deploy "empty" instances of `iSEE` apps, where any `SummarizedExperiment` object stored in an RDS file may be uploaded to the running application.
 Once the file is uploaded, the application will import the `sce` object and initialize the GUI panels with the contents of the object for interactive exploration.
-This type of `iSEE` applications is launched without specifying the `sce` argument, as shown below.
+This type of `iSEE` applications is launched without specifying the `sce` argument, as shown in Figure \@ref(fig:iSEE-landing).
 
-```{r, eval=FALSE}
-iSEE()
+```{r}
+app <- iSEE()
+```
+
+```{r iSEE-landing, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application with a landing page."}
+SCREENSHOT("iSEE_landing.png")
 ```
 
 ## Usage examples {#isee-examples}
@@ -72,7 +88,7 @@ A user can then select the cells with either large or small library sizes to ins
 copy.pbmc <- sce.pbmc
 
 # Computing various QC metrics; in particular, the log10-transformed library
-# size for each cell and the log-rank by decreasing library size
+# size for each cell and the log-rank by decreasing library size.
 library(scater)
 copy.pbmc <- addPerCellQC(copy.pbmc, exprs_values="counts")
 copy.pbmc$log10_total_counts <- log10(copy.pbmc$total)
@@ -101,10 +117,10 @@ initial.state <- list(
 app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
-The configured Shiny app can then be launched as shown below, or by simply printing the `app` object.
+The configured Shiny app can then be launched with the `runApp()` function or by simply printing the `app` object (Figure \@ref(fig:iSEE-qc)).
 
-```{r, eval=FALSE}
-shiny::runApp(app)
+```{r iSEE-qc, echo=FALSE, fig.cap="Screenshot of an _iSEE_ application for interactive exploration of quality control metrics."}
+SCREENSHOT("iSEE_qc.png")
 ```
 
 This app remains fully interactive, i.e., users can interactively control the settings and layout of the panels.
@@ -168,9 +184,13 @@ initial.state <- list(
 app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
-Once the application is launched, we sort the table by ascending value of "cluster1" to identify genes that are strong markers for cluster 1.
+After launching the application (Figure \@ref(fig:iSEE-anno)), we can then sort the table by ascending values of `cluster1` to identify genes that are strong markers for cluster 1.
 Then, users may select the first row in the _Row statistics table_ and watch the second and third panel automatically update to display the most significant marker gene on the y-axis (_Feature assay plot_) or as a color scale overlaid on the data points (_Reduced dimension plot_).
 Alternatively, users can simply search the table for arbitrary gene names and select known markers for visualization.
+
+```{r iSEE-anno, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application initialized for interactive exploration of population-specific marker expression."}
+SCREENSHOT("iSEE_anno.png")
+```
 
 ### Querying features of interest
 
@@ -187,7 +207,7 @@ dec <- modelGeneVarByPoisson(copy.pbmc)
 rowData(copy.pbmc) <- cbind(rowData(copy.pbmc), dec) 
 ```
 
-The next code chunk sets up an app that contains:
+The next code chunk sets up an app (Figure \@ref(fig:iSEE-hvg)) that contains:
 
 1. A plot showing the mean-variance trend, where each point represents a cell.
 2. A table of feature statistics, similar to that generated in the previous example.
@@ -227,10 +247,14 @@ initial.state <- list(
 app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
+```{r iSEE-hvg, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application initialized for examining highly variable genes."}
+SCREENSHOT("iSEE_hvg.png")
+```
+
 It is entirely possible for these row-centric panels to exist alongside the column-centric panels discussed previously.
 The only limitation is that row-based panels cannot transmit multi-row selections to column-based panels and vice versa.
 That said, a row-based panel can still transmit a single row selection to a column-based panel for, e.g., coloring by expression;
-this allows us to set up an app where selecting a single HVG in the mean-variance plot causes the neighboring $t$-SNE to be colored by the expression of the selected gene.
+this allows us to set up an app where selecting a single HVG in the mean-variance plot causes the neighboring $t$-SNE to be colored by the expression of the selected gene (Figure \@ref(fig:iSEE-rowcol)).
 
 ```{r}
 initial.state <- list(
@@ -255,6 +279,10 @@ initial.state <- list(
 app <- iSEE(copy.pbmc, initial=initial.state)
 ```
 
+```{r iSEE-rowcol, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application containing both row- and column-based panels."}
+SCREENSHOT("iSEE_rowcol.png")
+```
+
 ## Reproducible visualizations
 
 The state of the `iSEE` application can be saved at any point to provide a snapshot of the current view of the dataset.
@@ -276,7 +304,7 @@ Of course, the user can also save the plots and tables directly for further adju
 This involves writing a step-by-step walkthrough of the different panels with explanations to facilitate their interpretation.
 All that is needed to add a tour to an `iSEE` instance is a data frame with two columns named "element" and "intro"; the first column declares the UI element to highlight in each step of the tour, and the second one contains the text to display at that step.
 This data frame must then be provided to the `iSEE()` function via the `tour` argument.
-In the code chunk below, we demonstrate the implementation of a simple tour taking through the two panels that compose a GUI, and interactively train users to use the collapsible boxes.
+Below we demonstrate the implementation of a simple tour that takes users through the two panels that compose a GUI and trains them to use the collapsible boxes.
 
 ```{r}
 tour <- data.frame(
@@ -300,12 +328,16 @@ initial.state <- list(
 )
 ```
 
-The preconfigured Shiny app can then be loaded with the tour and launched as show below.
+The preconfigured Shiny app can then be loaded with the tour and launched to obtain Figure \@ref(fig:iSEE-tour).
 Note that the viewer is free to leave the interactive tour at any time and explore the data from their own perspective.
 Examples of advanced tours showcasing a selection of published data sets can be found at https://github.com/iSEE/iSEE2018.
 
-```{r, eval=FALSE}
-iSEE(sce.pbmc, initial = initial.state, tour = tour)
+```{r}
+app <- iSEE(sce.pbmc, initial = initial.state, tour = tour)
+```
+
+```{r iSEE-tour, echo=FALSE, fig.cap="Screenshot of the _iSEE_ application initialized with a tour."}
+SCREENSHOT("iSEE_tour.png")
 ```
 
 ## Additional resources
