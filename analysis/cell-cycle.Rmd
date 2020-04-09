@@ -39,13 +39,13 @@ cyclin.genes <- rownames(sce.416b)[cyclin.genes]
 cyclin.genes
 
 library(scater)
-plotHeatmap(sce.416b, order_columns_by="cluster", 
+plotHeatmap(sce.416b, order_columns_by="label", 
     cluster_rows=FALSE, features=sort(cyclin.genes))
 ```
 
 ```{r, echo=FALSE, results="hide"}
 library(scran)
-markers <- findMarkers(sce.416b, subset.row=cyclin.genes, group=sce.416b$cluster)
+markers <- findMarkers(sce.416b, subset.row=cyclin.genes) 
 lfc <- getMarkerEffects(markers[[1]])
 stopifnot(all(lfc[c("Ccnd1", "Ccnd2"),] > 0))
 stopifnot(all(lfc[c("Ccna2", "Ccnb1", "Ccne1"),] < 0))
@@ -60,7 +60,7 @@ The same logic applies to comparisons between treatment conditions, as described
 ```{r}
 library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
-    group=sce.416b$cluster, test.type="wilcox", direction="up")
+    test.type="wilcox", direction="up")
 
 # We can infer that cluster 4 has more cells in G2/M than the other clusters,
 # based on higher expression of the cyclin B's.
@@ -72,7 +72,7 @@ library(scran)
 stopifnot(all(getMarkerEffects(markers[[4]][c("Ccnb1"),]) > 0.5))
 ```
 
-Direct examination of cyclin expression is easily to understand, interprete and experimentally validate.
+Direct examination of cyclin expression is easily to understand, interpret and experimentally validate.
 However, it is best suited for statements about relative cell cycle activity; for example, we would find it difficult to assign cell cycle phase in Figure \@ref(fig:heat-cyclin) without the presence of clusters spanning all phases to provide benchmarks for "high" and "low" expression of each cyclin.
 We also assume that cyclin expression is not affected by biological processes other than the cell cycle, which may be a strong assumption in some cases, e.g., malignant cells.
 This strategy is strongly dependent on having good sequencing coverage of the cyclins, which is less of an issue for the whole-of-transcriptome methods described below that use information from more genes.
@@ -119,7 +119,7 @@ rownames(test.data) <- rowData(sce.416b)$ENSEMBL
 library(SingleR)
 assignments <- SingleR(test.data, ref=sce.ref,
     label=sce.ref$phase, genes=cycle.markers)
-tab <- table(assignments$labels, sce.416b$cluster)
+tab <- table(assignments$labels, colLabels(sce.416b))
 tab
 ```
 
@@ -138,7 +138,7 @@ However, it is not difficult to find routine violations of this assumption - for
 ```{r dist-lef1, fig.cap="Distribution of log-normalized expression values for _Lef1_ in the reference dataset (left) and in the 416B dataset (right).", fig.wide=TRUE}
 gridExtra::grid.arrange(
     plotExpression(sce.ref, features="ENSMUSG00000027985", x="phase"),
-    plotExpression(sce.416b, features="Lef1", x="cluster"),
+    plotExpression(sce.416b, features="Lef1", x="label"),
     ncol=2)
 ```
 
@@ -188,11 +188,11 @@ Cells are classified as being in G1 phase if the G1 score is above 0.5 and great
 We see that the results are quite similar to those from `SingleR()`, which is reassuring.
 
 ```{r}
-table(assignments$phases, sce.416b$cluster)
+table(assignments$phases, colLabels(sce.416b))
 ```
 
 ```{r, echo=FALSE, results="hide"}
-tab <- table(assignments$phases, sce.416b$cluster)
+tab <- table(assignments$phases, colLabels(sce.416b))
 stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
 stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
 stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
@@ -221,8 +221,7 @@ sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
 # Similar use in related functions that support blocking:
 dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", 
     block=assignments$phases)
-marker.nocycle <- findMarkers(sce.416b, sce.416b$cluster, 
-    block=assignments$phases)
+marker.nocycle <- findMarkers(sce.416b, block=assignments$phases)
 ```
 
 That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.

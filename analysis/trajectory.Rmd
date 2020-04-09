@@ -12,10 +12,200 @@ chapterPreamble()
 ```
 
 ```{r dio-fail, fig.cap="Waiting for Stephanie to finish her PR.", echo=FALSE}
-knitr::include_graphics("https://dl.dropboxusercontent.com/s/tvkcg5h4081yk3y/dio.jpg")
+path <- fetchImage("placeholder_dio.jpg")
+knitr::include_graphics(path)
 ```
 
-## Session Info {-}
+## Overview
+
+Many biological processes manifest as a continuum of dynamic changes in the cellular state.
+The most obvious example is that of differentiation into increasingly specialized cell subtypes, but we might also consider phenomena like the cell cycle or immune cell activation that are accompanied by gradual changes in the cell's transcriptome.
+We characterize these processes from single-cell expression data by identifying a "trajectory", i.e., a path through the high-dimensional expression space that traverses the various cellular states associated with a continuous process like differentiation.
+In the simplest case, a trajectory will be a simple path from one point to another,
+but we can also observe more complex trajectories involve branching to multiple endpoints.
+
+A related concept is that of "pseudotime", defined as the positioning of cells along the trajectory that quantifies the relative activity of the underlying biological process.
+For example, the pseudotime for a differentiation trajectory might represent the degree of differentiation from a pluripotent cell to a terminal state.
+This metric allows us to tackle questions related to the global population structure in a more quantitative manner.
+(It is worth noting that pseudotime is rather poorly named as it may or may not have much to do with actual time.
+For example, one can imagine a continuum of stress states with cells moving in either direction over time, 
+but the pseudotime will only increase in one direction.)
+
+In this section, we will demonstrate several different approaches to trajectory analysis using the haematopoietic stem cell (HSC) dataset from @nestorowa2016singlecell.
+
+```{r, results='asis', echo=FALSE}
+extractCached("nestorowa-hsc", "clustering", "sce.nest")
+```
+
+```{r}
+sce.nest
+```
+
+## Obtaining pseudo-times
+
+### Cluster-based minimum spanning tree
+
+The `r Biocpkg("TSCAN")` package employs a simple yet effective approach to trajectory reconstruction.
+It clusters cells to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the cell coordinates and then forms the minimum spanning tree (MST) across centroids.
+The MST is simply an undirected acyclic graph that passes through each centroid exactly once and can be thought of as the most parsimonious structure that captures the transitions between clusters.
+We demonstrate below on the Nestorowa dataset (Figure \@ref(fig:tscan-nest-mst)), computing the centroids in the low-dimensional space to take advantage of data compaction and denoising (Chapter \@ref(reduced-dimensions)).
+
+```{r tscan-nest-mst, fig.cap="Minimum spanning tree constructed using a _TSCAN_-like algorithm in the Nestorowa HSC dataset. Each node represents a cluster and is labelled according to the cluster number."}
+# TODO: get the TSCAN authors to allow me to plug in existing
+# dimensionality reduction and clustering results, rather than
+# forcing users to go along with their defaults.
+library(scater)
+by.cluster <- aggregateAcrossCells(sce.nest, ids=colLabels(sce.nest))
+centroids <- reducedDim(by.cluster, "PCA")
+
+dmat <- dist(centroids)
+dmat <- as.matrix(dmat)
+g <- igraph::graph.adjacency(dmat, mode = "undirected", weighted = TRUE)
+mst <- igraph::minimum.spanning.tree(g)
+
+set.seed(1000)
+plot(mst)
+```
+
+For reference, we can draw the same lines between the centroids in a $t$-SNE plot (Figure \@ref(fig:tscan-nest-tsne)).
+It is then straightforward to identify interesting clusters such as those at bifurcations or endpoints.
+Keep in mind that the MST is generated from distances in the PC space and is merely being visualized in the $t$-SNE space;
+its interpretation is not compromised by the distortions required to obtain a two-dimensional visualization.
+
+```{r tscan-nest-tsne, fig.cap="$t$-SNE plot of the Nestorowa HSC dataset, where each point is a cell and is colored according to its cluster assignment. The MST obtained using a _TSCAN_-like algorithm is overlaid on top."}
+# TODO: stuff this into a function somewhere.
+pairs <- Matrix::which(mst[] > 0, arr.ind=TRUE)
+coords <- reducedDim(by.cluster, "TSNE")
+group <- rep(seq_len(nrow(pairs)), 2)
+stuff <- data.frame(rbind(coords[pairs[,1],], coords[pairs[,2],]), group)
+
+plotTSNE(sce.nest, colour_by="label") + 
+    geom_line(data=stuff, mapping=aes(x=X1, y=X2, group=group))
+```
+
+We obtain a pseudotime ordering by projecting the cells onto the MST.
+In other words, we move each cell onto the edge of the MST to which it is closest;
+the pseudotime is then calculated as the distance along the MST from this new position to a "root node".
+For our purposes, we will arbitrarily pick one of the endpoint nodes as the root,
+though a more careful choice based on the biological annotation of each node may yield more relevant orderings
+(e.g., picking a node corresponding to a more pluripotent state).
+
+```{r}
+# Figure out how to plug into TSCAN's ordering system.
+```
+
+`r Biocpkg("TSCAN")` gains several advantages from using clusters to form the MST.
+The most obvious is that of computational speed as calculations are performed over clusters rather than cells.
+The relative coarseness of clusters protects against the per-cell noise that would otherwise reduce the stability of the MST.
+The interpretation of the MST is also relatively straightforward as it uses the same clusters as the rest of the analysis,
+allowing us to recycle previous knowledge about the biological annotations assigned to each cluster.
+
+However, the reliance on clustering is also a double-edged sword.
+If the clusters are not sufficiently granular, it is possible for `r Biocpkg("TSCAN")` to overlook a trajectory if the entirety of the trajectory occurs in a single cluster.
+In addition, the MST does poorly at handling more complex events like cycles (e.g., the cell cycle, obviously) or bubbles (e.g., multiple differentation paths to the same terminal cell type).
+Whether or not this is a problem depends on the complexity of the global structure of the population of interest. 
+
+### Principal curves
+
+To identify a trajectory, one might imagine simply "fitting" a one-dimensional curve so that it passes through the cloud of cells in the high-dimensional expression space.
+This is the idea behind principal curves [@hastie1989principal], effectively a non-linear generalization of PCA where the axes of most variation are allowed to bend.
+We use the `r Biocpkg("slingshot")` package [@street2018slingshot] to fit a principal curve to the PC coordinates,
+which yields a pseudotime ordering of cells based on their relative positions when projected onto the curve.
+
+```{r}
+library(slingshot)
+sce.sling <- slingshot(sce.nest, reducedDim='PCA')
+head(sce.sling$slingPseudotime_1)
+```
+
+Here, we fitted the principal curve to the PC space for the same reasons as described above.
+We can then visualize the literal path taken by the fitted curve in that space (Figure \@ref(fig:traj-princurve-pca-nest)). 
+
+```{r traj-princurve-pca-nest, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where each point is a cell and is colored by the _slingshot_ pseudotime ordering. The path taken by the fitted principal curve is shown in black."}
+# Setting up the colors.
+library(RColorBrewer)
+colors <- colorRampPalette(brewer.pal(11,'Spectral')[-6])(100)
+plotcol <- colors[cut(sce.sling$slingPseudotime_1, breaks=100)]
+
+# Creating a PCA plot.
+plot(reducedDim(sce.sling, "PCA"), col = plotcol, pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling), lwd=2, col='black')
+```
+
+For other dimensionality reduction results, we color by the pseudotime ordering to identify the direction of the trajectory (Figure \@ref(traj-princurve-umap-nest)).
+This is effectively a continuous generalization of the coloring by cluster assignment observed in other chapters.
+
+```{r traj-princurve-umap-nest, fig.cap="UMAP plot of the Nestorowa HSC dataset, where each point is a cell and is colored by the _slingshot_ pseudotime ordering."}
+library(scater)
+sce.sling <- runUMAP(sce.sling, dimred="PCA")
+
+# TODO: make ggcells robust to random crap in the colData().
+# Also need to add a function to auto-generate a path.
+sce.sling$cell.type <- sce.sling$FACS <- NULL
+
+library(viridis)
+gg <- ggcells(sce.sling, mapping=aes(x=UMAP.1, 
+        y=UMAP.2, col=slingPseudotime_1)) +
+     geom_point() + scale_color_viridis()
+```
+
+The previous `slingshot()` call assumed that all cells in the dataset were part of a single one-dimensional trajectory,
+which fails to consider more complex events like bifurcations.
+To accommodate this, we use our previously computed cluster assignments to build a rough sketch for the global structure in the form of a MST across the cluster centroids.
+Each path through the MST from a designated root node is treated as a lineage;
+principal curves are then simultaneously fitted to all lineages, with some averaging across curves to encourage consistency in regions that are common to multiple lineages.
+This allows `slingshot()` to capture branching events based on divergence in the principal curves (Figure \@ref(fig:traj-princurve-clustered-nest)).
+
+```{r traj-princurve-clustered-nest, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
+sce.sling2 <- slingshot(sce.nest, cluster=colLabels(sce.nest), reducedDim='PCA')
+
+plot(reducedDim(sce.sling2, "PCA"), col="grey80", pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling2), lwd=2, col='black')
+```
+
+When operating in this mode, `slingshot()` produces one pseudotime ordering for each principal curve.
+Cells not assigned to a particular curve will be assigned `NA` values for that curve's ordering.
+It is straightforward to determine whether a particular cell is shared across multiple curves or is unique to a subset of curves (i.e., occurs after branching).
+
+```{r}
+curve.data <- colData(sce.sling2)
+curve.data <- curve.data[,grepl("slingPseudotime", colnames(curve.data))]
+
+# Converting to integer codes: 1 for present, 0 for absent.
+is.present <- lapply(curve.data, function(x) as.integer(!is.na(x)))
+assignments <- do.call(paste0, is.present)
+table(assignments)
+```
+
+For larger datasets, we can speed up the algorithm by approximating each principal curve with a fixed number of points.
+By default, `slingshot()` uses one point per cell to define the curve, which is unnecessarily precise when the number of cells is large.
+Indeed, the approximated curves in Figure \@ref(fig:traj-princurve-clustered-nest-approx) are quite similar to those in Figure \@ref(fig:traj-princurve-clustered-nest).
+
+```{r traj-princurve-clustered-nest-approx, fig.cap="Plot of the first 2 PCs in the Nestorowa HSC dataset, where the paths taken by the fitted principal curves are shown in black."}
+sce.sling3 <- slingshot(sce.nest, cluster=colLabels(sce.nest), 
+    reducedDim='PCA', approx_points=100)
+
+plot(reducedDim(sce.sling3, "PCA"), col="grey80", pch=16, asp = 1)
+lines(SlingshotDataSet(sce.sling3), lwd=2, col='black')
+```
+
+### Whatever monocle does nowadays
+
+## Characterizing trajectories
+
+### Changes along a trajectory
+
+### Changes between lineages
+
+## Finding the root
+
+### Overview
+
+### Entropy-based methods
+
+### RNA velocity
+
+## Session information {-}
 
 ```{r sessionInfo, echo=FALSE, results='asis'}
 prettySessionInfo()

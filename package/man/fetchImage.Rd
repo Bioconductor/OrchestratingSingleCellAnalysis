@@ -4,23 +4,23 @@
 \alias{fetchImage}
 \title{Fetch image}
 \usage{
-fetchImage(path, url)
+fetchImage(name)
 }
 \arguments{
-\item{path}{String containing a path to an image file.
-Can be missing or point to a file that does not exist.}
-
-\item{url}{String containing a URL to the image file, used if \code{path} does not exist.}
+\item{name}{String containing the image file name for certain image files stored in the \pkg{OSCABase} repository.}
 }
 \value{
-String containing a path to an image file.
+String containing a URL to an image file.
 }
 \description{
-Fetch an image to display via \code{\link{include_graphics}}.
-This either uses the path directly or obtains it from a URL if the file is not present at the indicated path.
+Fetch an image from a URL to display via \code{\link{include_graphics}}.
 }
 \details{
-This function uses \pkg{BiocFileCache} to cache the image from \code{url} if \code{path} does not point to a file.
+Image files that are not otherwise available online can be committed to the \code{images} subdirectory 
+of the \code{images} branch of the \pkg{OSCABase} repository.
+We use a separate branch to isolate these (usually large) image files from the Git history of the rest of the repository;
+this gives us the option of completely moving them from \pkg{OSCABase} to another location
+without any residual blobs in the \code{master}.
 }
 \seealso{
 \code{\link{include_graphics}}, to use the returned path.

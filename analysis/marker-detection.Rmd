@@ -42,15 +42,24 @@ We use the `findMarkers()` function to perform pairwise comparisons between clus
 
 ```{r}
 library(scran)
-markers.pbmc <- findMarkers(sce.pbmc, sce.pbmc$cluster)
+markers.pbmc <- findMarkers(sce.pbmc)
 markers.pbmc
+```
+
+The function will automatically retrieve the cluster identities from `sce.pbmc` using the `colLabels()` function.
+We apply other clustering schemes by explicitly supplying them via the `groups=` argument, as shown below.
+This is useful for annotating clusters from different algorithms or parametrizations without requiring modification to `sce.pbmc`.
+
+```{r}
+# Exactly the same as 'markers.pbmc'.
+same.markers <- findMarkers(sce.pbmc, groups=colLabels(sce.pbmc))
 ```
 
 ```{r, echo=FALSE}
 chosen <- 9
 ```
 
-To demonstrate, we use cluster `r chosen` as our cluster of interest for this section.
+To demonstrate how to interpret the results, we will use cluster `r chosen` as our cluster of interest.
 The relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values [@simes1986improved] across the pairwise comparisons involving `r chosen`.
 
 ```{r}
@@ -110,7 +119,7 @@ To focus on up-regulated markers, we can instead perform a one-sided $t$-test to
 This is achieved by setting `direction="up"` in the `findMarkers()` call.
 
 ```{r}
-markers.pbmc.up <- findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up")
+markers.pbmc.up <- findMarkers(sce.pbmc, direction="up")
 interesting.up <- markers.pbmc.up[[chosen]]
 interesting.up[1:10,1:4]
 ```
@@ -121,8 +130,7 @@ This allows us to consider the magnitude of the log-fold change in our $p$-value
 We perform this by setting `lfc=` in our `findMarkers()` call - when combined with `direction=`, this tests for genes with log-fold changes that are significantly greater than 1:
 
 ```{r}
-markers.pbmc.up2 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
-    direction="up", lfc=1)
+markers.pbmc.up2 <- findMarkers(sce.pbmc, direction="up", lfc=1)
 interesting.up2 <- markers.pbmc.up2[[chosen]]
 interesting.up2[1:10,1:4]
 ```
@@ -153,8 +161,7 @@ A gene will only achieve a low combined $p$-value if it is strongly DE in all co
 
 ```{r}
 # We can combine this with 'direction='.
-markers.pbmc.up3 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
-    pval.type="all", direction="up")
+markers.pbmc.up3 <- findMarkers(sce.pbmc, pval.type="all", direction="up")
 interesting.up3 <- markers.pbmc.up3[[chosen]]
 interesting.up3[1:10,1:3]
 ```
@@ -175,8 +182,7 @@ The aim is to improve the conciseness of the top markers for defining a cluster 
 The downside is that taking this compromise position sacrifices the theoretical guarantees offered at the other two extremes.
 
 ```{r}
-markers.pbmc.up4 <- findMarkers(sce.pbmc, sce.pbmc$cluster, 
-    pval.type="some", direction="up")
+markers.pbmc.up4 <- findMarkers(sce.pbmc, pval.type="some", direction="up")
 interesting.up4 <- markers.pbmc.up4[[chosen]]
 interesting.up4[1:10,1:3]
 ```
@@ -201,8 +207,7 @@ The `direction=`, `lfc=` and `pval.type=` arguments can be specified and have th
 We demonstrate below by detecting upregulated genes in each cluster with `direction="up"`.
 
 ```{r}
-markers.pbmc.wmw <- findMarkers(sce.pbmc, test="wilcox",
-    sce.pbmc$cluster, direction="up")
+markers.pbmc.wmw <- findMarkers(sce.pbmc, test="wilcox", direction="up")
 names(markers.pbmc.wmw)
 ```
 
@@ -233,7 +238,7 @@ One practical advantage of the WMW test over the Welch $t$-test is that it is sy
 This means that, all else being equal, the top-ranked genes on each side of a DE comparison will have similar expression profiles regardless of the number of cells in each group.
 In contrast, the $t$-test will favor genes where the larger group has the higher relative variance as this increases the estimated degrees of freedom and decreases the resulting $p$-value.
 This can lead to unappealing rankings when the aim is to identify genes upregulated in smaller groups.
-The WMW test is not completely immune the variance effects - for example, it will slightly favor detection of DEGs at low average abundance where the greater number of ties at zero deflates the approximate variance of the rank sum statistic - but this is relatively benign as the selected genes are still fairly interesting.
+The WMW test is not completely immune to variance effects - for example, it will slightly favor detection of DEGs at low average abundance where the greater number of ties at zero deflates the approximate variance of the rank sum statistic - but this is relatively benign as the selected genes are still fairly interesting.
 We observe both of these effects in a comparison between alpha and gamma cells in the human pancreas data set from @lawlor2017singlecell (Figure \@ref(fig:comparative-markers-tw)).
 
 ```{r, eval=FALSE, echo=FALSE}
@@ -271,8 +276,6 @@ marker.lawlor.w <- findMarkers(sce.lawlor, groups=sce.lawlor$`cell type`,
 # Upregulated in alpha:
 marker.alpha.t <- marker.lawlor.t$Alpha
 marker.alpha.w <- marker.lawlor.w$Alpha
-marker.alpha.t <- marker.alpha.t[order(marker.alpha.t$p.value),]
-marker.alpha.w <- marker.alpha.w[order(marker.alpha.w$p.value),]
 chosen.alpha.t <- rownames(marker.alpha.t)[1:20]
 chosen.alpha.w <- rownames(marker.alpha.w)[1:20]
 u.alpha.t <- setdiff(chosen.alpha.t, chosen.alpha.w)
@@ -281,8 +284,6 @@ u.alpha.w <- setdiff(chosen.alpha.w, chosen.alpha.t)
 # Upregulated in gamma:
 marker.gamma.t <- marker.lawlor.t$`Gamma/PP`
 marker.gamma.w <- marker.lawlor.w$`Gamma/PP`
-marker.gamma.t <- marker.gamma.t[order(marker.gamma.t$p.value),]
-marker.gamma.w <- marker.gamma.w[order(marker.gamma.w$p.value),]
 chosen.gamma.t <- rownames(marker.gamma.t)[1:20]
 chosen.gamma.w <- rownames(marker.gamma.w)[1:20]
 u.gamma.t <- setdiff(chosen.gamma.t, chosen.gamma.w)
@@ -328,8 +329,7 @@ Large positive log-fold changes indicate that the gene is more frequently expres
 We focus on genes that are upregulated in each cluster compared to the others by setting `direction="up"`.
 
 ```{r}
-markers.pbmc.binom <- findMarkers(sce.pbmc, test="binom",
-    sce.pbmc$cluster, direction="up")
+markers.pbmc.binom <- findMarkers(sce.pbmc, test="binom", direction="up")
 names(markers.pbmc.binom)
 interesting.binom <- markers.pbmc.binom[[chosen]]
 colnames(interesting.binom)
@@ -340,7 +340,7 @@ Figure \@ref(fig:viol-de-binom) confirms that the top genes exhibit strong diffe
 ```{r viol-de-binom, fig.cap=sprintf("Distribution of log-normalized expression values for the top 10 DE genes involving cluster %s with the binomial test, stratified by cluster assignment and coloured by the plate of origin for each cell.", chosen)}
 library(scater)
 top.genes <- head(rownames(interesting.binom))
-plotExpression(sce.pbmc, x="cluster", features=top.genes)
+plotExpression(sce.pbmc, x="label", features=top.genes)
 ```
 
 The disadvantage of the binomial test is that its increased stringency can lead to the loss of good candidate markers.
@@ -363,7 +363,7 @@ We first process our `SingleCellExperiment` to obtain a `fit` object as shown be
 
 ```{r}
 library(limma)
-design <- model.matrix(~0 + cluster, data=colData(sce.pbmc))
+design <- model.matrix(~0 + label, data=colData(sce.pbmc))
 colnames(design)
 
 # Removing very low-abundance genes.
@@ -379,7 +379,7 @@ We then perform pairwise comparisons between clusters using the TREAT strategy [
 For each comparison, we store the corresponding data frame of statistics in `all.results`, along with the identities of the clusters involved in `all.pairs`.
 
 ```{r}
-nclust <- length(unique(sce.pbmc$cluster))
+nclust <- length(unique(colLabels(sce.pbmc)))
 all.results <- all.pairs <- list()
 counter <- 1L
 
@@ -437,11 +437,9 @@ We use the `multiMarkerStats()` to merge the results of separate `findMarkers()`
 
 ```{r}
 combined <- multiMarkerStats(
-    t=findMarkers(sce.pbmc, sce.pbmc$cluster, direction="up"),
-    wilcox=findMarkers(sce.pbmc, test="wilcox", 
-        sce.pbmc$cluster, direction="up"),
-    binom=findMarkers(sce.pbmc, test="binom", 
-        sce.pbmc$cluster, direction="up")
+    t=findMarkers(sce.pbmc, direction="up"),
+    wilcox=findMarkers(sce.pbmc, test="wilcox", direction="up"),
+    binom=findMarkers(sce.pbmc, test="binom", direction="up")
 )
 
 # Interleaved marker statistics from both tests for each cluster.
@@ -467,11 +465,10 @@ extractCached("lun-416b", "clustering", "sce.416b")
 ```
 
 ```{r}
-m.out <- findMarkers(sce.416b, sce.416b$cluster, 
-    block=sce.416b$block, direction="up") 
+m.out <- findMarkers(sce.416b, block=sce.416b$block, direction="up") 
 ```
 
-For each gene, each pairwise comparion between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
+For each gene, each pairwise comparison between clusters is performed separately in each level of the blocking factor - in this case, the plate of origin.
 The function will then combine $p$-values from different plates using Stouffer's Z method to obtain a single $p$-value per pairwise comparison.
 (These $p$-values are further combined across comparisons to obtain a single $p$-value per gene, using either Simes' method or an intersection-union test depending on the value of `pval.type=`.)
 This approach favours genes that exhibit consistent DE in the same direction in each plate.
@@ -498,8 +495,7 @@ There is also a slight increase in power when information is shared across clust
 design <- model.matrix(~sce.416b$block)
 design <- design[,-1,drop=FALSE]
 
-m.alt <- findMarkers(sce.416b, sce.416b$cluster, 
-    design=design, direction="up")
+m.alt <- findMarkers(sce.416b, design=design, direction="up")
 demo <- m.alt[["1"]]
 demo[demo$Top <= 5,1:4]
 ```
@@ -536,7 +532,7 @@ hist(out[[1]]$p.value, col="grey80", xlab="p-value")
 
 For marker gene detection, this effect is largely harmless as the $p$-values are used only for ranking.
 However, it becomes an issue when the $p$-values are used to define "significant differences" between clusters with respect to an error rate threshold.
-Meaningful interpretation of error rates require consideration of the long-run behaviour, i.e., the rate of incorrect rejections if the experiment were repeated many times.
+Meaningful interpretation of error rates require consideration of the long-run behavior, i.e., the rate of incorrect rejections if the experiment were repeated many times.
 The concept of statistical significance for differences between clusters is not applicable if clusters and their interpretations are not stably reproducible across (hypothetical) replicate experiments.
 
 ### Nature of replication {#false-replicates}

@@ -1,6 +1,6 @@
 # Muraro human pancreas (CEL-seq)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -39,7 +39,7 @@ unfiltered <- sce.muraro
 ```
 
 This dataset lacks mitochondrial genes so we will do without.
-For the one batch that seems to have a high proportion of low-quality cells, we compute an appropriate filter threshold using a shared median and MAD from the other batches (Figure \@ref(unref-muraro-qc-dist)).
+For the one batch that seems to have a high proportion of low-quality cells, we compute an appropriate filter threshold using a shared median and MAD from the other batches (Figure \@ref(fig:unref-muraro-qc-dist)).
 
 ```{r quality-control}
 library(scater)
@@ -138,22 +138,22 @@ merged.muraro <- runTSNE(merged.muraro, dimred="corrected")
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(merged.muraro, use.dimred="corrected")
-merged.muraro$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(merged.muraro) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r unref-seger-heat, fig.cap="Heatmap of the frequency of cells from each cell type label in each cluster."}
-tab <- table(Cluster=merged.muraro$cluster, CellType=sce.muraro$label)
+tab <- table(Cluster=colLabels(merged.muraro), CellType=sce.muraro$label)
 library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
 ```{r}
-table(Cluster=merged.muraro$cluster, Donor=merged.muraro$batch)
+table(Cluster=colLabels(merged.muraro), Donor=merged.muraro$batch)
 ```
 
 ```{r unref-muraro-tsne, fig.cap="Obligatory $t$-SNE plots of the Muraro pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotTSNE(merged.muraro, colour_by="cluster"),
+    plotTSNE(merged.muraro, colour_by="label"),
     plotTSNE(merged.muraro, colour_by="batch"),
     ncol=2
 )

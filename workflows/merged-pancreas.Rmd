@@ -1,6 +1,6 @@
 # Merged human pancreas datasets {#merged-pancreas}
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -178,7 +178,7 @@ plotTSNE(mnn.pancreas, colour_by=I(seger.donors))
 
 Given these results, the most prudent course of action is to remove the donor effects within each dataset in addition to the batch effects across datasets.
 This involves a bit more work to properly specify the two levels of unwanted heterogeneity.
-To make it a bit easier, we use the `noCorrect()` utility to combine all batches into a single `SingleCellExperiment` object.
+To make our job a bit easier, we use the `noCorrect()` utility to combine all batches into a single `SingleCellExperiment` object.
 
 ```{r}
 combined <- noCorrect(normed.pancreas)
@@ -186,25 +186,18 @@ assayNames(combined) <- "logcounts"
 combined$donor <- donors
 ```
 
-For each donor, we determine the number of donors from the same dataset.
-This is used to weight the PCA step to ensure that each dataset contributes equally to the definition of the PC space, regardless of the number of donors in that dataset.
-(Similarly, the default behavior of `fastMNN()` ensures that each batch contributes equally to the PCA, regardless of the number of cells.)
+We then call `fastMNN()` on the combined object with our chosen HVGs, using the `batch=` argument to specify which cells belong to which donors.
+This will progressively merge cells from each donor in each batch until all cells are mapped onto a common coordinate space.
+For some extra sophistication, we also set the `weights=` argument to ensure that each batch contributes equally to the PCA, regardless of the number of donors present in that batch; see `?multiBatchPCA` for more details.
 
 ```{r}
-donors.by.batches <- lapply(split(combined$donor, combined$batch), unique)
-donors.by.batches
-ndonors <- rep(lengths(donors.by.batches), lengths(donors.by.batches))
-names(ndonors) <- unlist(donors.by.batches)
-ndonors
-```
+donors.per.batch <- split(combined$donor, combined$batch)
+donors.per.batch <- lapply(donors.per.batch, unique)
+donors.per.batch
 
-We then call `fastMNN()` on the combined object, using the `batch=` argument to specify which cells belong to which donors.
-This will progressively merge cells from each donor until all cells are mapped onto a common coordinate space.
-
-```{r}
 set.seed(1010100)
-multiout <- fastMNN(combined, batch=donors, subset.row=chosen.genes,
-    weights=1/ndonors)
+multiout <- fastMNN(combined, batch=combined$donor, 
+    subset.row=chosen.genes, weights=donors.per.batch)
 
 # Renaming metadata fields for easier communication later.
 multiout$dataset <- combined$batch

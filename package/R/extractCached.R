@@ -6,6 +6,7 @@
 #' @param chunk String containing the name of the requested chunk.
 #' @param objects Character vector containing variable names for one or more objects to be extracted.
 #' @param flexible Logical scalar indicating a flexible search for the Rmarkdown file should be performed.
+#' @param envir Environment where the loaded objects should be stored.
 #'
 #' @details
 #' Each object is extracted in its state at the requested chunk at \code{chunk}.
@@ -37,6 +38,9 @@
 #' 
 #' If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
 #' This is relevant for the final compilation of the book.
+#'
+#' If the discovered file does not have a cache, 
+#' \code{extractCached} will compile it (and thus generate the cache) using \code{\link{compileWorkflows}}.
 #' 
 #' @return Variables with names \code{objects} are created in the global environment.
 #' An markdown chunk (wrapped in a collapsible element) is printed that contains all commands needed to generate those objects, 
@@ -48,26 +52,71 @@
 #' \code{\link{setupHTML}} and \code{\link{chapterPreamble}}, to set up the code for the collapsible element.
 #' 
 #' @export
-#' @importFrom knitr opts_knit load_cache
-extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
-    if (flexible) {
-        if (!file.exists(paste0(prefix, ".Rmd"))) {
-            tmp <- file.path("../workflows", prefix)
+extractCached <- function(prefix, chunk, objects, flexible=TRUE, envir=topenv(parent.frame())) {
+    fout <- .obtain_cache_path(prefix, flexible=flexible)
+    fname <- fout$fname
+    cache_path <- fout$cache_path
 
-            if (file.exists(paste0(tmp, ".Rmd"))) {
-                prefix <- tmp
-            } else {
-                potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
-                if (length(potential)) {
-                    prefix <- sub("\\.Rmd$", "", potential[1])
-                }
+    chunks <- .extract_chunks(fname, chunk)
+    .load_objects(cache_path, chunks, objects=objects, envir=envir)
+
+    # Pretty-printing the chunks.
+    cat('<button class="aaron-collapse">View history</button>
+<div class="aaron-content">
+   
+```r\n')
+    first <- TRUE
+    for (x in names(chunks)) {
+        if (!first) {
+            cat("\n")
+        } else {
+            first <- FALSE
+        }
+        cat(sprintf("#--- %s ---#\n", x))
+        cat(chunks[[x]], sep="\n")
+    }
+    cat("```
+
+</div>\n")
+
+    invisible(NULL)
+}
+
+.obtain_cache_path <- function(prefix, flexible) {
+    if (flexible) {
+        prefix <- .flexible_location_finder(prefix)
+    }
+
+    fname <- paste0(prefix, ".Rmd")
+    cache_path <- paste0(prefix, "_cache")
+    cache_path <- file.path(cache_path, "html/")
+
+    if (!file.exists(cache_path)) {
+        compileWorkflows(fname)
+    }
+    list(fname=fname, cache_path=cache_path)
+}
+
+.flexible_location_finder <- function(prefix) {
+    if (!file.exists(paste0(prefix, ".Rmd"))) {
+        tmp <- file.path("../workflows", prefix)
+
+        if (file.exists(paste0(tmp, ".Rmd"))) {
+            prefix <- tmp
+        } else {
+            potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
+            if (length(potential)) {
+                prefix <- sub("\\.Rmd$", "", potential[1])
             }
         }
     }
 
-    all.lines <- readLines(paste0(prefix, ".Rmd"))
+    prefix
+}
 
+.extract_chunks <- function(fname, chunk) {
     # Extracting chunks until we get to the one with 'chunk'.
+    all.lines <- readLines(fname)
     named.pattern <- "^```\\{r ([^,]+).*\\}"
     opens <- grep(named.pattern, all.lines)
 
@@ -96,15 +145,19 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
     if (is.na(m)) {
         stop(sprintf("could not find chunk '%s'", chunk))
     }
-    chunks <- chunks[seq_len(m)]
+    chunks[seq_len(m)]
+}
 
-    # Collecting all variable names and loading them into the global namespace.
+#' @importFrom knitr opts_knit load_cache
+.load_objects <- function(cache_path, chunks, objects, envir) {
+    # This is required so that the cache_path is interpreted correctly,
+    # as load_cache will just slap output.dir in front of cache_path.
     if (is.null(old <- opts_knit$get("output.dir"))) {
         opts_knit$set(output.dir=".")
         on.exit(opts_knit$set(output.dir=old))
     }
-    cache_path <- file.path(paste0(prefix, "_cache"), "html/")
 
+    # Collecting all variable names and loading them into the global namespace.
     for (obj in objects) {
         assign.pattern <- paste0(obj, ".*<-")
         found <- FALSE
@@ -112,8 +165,7 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
         # Setting 'rev' to get the last chunk in which 'obj' was on the left-hand side of assignment.
         for (x in rev(names(chunks))) {
             if (found <- any(grepl(assign.pattern, chunks[[x]]))) {
-                assign(obj, envir=.GlobalEnv, 
-                    value=load_cache(label=x, object=obj, path=cache_path))
+                assign(obj, envir=envir, value=load_cache(label=x, object=obj, path=cache_path))
                 break
             }
         }
@@ -121,26 +173,7 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE) {
         if (!found) {
             stop(sprintf("could not find '%s'", obj))
         }
-
     }
 
-    # Pretty-printing the chunks.
-    cat('<button class="aaron-collapse">View history</button>
-<div class="aaron-content">
-   
-```r\n')
-    first <- TRUE
-    for (x in names(chunks)) {
-        if (!first) {
-            cat("\n")
-        } else {
-            first <- FALSE
-        }
-        cat(sprintf("#--- %s ---#\n", x))
-        cat(chunks[[x]], sep="\n")
-    }
-    cat("```
-
-</div>\n")
     invisible(NULL)
 }

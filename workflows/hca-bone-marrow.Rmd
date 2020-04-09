@@ -1,6 +1,6 @@
 # HCA human bone marrow (10X Genomics) 
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -67,7 +67,7 @@ gridExtra::grid.arrange(
 )
 ```
 
-```{r unref-hca-bone-mito, fig.cap="Percentage of mitochondrial reads in each cell in the Bach mammary gland dataset compared to its total count. Each point represents a cell and is colored according to whether that cell was discarded."}
+```{r unref-hca-bone-mito, fig.cap="Percentage of mitochondrial reads in each cell in the HCA bone marrow dataset compared to its total count. Each point represents a cell and is colored according to whether that cell was discarded."}
 plotColData(unfiltered, x="sum", y="subsets_Mito_percent", 
     colour_by="discard") + scale_x_log10()
 ```
@@ -95,7 +95,7 @@ dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor, BPPARAM=bpp)
 top.bone <- getTopHVGs(dec.bone, n=5000)
 ```
 
-```{r unref-nest-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the Bach mammary gland dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
+```{r unref-hca-bone-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the HCA bone marrow dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
 par(mfrow=c(4,2))
 blocked.stats <- dec.bone$per.block
 for (i in colnames(blocked.stats)) {
@@ -154,13 +154,13 @@ Some parameter fiddling is required to improve convergence with a large number o
 set.seed(1000)
 kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
     centers=40, iter.max=1000, algorithm="MacQueen") 
-sce.bone$cluster <- factor(kout.bone$cluster)
+colLabels(sce.bone) <- factor(kout.bone$cluster)
 ```
 
 We observe mostly balanced contributions from different samples to each cluster (Figure \@ref(fig:unref-hca-bone-ab)), consistent with the expectation that all samples are replicates from different donors.
 
 ```{r unref-hca-bone-ab, fig.asp=1, fig.cap="Heatmap of log~10~-number of cells in each cluster (row) from each sample (column)."}
-tab <- table(Cluster=sce.bone$cluster, Donor=sce.bone$Donor)
+tab <- table(Cluster=colLabels(sce.bone), Donor=sce.bone$Donor)
 library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
@@ -175,7 +175,7 @@ stopifnot(all(tab>10))
 scrambled <- sample(ncol(sce.bone))
 
 gridExtra::grid.arrange(
-    plotUMAP(sce.bone, colour_by="cluster"),
+    plotUMAP(sce.bone, colour_by="label"),
     plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 )
 ```
@@ -193,10 +193,8 @@ plot(bone.clust)
 We identify marker genes for each cluster while blocking on the donor.
 
 ```{r differential-expression}
-markers.bone <- findMarkers(sce.bone, sce.bone$cluster,
-    block = sce.bone$Donor, 
-    direction = 'up', lfc = 1,
-    BPPARAM=bpp)
+markers.bone <- findMarkers(sce.bone, block = sce.bone$Donor, 
+    direction = 'up', lfc = 1, BPPARAM=bpp)
 ```
 
 We visualize the top markers for a randomly chosen cluster using a "dot plot" in Figure \@ref(fig:unref-hca-bone-dotplot).
@@ -225,17 +223,16 @@ stopifnot(c("LYZ", "VCAN", "S100A8", "CTSS") %in% rownames(best))
 ## Cell type classification
 
 We perform automated cell type classification using a reference dataset to annotate each cluster based on its pseudo-bulk profile. 
-This is faster than the per-cell approaches described in Chapter \@ref(cell-type-annotation), but sacrifices resolution for detecting heterogeneity inside a cluster.
+This is faster than the per-cell approaches described in Chapter \@ref(cell-type-annotation) at the cost of the resolution required to detect heterogeneity inside a cluster.
 Nonetheless, it is often sufficient for a quick assignment of cluster identity, and indeed, cluster `r cluster.choice` is also identified as consisting of monocytes from this analysis.
 
 ```{r cell-type-classification}
-# TODO: have SingleR use sumCountsAcrossCells to benefit from 
-# parallelized summation as well.
-aggregated <- sumCountsAcrossCells(sce.bone, id=sce.bone$cluster)
+se.aggregated <- sumCountsAcrossCells(sce.bone, id=colLabels(sce.bone))
 
 library(SingleR)
 hpc <- HumanPrimaryCellAtlasData()
-anno.single <- SingleR(aggregated, ref = hpc, labels = hpc$label.main)
+anno.single <- SingleR(se.aggregated, ref = hpc, labels = hpc$label.main,
+    assay.type.test="sum")
 anno.single
 ```
 

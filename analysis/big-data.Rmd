@@ -47,14 +47,14 @@ library(scran)
 library(BiocNeighbors)
 snn.gr <- buildSNNGraph(sce.pbmc, BNPARAM=AnnoyParam(), use.dimred="PCA")
 clusters <- igraph::cluster_walktrap(snn.gr)
-table(Exact=sce.pbmc$cluster, Approx=clusters$membership)
+table(Exact=colLabels(sce.pbmc), Approx=clusters$membership)
 ```
 
 ```{r, echo=FALSE}
 # Checking that I'm not just talking shit.
 library(fossil)
 stopifnot(rand.index(
-    as.integer(factor(sce.pbmc$cluster)),
+    as.integer(factor(colLabels(sce.pbmc))),
     as.integer(factor(clusters$membership))
 ) > 0.95)
 ```
@@ -108,6 +108,7 @@ We can pick from a diverse range of parallelization backends depending on the av
 For example, we might use forking across 2 cores to parallelize the variance calculations on a Unix system:
 
 ```{r}
+library(BiocParallel)
 dec.pbmc.mc <- modelGeneVar(sce.pbmc, BPPARAM=MulticoreParam(2))
 dec.pbmc.mc
 ```

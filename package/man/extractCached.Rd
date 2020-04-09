@@ -4,7 +4,13 @@
 \alias{extractCached}
 \title{Extract cached objects}
 \usage{
-extractCached(prefix, chunk, objects, flexible = TRUE)
+extractCached(
+  prefix,
+  chunk,
+  objects,
+  flexible = TRUE,
+  envir = topenv(parent.frame())
+)
 }
 \arguments{
 \item{prefix}{String containing the prefix of the Rmarkdown file.}
@@ -14,6 +20,8 @@ extractCached(prefix, chunk, objects, flexible = TRUE)
 \item{objects}{Character vector containing variable names for one or more objects to be extracted.}
 
 \item{flexible}{Logical scalar indicating a flexible search for the Rmarkdown file should be performed.}
+
+\item{envir}{Environment where the loaded objects should be stored.}
 }
 \value{
 Variables with names \code{objects} are created in the global environment.
@@ -54,6 +62,9 @@ under the assumption that it is being called from a file in \code{analysis/}.
 
 If this also fails, the function will then search for a file in the current working directory that ends with \code{<prefix>.Rmd} and follows the same naming scheme as a \pkg{bookdown} chapters.
 This is relevant for the final compilation of the book.
+
+If the discovered file does not have a cache, 
+\code{extractCached} will compile it (and thus generate the cache) using \code{\link{compileWorkflows}}.
 }
 
 \seealso{

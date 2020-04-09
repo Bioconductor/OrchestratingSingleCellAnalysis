@@ -1,6 +1,6 @@
 # Lawlor human pancreas (SMARTer)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -120,20 +120,20 @@ sce.lawlor <- runTSNE(sce.lawlor, dimred="PCA")
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.lawlor, use.dimred="PCA")
-sce.lawlor$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(sce.lawlor) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r}
-table(sce.lawlor$cluster, sce.lawlor$`cell type`)
+table(colLabels(sce.lawlor), sce.lawlor$`cell type`)
 ```
 
 ```{r}
-table(sce.lawlor$cluster, sce.lawlor$`islet unos id`)
+table(colLabels(sce.lawlor), sce.lawlor$`islet unos id`)
 ```
 
 ```{r unref-grun-tsne, fig.cap="Obligatory $t$-SNE plots of the Lawlor pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotTSNE(sce.lawlor, colour_by="cluster"),
+    plotTSNE(sce.lawlor, colour_by="label"),
     plotTSNE(sce.lawlor, colour_by="islet unos id"),
     ncol=2
 )

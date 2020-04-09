@@ -204,9 +204,9 @@ This is subject to the same assumptions as described above for `rescaleBatches()
 
 ### Algorithm overview
 
-Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbours to $a$ in the expression space defined by the selected features.
-Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbours in $A$.
-Mutual nearest neighbours are pairs of cells from different batches that belong in each other's set of nearest neighbours.
+Consider a cell $a$ in batch $A$, and identify the cells in batch $B$ that are nearest neighbors to $a$ in the expression space defined by the selected features.
+Repeat this for a cell $b$ in batch $B$, identifying its nearest neighbors in $A$.
+Mutual nearest neighbors are pairs of cells from different batches that belong in each other's set of nearest neighbors.
 The reasoning is that MNN pairs represent cells from the same biological state prior to the application of a batch effect - see @haghverdi2018batch for full theoretical details.
 Thus, the difference between cells in MNN pairs can be used as an estimate of the batch effect, the subtraction of which yields batch-corrected values.
 
@@ -254,7 +254,7 @@ We do not recommend using this for anything other than visualization (Section \@
 assay(mnn.out, "reconstructed")
 ```
 
-The most relevant parameter for tuning `fastMNN()` is `k`, which specifies the number of nearest neighbours to consider when defining MNN pairs.
+The most relevant parameter for tuning `fastMNN()` is `k`, which specifies the number of nearest neighbors to consider when defining MNN pairs.
 This can be interpreted as the minimum anticipated frequency of any shared cell type or state in each batch.
 Increasing `k` will generally result in more aggressive merging as the algorithm is more generous in matching subpopulations across batches.
 It can occasionally be desirable to increase `k` if one clearly sees that the same cell types are not being adequately merged across batches.
@@ -323,13 +323,13 @@ library(pheatmap)
 # For the first batch (adding +10 for a smoother color transition
 # from zero to non-zero counts for any given matrix entry).
 tab <- table(paste("after", clusters.mnn[rescaled$batch==1]),
-    paste("before", pbmc3k$cluster))
+    paste("before", colLabels(pbmc3k)))
 heat3k <- pheatmap(log10(tab+10), cluster_row=FALSE, cluster_col=FALSE,
     main="PBMC 3K comparison", silent=TRUE)
 
 # For the second batch.
 tab <- table(paste("after", clusters.mnn[rescaled$batch==2]),
-    paste("before", pbmc4k$cluster))
+    paste("before", colLabels(pbmc4k)))
 heat4k <- pheatmap(log10(tab+10), cluster_row=FALSE, cluster_col=FALSE,
     main="PBMC 4K comparison", silent=TRUE)
 
@@ -340,14 +340,14 @@ Another evaluation approach is to compute the coassignment probabilities (Sectio
 High probabilities off the diagonal in Figure \@ref(fig:coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
 We would generally expect low off-diagonal probabilities for most pairs of clusters, though this may not be reasonably possible if the within-batch clusters were poorly separated in the first place.
 
-```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilites for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
+```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilities for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
 # For the first batch.
-tab <- coassignProb(pbmc3k$cluster, clusters.mnn[rescaled$batch==1])
+tab <- coassignProb(colLabels(pbmc3k), clusters.mnn[rescaled$batch==1])
 heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
     col=rev(viridis::magma(100)), main="PBMC 3K probabilities", silent=TRUE)
 
 # For the second batch.
-tab <- coassignProb(pbmc4k$cluster, clusters.mnn[rescaled$batch==2])
+tab <- coassignProb(colLabels(pbmc4k), clusters.mnn[rescaled$batch==2])
 heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
     col=rev(viridis::magma(100)), main="PBMC 4K probabilities", silent=TRUE)
 
@@ -361,10 +361,10 @@ Larger rand indices (i.e., closer to 1) are more desirable, though this must be 
 ```{r}
 library(fossil)
 ri3k <- rand.index(as.integer(clusters.mnn[rescaled$batch==1]),
-    as.integer(pbmc3k$cluster))
+    as.integer(colLabels(pbmc3k)))
 ri3k
 ri4k <- rand.index(as.integer(clusters.mnn[rescaled$batch==2]),
-    as.integer(pbmc4k$cluster))
+    as.integer(colLabels(pbmc4k)))
 ri4k
 ```
 
@@ -388,14 +388,16 @@ In this case, we use the top 10 marker genes but any value can be used depending
 We then take the union across all comparisons in all batches and use that in place of our HVG set in `fastMNN()`.
 
 ```{r}
-stats3 <- pairwiseWilcox(logcounts(pbmc3k), pbmc3k$cluster, direction="up")
+# Recall that groups for marker detection
+# are automatically defined from 'colLabels()'. 
+stats3 <- pairwiseWilcox(pbmc3k, direction="up")
 markers3 <- getTopMarkers(stats3[[1]], stats3[[2]], n=10)
 
-stats4 <- pairwiseWilcox(logcounts(pbmc4k), pbmc4k$cluster, direction="up")
+stats4 <- pairwiseWilcox(pbmc4k, direction="up")
 markers4 <- getTopMarkers(stats4[[1]], stats4[[2]], n=10)
 
 marker.set <- unique(unlist(c(unlist(markers3), unlist(markers4))))
-length(marker.set) # getting the number of genes selected in this manner.
+length(marker.set) # getting the total number of genes selected in this manner.
 
 set.seed(1000110)
 mnn.out2 <- fastMNN(pbmc3k, pbmc4k, subset.row=marker.set,
@@ -409,8 +411,8 @@ We note that some within-batch clusters have merged, most likely due to the lack
 ```{r tsne-pbmc-corrected-markers, fig.cap="$t$-SNE plots of the merged PBMC datasets, where the merge was performed using only marker genes identified within each batch. Each point represents a cell that is colored by the assigned cluster from the within-batch analysis for the 3K (left) and 4K dataset (right)."}
 mnn.out2 <- runTSNE(mnn.out2, dimred="corrected")
 gridExtra::grid.arrange(
-    plotTSNE(mnn.out2[,mnn.out2$batch==1], colour_by=I(pbmc3k$cluster)),
-    plotTSNE(mnn.out2[,mnn.out2$batch==2], colour_by=I(pbmc4k$cluster)),
+    plotTSNE(mnn.out2[,mnn.out2$batch==1], colour_by=I(colLabels(pbmc3k))),
+    plotTSNE(mnn.out2[,mnn.out2$batch==2], colour_by=I(colLabels(pbmc4k))),
     ncol=2
 )
 ```

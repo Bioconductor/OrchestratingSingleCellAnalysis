@@ -1,6 +1,6 @@
 # Nestorowa mouse HSC (Smart-seq2) 
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -125,21 +125,21 @@ ncol(reducedDim(sce.nest, "PCA"))
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.nest, use.dimred="PCA")
-sce.nest$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(sce.nest) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r}
-table(sce.nest$cluster)
+table(colLabels(sce.nest))
 ```
 
-```{r unref-nest-tsne, fig.cap="Obligatory $t$-SNE plot of the Bach mammary gland dataset, where each point represents a cell and is colored according to the assigned cluster."}
-plotTSNE(sce.nest, colour_by="cluster")
+```{r unref-nest-tsne, fig.cap="Obligatory $t$-SNE plot of the Nestorowa HSC dataset, where each point represents a cell and is colored according to the assigned cluster."}
+plotTSNE(sce.nest, colour_by="label")
 ```
 
 ## Marker gene detection
 
 ```{r marker-detection}
-markers <- findMarkers(sce.nest, sce.nest$cluster, 
+markers <- findMarkers(sce.nest, colLabels(sce.nest), 
     test.type="wilcox", direction="up", lfc=0.5,
     row.data=rowData(sce.nest)[,"SYMBOL",drop=FALSE])
 ```
@@ -184,7 +184,7 @@ Most clusters are not assigned to any single lineage (Figure \@ref(fig:unref-ass
 Cluster `r cluster` is considered to contain erythrocytes, which is roughly consistent with our conclusions from the marker gene analysis above.
 
 ```{r unref-assignments-nest, fig.cap="Heatmap of the distribution of cells for each cluster in the Nestorowa HSC dataset, based on their assignment to each label in the mouse RNA-seq references from the _SingleR_ package."}
-tab <- table(labels$labels, sce.nest$cluster)
+tab <- table(labels$labels, colLabels(sce.nest))
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
@@ -203,10 +203,11 @@ this is perhaps unsurprising given that all cells should be HSCs of some sort.
 Y <- colData(sce.nest)$FACS
 keep <- rowSums(is.na(Y))==0 # Removing NA intensities.
 
-averages <- sumCountsAcrossCells(t(Y[keep,]), 
-    sce.nest$cluster[keep], average=TRUE)
+se.averaged <- sumCountsAcrossCells(t(Y[keep,]), 
+    colLabels(sce.nest)[keep], average=TRUE)
+averaged <- assay(se.averaged)
 
-log.intensities <- log2(averages+1)
+log.intensities <- log2(averaged+1)
 centered <- log.intensities - rowMeans(log.intensities)
 pheatmap(centered, breaks=seq(-1, 1, length.out=101))
 ```

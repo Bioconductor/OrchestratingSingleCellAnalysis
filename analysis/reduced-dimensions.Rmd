@@ -53,16 +53,16 @@ It takes advantage of the well-studied theoretical properties of the PCA - namel
 It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.
 
 When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner.
-This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behaviour of many genes.
+This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behavior of many genes.
 By comparison, random technical or biological noise is expected to affect each gene independently.
 There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs.
 This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise. 
 
 We perform the PCA on the log-normalized expression values using the `runPCA()` function from `r Biocpkg("scater")`.
 By default, `runPCA()` will compute the first 50 PCs and store them in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below.
-Here, we use only the top 2000 genes with the largest biological components to reduce computational work and noise.
-Specifically, PCA is generally robust to random noise but an excess of it may cause the earlier PCs to capture noise instead of biological structure.
-This effect can be avoided - or at least mitigated - by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter \@ref(feature-selection).
+Here, we use only the top 2000 genes with the largest biological components to reduce both computational work and high-dimensional random noise.
+In particular, while PCA is robust to random noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure [@johnstone2009consistency].
+This effect can be mitigated by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter \@ref(feature-selection).
 
 ```{r}
 library(scran)
@@ -251,7 +251,7 @@ We demonstrate the application of NMF on the @zeisel2015brain dataset using the 
 As with the PCA results, `runNMF()` stores the per-cell coordinates in the `"NMF"` entry of the `reducedDims()` of the output, which we could then use directly for downstream steps like clustering.
 However, the main benefit of NMF over PCA is that we can directly interpret the individual factors based on the identity of the highly weighted genes in the basis matrix $W$ and the affected cells in the coordinate matrix $H$ (Figure \@ref(fig:heat-nmf-zeisel)).
 
-```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
+```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right).", eval=FALSE}
 set.seed(101001)
 nmf.zeisel <- runNMF(sce.zeisel, ncomponents=10, subset_row=top.zeisel)
 
@@ -280,7 +280,7 @@ A factor with a high basis value for _Mog_ can be treated as a proxy for oligode
 cells with high NMF coordinates for that factor (Figure \@ref(fig:heat-nmf-zeisel)) are likely to be oligodendrocytes.
 Indeed, the concept of "cell type identity" is particularly amenable for NMF as the upregulation of marker genes manifests as large positive values in both $H$ and $W$ matrices, simplifying the process of interpretation for the affected factor.
 
-```{r}
+```{r, eval=FALSE}
 by.factor <- list()
 for (x in colnames(nmf.basis)) {
     by.factor[[x]] <- sort(nmf.basis[,x], decreasing=TRUE)
@@ -288,7 +288,7 @@ for (x in colnames(nmf.basis)) {
 lapply(by.factor, head, n=10)
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 # Checking my trash talk.
 top <- lapply(lapply(by.factor, head, n=10), names)
 stopifnot("Mog" %in% unlist(top))
@@ -317,7 +317,7 @@ This serves a separate purpose to the PCA-based dimensionality reduction describ
 Algorithms are more than happy to operate on 10-50 PCs, but these are still too many dimensions for human comprehension.
 Further dimensionality reduction strategies are required to pack the most salient features of the data into 2 or 3 dimensions, which we will discuss below.
 
-### Visualizating with PCA
+### Visualizing with PCA
 
 The simplest visualization approach is to plot the top 2 PCs (Figure \@ref(fig:zeisel-pca)):
 
@@ -345,9 +345,9 @@ However, as shown above, PCA is usually not satisfactory for visualization of co
 
 ### $t$-stochastic neighbor embedding
 
-The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbour embedding ($t$-SNE) method [@van2008visualizing].
-This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbours in the high-dimensional space. 
-Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distance populations.
+The _de facto_ standard for visualization of scRNA-seq data is the $t$-stochastic neighbor embedding ($t$-SNE) method [@van2008visualizing].
+This attempts to find a low-dimensional representation of the data that preserves the distances between each point and its neighbors in the high-dimensional space. 
+Unlike PCA, it is not restricted to linear transformations, nor is it obliged to accurately represent distances between distant populations.
 This means that it has much more freedom in how it arranges cells in low-dimensional space, enabling it to separate many distinct clusters in a complex population (Figure \@ref(fig:tsne-brain)).
 
 ```{r tsne-brain, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset. Each point represents a cell, coloured according to the published annotation."}
@@ -366,7 +366,7 @@ It is possible to run $t$-SNE on the original expression matrix but this is less
 Another issue with $t$-SNE is that it requires the user to be aware of additional parameters (discussed [here](http://distill.pub/2016/misread-tsne/) in some depth).
 It involves a random initialization so we need to (i) repeat the visualization several times to ensure that the results are representative and (ii) set the seed to ensure that the chosen results are reproducible.
 The "perplexity" is another important parameter that determines the granularity of the visualization (Figure \@ref(fig:tsne-perplexity)).
-Low perplexities will favour resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
+Low perplexities will favor resolution of finer structure, possibly to the point that the visualization is compromised by random noise.
 Thus, it is advisable to test different perplexity values to ensure that the choice of perplexity does not drive the interpretation of the plot.
 
 ```{r tsne-perplexity, fig.cap="$t$-SNE plots constructed from the top PCs in the Zeisel brain dataset, using a range of perplexity values. Each point represents a cell, coloured according to its annotation.", fig.width=15, fig.asp=0.3}
@@ -416,8 +416,8 @@ From a practical perspective, UMAP is much faster than $t$-SNE, which may be an 
 UMAP also involves a series of randomization steps so setting the seed is critical.
 
 Like $t$-SNE, UMAP has its own suite of hyperparameters that affect the visualization.
-Of these, the number of neighbours (`n_neighbors`) and the minimum distance between embedded points (`min_dist`) have the greatest effect on the granularity of the output.
-If these values are too low, random noise will be incorrectly treated as high-resolution structure, while values that are too high will discard fine structure altogether in favour of obtaining an accurate overview of the entire dataset.
+Of these, the number of neighbors (`n_neighbors`) and the minimum distance between embedded points (`min_dist`) have the greatest effect on the granularity of the output.
+If these values are too low, random noise will be incorrectly treated as high-resolution structure, while values that are too high will discard fine structure altogether in favor of obtaining an accurate overview of the entire dataset.
 Again, it is a good idea to test a range of values for these parameters to ensure that they do not compromise any conclusions drawn from a UMAP plot.
 
 It is arguable whether the UMAP or $t$-SNE visualizations are more useful or aesthetically pleasing.
@@ -434,14 +434,15 @@ Perhaps this perspective is not entirely invalid, but we suggest that there is s
 To illustrate, consider the interaction between clustering and $t$-SNE.
 As a general rule, we would not perform clustering on the $t$-SNE coordinates.
 Rather, we would cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on the $t$-SNE plot.
-This ensures that clustering makes use of the information that was lost during compression into two dimensions.
-The $t$-SNE plot can then be used for a diagnostic inspection of the clustering output.
-In particular, the plot is most useful for checking whether two clusters are actually neighboring subclusters or whether a cluster can be split into further subclusters, which are generally safe interpretations of $t$-SNE coordinates.
+This ensures that clustering makes use of the information that was lost during compression into two dimensions for visualization.
+The plot can then be used for a diagnostic inspection of the clustering output, e.g., to check which clusters are close neighbors or whether a cluster can be split into further subclusters; such interpretations of $t$-SNE coordinates are generally safe.
 
-It is worth elaborating on why we should not perform downstream analyses directly on the $t$-SNE or UMAP coordinates.
-Let us put aside the fact that operating on the high-dimensional representations preserves more information; from a naive perspective, using the $t$-SNE coordinates is very tempting as it ensures that any results are immediately consistent with the visualizations (regardless of whether they are right).
-However, this can actually be considered a disservice as it masks the uncertainty of the results, leading us to place more confidence in them than is warranted.
-Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the more ambiguous parts of the dataset; conversely, the lack of discrepancies increases trust in the results.
+From a naive perspective, using the $t$-SNE coordinates directly for clustering is tempting as it ensures that any results are immediately consistent with the visualization.
+Given that clustering is rather arbitrary anyway, there is nothing inherently wrong with this strategy - it can be treated as a rather circuitous implementation of graph-based clustering (Section \@ref(clustering-graph)).
+However, the enforced consistency can actually be considered a disservice as it masks the ambiguity of the conclusions, either due to the loss of information from dimensionality reduction or the uncertainty of the clustering.
+Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the less obvious aspects of the dataset; conversely, the lack of discrepancies increases trust in the conclusions.
+
+Or perhaps more bluntly: do not let the tail (of visualization) wag the dog (of quantitative analysis).
 
 ## Session Info {-}
 

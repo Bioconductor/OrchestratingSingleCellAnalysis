@@ -50,17 +50,17 @@ A brief inspection of the results indicates that clusters contain similar contri
 
 ```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
 library(scater)
-table(merged$cluster, merged$tomato)
-table(merged$cluster, merged$pool)
+table(colLabels(merged), merged$tomato)
+table(colLabels(merged), merged$pool)
 gridExtra::grid.arrange(
-    plotTSNE(merged, colour_by="tomato", text_by="cluster"),
+    plotTSNE(merged, colour_by="tomato", text_by="label"),
     plotTSNE(merged, colour_by=data.frame(pool=factor(merged$pool))),
     ncol=2
 )
 ```
 
 ```{r, echo=FALSE}
-tab <- table(merged$cluster, merged$pool)
+tab <- table(colLabels(merged), merged$pool)
 stopifnot(mean(rowMeans(tab > 0)==1) > 0.9) 
 # almost all clusters have entries in all samples,
 # indicating that things are truly well-mixed.
@@ -72,7 +72,7 @@ These were obtained by mapping the cells in this dataset to a larger, pre-annota
 While broadly consistent, many of our clusters map to multiple labels (Figure \@ref(fig:heat-cluster-label}), which reflects the difficulties in unambiguously resolving cell types undergoing differentiation.
 
 ```{r heat-cluster-label, fig.cap="Heatmap showing the abundance of cells with each combination of cluster (row) and cell type label (column). The color scale represents the log~2~-count for each combination."}
-by.label <- table(merged$cluster, merged$celltype.mapped)
+by.label <- table(colLabels(merged), merged$celltype.mapped)
 pheatmap::pheatmap(log2(by.label+1), cluster_cols=FALSE, cluster_rows=FALSE,
     color=viridis::viridis(101))
 ```
@@ -92,10 +92,7 @@ and combines it with the statistical rigor of existing methods for DE analyses i
 # Using 'label' and 'sample' as our two factors; each column of the output
 # corresponds to one unique combination of these two factors.
 summed <- aggregateAcrossCells(merged, 
-    id=DataFrame(
-        label=merged$celltype.mapped,
-        sample=merged$sample)
-)
+    id=colData(merged)[,c("celltype.mapped", "sample")])
 summed
 ```
 
@@ -128,7 +125,7 @@ Instead, we arbitrarily pick one of the labels to use for this demonstration.
 
 ```{r}
 label <- "Mesenchyme"
-current <- summed[,label==summed$label]
+current <- summed[,label==summed$celltype.mapped]
 
 # Creating up a DGEList object for use in edgeR:
 library(edgeR)
@@ -255,7 +252,7 @@ or are not represented in a sufficient number of replicate samples to enable mod
 library(scran)
 de.results <- pseudoBulkDGE(summed.filt, 
     sample=summed.filt$sample,
-    label=summed.filt$label,
+    label=summed.filt$celltype.mapped,
     design=design,
     coef=ncol(design),
 
@@ -297,7 +294,7 @@ up.de <- is.de > 0 & !is.na(is.de)
 head(sort(rowMeans(up.de), decreasing=TRUE), 10)
 
 # Downregulated across cell types.
-down.de <- is.de > 0 & !is.na(is.de)
+down.de <- is.de < 0 & !is.na(is.de)
 head(sort(rowMeans(down.de), decreasing=TRUE), 10)
 ```
 
@@ -314,9 +311,9 @@ We further identify label-specific DE genes that are significant in our label of
 As hypothesis tests are not typically geared towards identifying genes that are not DE,
 we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
 if it fails to be detected even at a generous FDR threshold of 50%.
-We demonstrate below to identify injection-induced DE genes that are unique to the allantois,
+We demonstrate this approach below by identifying injection-induced DE genes that are unique to the allantois,
 though differences in power between labels suggest that this should be interpreted with some caution;
-for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked unique gene exhibits some evidence of DE in other labels but was not detected for various reasons like too low abundance or insufficient replicates.
+for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked allantois-specific gene exhibits some evidence of DE in other labels but was not detected for various reasons like low abundance or insufficient replicates.
 
 ```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
 remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
@@ -331,6 +328,8 @@ unique.degs
 de.allantois <- de.results$Allantois
 de.allantois <- de.allantois[order(de.allantois$PValue),]
 de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
+
+sizeFactors(summed.filt) <- NULL
 plotExpression(logNormCounts(summed.filt), features=rownames(de.allantois)[1],
     x="tomato", colour_by="tomato", other_fields="label") + facet_wrap(~label)
 ```

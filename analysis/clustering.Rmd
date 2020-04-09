@@ -50,7 +50,7 @@ This iterative approach is entirely permissible for data exploration, which cons
 ### Background
 
 Popularized by its use in `r CRANpkg("Seurat")`, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets.
-We first build a graph where each node is a cell that is connected to its nearest neighbours in the high-dimensional space.
+We first build a graph where each node is a cell that is connected to its nearest neighbors in the high-dimensional space.
 Edges are weighted based on the similarity between the cells involved, with higher weight given to cells that are more closely related.
 We then apply algorithms to identify "communities" of cells that are more connected to cells in the same community than they are to cells of different communities.
 Each community represents a cluster that we can use for downstream interpretation.
@@ -60,7 +60,7 @@ It only requires a $k$-nearest neighbor search that can be done in log-linear ti
 Graph construction avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster, compared to other methods like $k$-means (that favor spherical clusters) or Gaussian mixture models (that require normality).
 From a practical perspective, each cell is forcibly connected to a minimum number of neighboring cells, which reduces the risk of generating many uninformative clusters consisting of one or two outlier cells.
 
-The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighbouring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
+The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighboring cells^[Sten Linarrsson talked about this in SCG2018, but I don't know where that work ended up. So this is what passes as a reference for the time being.].
 This has some practical consequences in datasets that exhibit differences in cell density, as more steps through the graph are required to move the same distance through a region of higher cell density.
 From the perspective of community detection algorithms, this effect "inflates" the high-density regions such that any internal substructure or noise is more likely to cause formation of subclusters.
 The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if it overstates the heterogeneity in the data.
@@ -105,8 +105,8 @@ This allows us to conveniently visualize the distribution of clusters in a $t$-S
 
 ```{r tsne-clust-graph, fig.cap="$t$-SNE plot of the 10X PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from graph-based clustering."}
 library(scater)
-sce.pbmc$cluster <- factor(clust)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+colLabels(sce.pbmc) <- factor(clust)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="label")
 ```
 
 One of the most important parameters is `k`, the number of nearest neighbors used to construct the graph.
@@ -133,10 +133,10 @@ stopifnot(length(unique(clust)) > length(unique(clust.50)))
 The graph itself can be visualized using a force-directed layout (Figure \@ref(fig:pbmc-force)).
 This yields a dimensionality reduction result that is closely related to $t$-SNE and UMAP, though which of these is the most aesthetically pleasing is left to the eye of the beholder.
 
-```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbour graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
+```{r pbmc-force, message=FALSE, fig.cap="Force-directed layout for the shared nearest-neighbor graph of the PBMC dataset. Each point represents a cell and is coloured according to its assigned cluster identity."}
 set.seed(2000)
 reducedDim(sce.pbmc, "force") <- igraph::layout_with_fr(g)
-plotReducedDim(sce.pbmc, colour_by="cluster", dimred="force")
+plotReducedDim(sce.pbmc, colour_by="label", dimred="force")
 ```
 
 ### Other parameters
@@ -192,7 +192,7 @@ stopifnot(length(unique(clust.infomap)) > length(unique(clust)))
 
 Some community detection algorithms operate by agglomeration and thus can be used to construct a hierarchical dendrogram based on the pattern of merges between clusters.
 The dendrogram itself is not particularly informative as it simply describes the order of merge steps performed by the algorithm; unlike the dendrograms produced by hierarchical clustering (Section \@ref(hierarchical-clustering)), it does not capture the magnitude of differences between subpopulations.
-However, it does provide a convenient avenue for manually tuning the clustering resolution by generatig nested clusterings using the `cut_at()` function, as shown below.
+However, it does provide a convenient avenue for manually tuning the clustering resolution by generating nested clusterings using the `cut_at()` function, as shown below.
 
 ```{r}
 community.walktrap <- igraph::cluster_walktrap(g)
@@ -259,7 +259,7 @@ Each cell is assigned to the cluster with the closest centroid, which is done by
 The main advantage of this approach lies in its speed, given the simplicity and ease of implementation of the algorithm.
 However, it suffers from a number of serious shortcomings that reduce its appeal for obtaining interpretable clusters:
 
-- It implicitly favours spherical clusters of equal radius.
+- It implicitly favors spherical clusters of equal radius.
 This can lead to unintuitive partitionings on real datasets that contain groupings with irregular sizes and shapes.
 - The number of clusters $k$ must be specified beforehand and represents a hard cap on the resolution of the clustering..
 For example, setting $k$ to be below the number of cell types will always lead to co-clustering of two cell types, regardless of how well separated they are.
@@ -285,14 +285,14 @@ set.seed(100)
 clust.kmeans <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=10)
 table(clust.kmeans$cluster)
 
-sce.pbmc$cluster <- factor(clust.kmeans$cluster)
-plotReducedDim(sce.pbmc, "TSNE", colour_by="cluster")
+colLabels(sce.pbmc) <- factor(clust.kmeans$cluster)
+plotReducedDim(sce.pbmc, "TSNE", colour_by="label")
 ```
 
 If we were so inclined, we could obtain a "reasonable" choice of $k$ by computing the gap statistic using methods from the `r CRANpkg("cluster")` package.
 This is the log-ratio of the expected to observed within-cluster sum of squares, where the expected value is computed by randomly distributing cells within the minimum bounding box of the original data.
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
-Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favour spherical clusters drives a large $k$ to capture different cluster shapes.
+Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favor spherical clusters drives a large $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
 
 ```{r kmeans-gap, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
@@ -322,8 +322,8 @@ set.seed(100)
 clust.kmeans2 <- kmeans(reducedDim(sce.pbmc, "PCA"), centers=20)
 table(clust.kmeans2$cluster)
 
-sce.pbmc$cluster <- factor(clust.kmeans2$cluster)
-plotTSNE(sce.pbmc, colour_by="cluster", text_by="cluster")
+colLabels(sce.pbmc) <- factor(clust.kmeans2$cluster)
+plotTSNE(sce.pbmc, colour_by="label", text_by="label")
 ```
 
 ### Assessing cluster separation
@@ -349,6 +349,37 @@ This directly lends itself to visualization as a tree after hierarchical cluster
 cent.tree <- hclust(dist(clust.kmeans2$centers), "ward.D2")
 plot(cent.tree)
 ```
+
+### In two-step procedures
+
+As previously mentioned, $k$-means is most effective in its role of vector quantization, 
+i.e., compressing adjacent cells into a single representative point.
+This allows $k$-means to be used as a prelude to more sophisticated and interpretable (but expensive) clustering algorithms.
+For example, the `clusterSNNGraph()` function from `r Biocpkg("scran")` can use $k$-means as an initial step to obtain representative centroids that are then subjected to graph-based clustering (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
+Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to.
+
+```{r tsne-kmeans-graph-pbmc, fig.cap="$t$-SNE plot of the PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from combined $k$-means/graph-based clustering."}
+# Setting the seed due to the randomness of k-means.
+set.seed(0101010)
+kgraph.clusters <- clusterSNNGraph(sce.pbmc, use.dimred="PCA", 
+    use.kmeans=TRUE, kmeans.centers=1000, k=5)
+table(kgraph.clusters)
+
+plotTSNE(sce.pbmc, colour_by=I(kgraph.clusters))
+```
+
+The obvious benefit of this approach over direct graph-based clustering is the speed improvement.
+We avoid the need to identifying nearest neighbors for each cell and the construction of a large intermediate graph,
+while benefiting from the relative interpretability of graph-based clusters compared to those from $k$-means.
+This approach also mitigates the "inflation" effect discussed in Section \@ref(fig:clustering-graph).
+Each centroid serves as a representative of a region of space that is roughly similar in volume,
+ameliorating differences in cell density that can cause (potentially undesirable) differences in resolution.
+
+The choice of the number of $k$-means clusters (defined here by the `kmeans.clusters=` argument) determines the trade-off between speed and fidelity.
+Larger values provide a more faithful representation of the underlying distribution of cells,
+at the cost of requiring more computational work by the second-stage clustering procedure.
+Note that the second step operates on the centroids, so increasing `kmeans.clusters=` may have further implications if the second-stage procedure is sensitive to the total number of input observations. 
+For example, increasing the number of centroids would require an concomitant increase in `k=` (the number of neighbors in graph construction) to maintain the same level of resolution in the final output.
 
 ## Hierarchical clustering
 
@@ -459,17 +490,17 @@ plot(dend)
 
 This generally corresponds well to the grouping of cells on a $t$-SNE plot (Figure \@ref(fig:tsne-416b)).
 The exception is cluster 2, which is split across two visual clusters in the plot.
-We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behaviour of the clustering algorithm, based on the examination of some later diagnostics.
+We attribute this to a distortion introduced by $t$-SNE rather than inappropriate behavior of the clustering algorithm, based on the examination of some later diagnostics.
 
 ```{r tsne-416b, fig.cap="$t$-SNE plot of the 416B dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from hierarchical clustering."}
-sce.416b$cluster <- factor(clust.416b)
-plotReducedDim(sce.416b, "TSNE", colour_by="cluster")
+colLabels(sce.416b) <- factor(clust.416b)
+plotReducedDim(sce.416b, "TSNE", colour_by="label")
 ```
 
 ```{r, echo=FALSE}
 fault <- 2L
 visual <- kmeans(reducedDim(sce.416b, "TSNE"), 4)
-xtab <- table(sce.416b$cluster, visual$cluster)
+xtab <- table(colLabels(sce.416b), visual$cluster)
 stopifnot(sum(xtab[fault,] > 0) == 2)
 stopifnot(sum(xtab[fault,]==0) == 2)
 ```
@@ -531,7 +562,7 @@ dim(coassign)
 The function returns a matrix of coassignment probabilities between every pair of original clusters in `originals` (Figure \@ref(fig:bootstrap-matrix)).
 Each coassignment probability between clusters $X$ and $Y$ represents the probability that a randomly chosen cell from $X$ and a randomly chosen from $Y$ are assigned to the same cluster in the bootstrap replicate.
 High co-assignment probabilities indicate that $X$ is not stable with respect to its separation from $Y$, given that their cells are liable to cluster together in the replicates.
-Ideally, we would hope for high coassignment probabilites on the diagonal (i.e., $X$ cells cluster with themselves) and low probabilites off the diagonal.
+Ideally, we would hope for high coassignment probabilities on the diagonal (i.e., $X$ cells cluster with themselves) and low probabilities off the diagonal.
 
 ```{r bootstrap-matrix, fig.cap="Heatmap of coassignment probabilities from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the coassignment probability between that pair of clusters."}
 pheatmap(coassign, cluster_row=FALSE, cluster_col=FALSE,

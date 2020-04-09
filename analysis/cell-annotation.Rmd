@@ -17,7 +17,7 @@ The most challenging task in scRNA-seq data analysis is arguably the interpretat
 Obtaining clusters of cells is fairly straightforward, but it is more difficult to determine what biological state is represented by each of those clusters. 
 Doing so requires us to bridge the gap between the current dataset and prior biological knowledge, and the latter is not always available in a consistent and quantitative manner^[For example, it may be somewhere in your bench collaborator's head. Try `ssh`ing into _that_.].
 Indeed, even the concept of a "cell type" is [not clearly defined](https://doi.org/10.1016/j.cels.2017.03.006), with most practitioners possessing a "I'll know it when I see it" intuition that is not amenable to computational analysis.
-As such, intepretation of scRNA-seq data is often manual and a common bottleneck in the analysis workflow.
+As such, interpretation of scRNA-seq data is often manual and a common bottleneck in the analysis workflow.
 
 To expedite this step, we can use various computational approaches that exploit prior information to assign meaning to an uncharacterized scRNA-seq dataset.
 The most obvious sources of prior information are the curated gene sets associated with particular biological processes, e.g., from the Gene Ontology (GO) or the Kyoto Encyclopedia of Genes and Genomes (KEGG) collections.
@@ -90,7 +90,7 @@ Interestingly, our clustering does not effectively distinguish between CD4^+^ an
 We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
 
 ```{r singler-cluster, fig.cap="Heatmap of the distribution of cells across labels and clusters in the 10X PBMC dataset. Color scale is reported in the log~10~-number of cells for each cluster-label combination."}
-tab <- table(Assigned=pred$pruned.labels, Cluster=sce.pbmc$cluster)
+tab <- table(Assigned=pred$pruned.labels, Cluster=colLabels(sce.pbmc))
 
 # Adding a pseudo-count of 10 to avoid strong color jumps with just 1 cell.
 library(pheatmap)
@@ -176,8 +176,8 @@ extractCached("zeisel-brain", "normalization", c("sce.zeisel"))
 
 ```{r}
 library(scran)
-wilcox.z <- pairwiseWilcox(logcounts(sce.zeisel), 
-    sce.zeisel$level1class, lfc=1, direction="up")
+wilcox.z <- pairwiseWilcox(sce.zeisel, sce.zeisel$level1class, 
+    lfc=1, direction="up")
 markers.z <- getTopMarkers(wilcox.z$statistics, wilcox.z$pairs,
     pairwise=FALSE, n=50)
 lengths(markers.z)
@@ -318,7 +318,7 @@ extractCached("bach-mammary", "clustering", "sce.mam")
 ```
 
 ```{r}
-markers.mam <- findMarkers(sce.mam, sce.mam$cluster, direction="up", lfc=1)
+markers.mam <- findMarkers(sce.mam, direction="up", lfc=1)
 ```
 
 ```{r, echo=FALSE}
@@ -366,7 +366,7 @@ stopifnot(all(as.matrix(milk)>0))
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
-    x="cluster", colour_by="cluster")
+    x="label", colour_by="label")
 ```
 
 Further inspection of interesting GO terms is achieved by extracting the relevant genes. 
@@ -407,26 +407,26 @@ We can then identify "differential gene set activity" between clusters by lookin
 For example, we observe that cluster `r chosen.text` has the highest average expression for the triacylglycerol biosynthesis GO term (Figure \@ref(fig:lipid-synth-violin)), consistent with the proposed identity of those cells.
 
 ```{r lipid-synth-violin, fig.cap="Distribution of average log-normalized expression for genes involved in triacylglycerol biosynthesis, for all cells in each cluster of the mammary gland dataset."}
-plotColData(sce.mam, y=I(aggregated["GO:0019432",]), x="cluster")
+plotColData(sce.mam, y=I(aggregated["GO:0019432",]), x="label")
 ```
 
 ```{r, echo=FALSE}
-maxed <- vapply(split(aggregated["GO:0019432",], sce.mam$cluster), median, 0)
+maxed <- vapply(split(aggregated["GO:0019432",], colLabels(sce.mam)), median, 0)
 stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
 ```
 
 The obvious disadvantage of this approach is that not all genes in the set may exhibit the same pattern of differences.
-Non-DE genes will add noise to the per-set average, "diluting" the strength of any differences compared to an analysis that focuses directly on the DE genes (Figure \@ref(thrsp-violin)).
+Non-DE genes will add noise to the per-set average, "diluting" the strength of any differences compared to an analysis that focuses directly on the DE genes (Figure \@ref(fig:thrsp-violin)).
 At worst, a gene set may contain subsets of DE genes that change in opposite directions, cancelling out any differences in the per-set average.
 This is not uncommon for gene sets that contain both positive and negative regulators of a particular biological process or pathway.
 
 ```{r thrsp-violin, fig.cap="Distribution of log-normalized expression values for _Thrsp_ across all cells in each cluster of the mammary gland dataset."}
 # Choose the top-ranking gene in GO:0019432.
-plotExpression(sce.mam, "Thrsp", x="cluster")
+plotExpression(sce.mam, "Thrsp", x="label")
 ```
 
 ```{r, echo=FALSE}
-maxed <- vapply(split(logcounts(sce.mam)["Thrsp",], sce.mam$cluster), median, 0)
+maxed <- vapply(split(logcounts(sce.mam)["Thrsp",], colLabels(sce.mam)), median, 0)
 stopifnot(identical(names(maxed)[which.max(maxed)], '2'))
 ```
 

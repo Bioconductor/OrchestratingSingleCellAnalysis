@@ -1,6 +1,6 @@
 # Grun human pancreas (CEL-seq2) 
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -140,16 +140,16 @@ merged.grun <- runTSNE(merged.grun, dimred="corrected")
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(merged.grun, use.dimred="corrected")
-merged.grun$cluster <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+colLabels(merged.grun) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
 ```{r}
-table(Cluster=merged.grun$cluster, Donor=merged.grun$batch)
+table(Cluster=colLabels(merged.grun), Donor=merged.grun$batch)
 ```
 
 ```{r unref-grun-tsne, fig.cap="Obligatory $t$-SNE plots of the Grun pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
-    plotTSNE(merged.grun, colour_by="cluster"),
+    plotTSNE(merged.grun, colour_by="label"),
     plotTSNE(merged.grun, colour_by="batch"),
     ncol=2
 )

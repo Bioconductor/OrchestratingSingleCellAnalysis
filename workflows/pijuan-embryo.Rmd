@@ -1,6 +1,6 @@
 # Pijuan-Sala chimeric mouse embryo (10X Genomics)
 
-```{r setup, echo=FALSE, results="asis"}
+```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
 chapterPreamble(use_cache = TRUE)
 ```
@@ -8,7 +8,7 @@ chapterPreamble(use_cache = TRUE)
 ## Introduction
 
 This performs an analysis of the @pijuansala2019single dataset on mouse gastrulation.
-Here, we examine chimeric embryos at the E7.5 stage of development 
+Here, we examine chimeric embryos at the E8.5 stage of development 
 where td-Tomato-positive embryonic stem cells (ESCs) were injected into a wild-type blastocyst.
 
 ## Data loading
@@ -100,13 +100,13 @@ metadata(merged)$merge.info$lost.var
 ```{r clustering}
 g <- buildSNNGraph(merged, use.dimred="corrected")
 clusters <- igraph::cluster_louvain(g)
-merged$cluster <- factor(clusters$membership)
+colLabels(merged) <- factor(clusters$membership)
 ```
 
 We examine the distribution of cells across clusters and samples.
 
 ```{r}
-table(Cluster=merged$cluster, Sample=merged$sample)
+table(Cluster=colLabels(merged), Sample=merged$sample)
 ```
 
 ## Dimensionality reduction
@@ -118,9 +118,9 @@ merged <- runTSNE(merged, dimred="corrected", external_neighbors=TRUE)
 merged <- runUMAP(merged, dimred="corrected", external_neighbors=TRUE)
 ```
 
-```{r unref-nest-tsne, fig.asp=1.5, fig.cap="Obligatory $t$-SNE plots of the Pijuan-Sala chimeric mouse embryo dataset, where each point represents a cell and is colored according to the assigned cluster (top) or sample of origin (bottom)."}
+```{r unref-pijuan-tsne, fig.asp=1.5, fig.cap="Obligatory $t$-SNE plots of the Pijuan-Sala chimeric mouse embryo dataset, where each point represents a cell and is colored according to the assigned cluster (top) or sample of origin (bottom)."}
 gridExtra::grid.arrange(
-    plotTSNE(merged, colour_by="cluster", text_by="cluster", text_col="red"),
+    plotTSNE(merged, colour_by="label", text_by="label", text_col="red"),
     plotTSNE(merged, colour_by="batch")
 )
 ```
