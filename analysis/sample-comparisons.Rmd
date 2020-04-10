@@ -576,7 +576,9 @@ _Tal1_ is a transcription factor that has known roles in erythroid differentiati
 library(MouseGastrulationData)
 sce.tal1 <- Tal1ChimeraData()
 rownames(sce.tal1) <- uniquifyFeatureNames(
-    rowData(sce.tal1)$ENSEMBL, rowData(sce.tal1)$SYMBOL)
+    rowData(sce.tal1)$ENSEMBL, 
+    rowData(sce.tal1)$SYMBOL
+)
 sce.tal1
 ```
 
@@ -616,26 +618,31 @@ stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
 
 ### Discarding ambient DEGs
 
-The presence of ambient contamination makes it difficult to interpret multi-condition DE analyses.
+As shown above, the presence of ambient contamination makes it difficult to interpret multi-condition DE analyses.
 To mitigate its effects, we need to obtain an estimate of the ambient "expression" profile from the raw count matrix for each sample.
 We follow the approach used in `emptyDrops()` [@lun2018distinguishing] and consider all barcodes with total counts below 100 to represent empty droplets.
-This allows us to construct a matrix containing UMI counts attributable to contaminating ambient transcripts in each sample.
+We then sum the counts for each gene across these barcodes to obtain an expression vector representing the ambient profile for each sample.
 
 ```{r}
-raw.tal1 <- Tal1ChimeraData(type="raw")
+library(DropletUtils)
+ambient <- vector("list", ncol(summed.neural))
 
-library(Matrix)
-ambient <- vector("list", length(raw.tal1))
-for (i in seq_along(raw.tal1)) {
-    curmat <- counts(raw.tal1[[i]])
-    is.empty <- colSums(curmat) < 100
-    ambient[[i]] <- rowSums(curmat[,is.empty])
+# Looping over all raw (unfiltered) count matrices and
+# computing the ambient profile based on its low-count barcodes.
+# Turning off rounding, as we know this is count data.
+for (s in seq_along(ambient)) {
+    raw.tal1 <- Tal1ChimeraData(type="raw", samples=s)[[1]]
+    ambient[[s]] <- estimateAmbience(counts(raw.tal1), 
+        good.turing=FALSE, round=FALSE)
 }
 
+# Cleaning up the output for pretty printing.
 ambient <- do.call(cbind, ambient)
-colnames(ambient) <- names(raw.tal1) 
+colnames(ambient) <- seq_len(ncol(ambient))
 rownames(ambient) <- uniquifyFeatureNames(
-    rowData(raw.tal1[[1]])$ENSEMBL, rowData(raw.tal1[[1]])$SYMBOL)
+    rowData(raw.tal1)$ENSEMBL, 
+    rowData(raw.tal1)$SYMBOL
+)
 head(ambient)
 ```
 
@@ -644,27 +651,30 @@ stopifnot(identical(rownames(ambient), rownames(summed.neural)))
 stopifnot(identical(as.integer(colnames(ambient)), summed.neural$sample))
 ```
 
-Given prior knowledge of mutually exclusive gene expression profiles, we estimate the contribution of ambient RNA to each sample [@young2018soupx].
-In this case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination in each sample.
-Specifically, we scale `ambient.hb` so that the hemoglobin coverage is the same as the corresponding sample of `neural.hb`; this represents an estimate of the contaminating counts in each pseudo-bulk sample.
+For each sample, we determine the maximum proportion of the count for each gene that could be attributed to ambient contamination.
+This is done by scaling the ambient profile in `ambient` and computing the $p$-value for observing a count equal to or lower than that in `summed.neural`; we then identify the maximum scaling factor for a given threshold on the (combined) $p$-value.
+The scaled ambient profile represents the upper bound of the contribution to each sample from ambient contamination.
+We deliberately use an upper bound so that our next step will aggressively remove any gene that is potentially problematic.
 
 ```{r}
-is.hbb <- grep("^Hb[ab]-", rownames(summed.neural))
-neural.hb <- colSums(counts(summed.neural)[is.hbb,])
-ambient.hb <- colSums(ambient[is.hbb,])
-scaled.ambient <- t(t(ambient) * neural.hb/ambient.hb)
-head(scaled.ambient)
+# Looping over all samples and computing the maximum proportion of 
+# counts explained by ambient contamination in each sample.
+max.ambient <- lapply(seq_len(ncol(ambient)), function(i) {
+    maximumAmbience(counts(summed.neural)[,i], ambient[,i], mode="proportion")
+})
+
+max.ambient <- do.call(cbind, max.ambient)
+dimnames(max.ambient) <- dimnames(ambient)
+head(max.ambient)
 ```
 
-For each gene, we compute the proportion of the average count attributable to ambient contamination.
-Genes in which over 10% of the counts are ambient-derived are subsequently discarded from our analysis.
-Roughly speaking, this threshold prevents ambient contribution from biasing the true fold-change by more than 10%, which is a tolerable margin of error for most applications.
-(In more extreme situations with large condition-specific differences between the total counts of the pseudo-bulk samples, one might consider applying this threshold to the proportions computed within each condition instead.)
-This approach yields a slightly smaller list of DEGs without the hemoglobins - by definition, but encouraging nonetheless as it suggests that any other (less obvious) effects of ambient contamination have also been removed.
+Genes in which over 10% of the counts are ambient-derived (averaged across samples) are subsequently discarded from our analysis.
+For balanced designs, this threshold prevents ambient contribution from biasing the true fold-change by more than 10%, which is a tolerable margin of error for most applications.
+(Unbalanced designs may warrant the use of a weighted average to account for sample size differences between groups.)
+This approach yields a slightly smaller list of DEGs without the hemoglobins, which is  encouraging as it suggests that any other (less obvious) effects of ambient contamination have also been removed.
 
 ```{r}
-ratio <- rowMeans(scaled.ambient) / rowMeans(counts(summed.neural))
-non.ambient <- ratio < 0.1 
+non.ambient <- rowMeans(max.ambient, na.rm=TRUE) <= 0.1
 summary(non.ambient)
 
 okay.genes <- names(non.ambient)[which(non.ambient)]
@@ -677,6 +687,25 @@ topTags(res.neural2)
 # Checking that the hemoglobins are no longer there.
 tab <- topTags(res.neural2)$table
 stopifnot(all(!grepl("^Hb[ab]-", rownames(tab))))
+```
+
+An alternative approach to estimating the ambient proportions involves the use of prior knowledge of mutually exclusive gene expression profiles [@young2018soupx].
+In this case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination in each sample.
+Specifically, we scale `ambient.hb` so that the hemoglobin coverage is the same as the corresponding sample of `neural.hb`; 
+this represents an direct estimate of the contaminating counts in each pseudo-bulk sample, unlike the upper bound provided by `maximumAmbience()`.
+It is then straightforward to use this to filter out genes in the same manner as described above.
+
+```{r}
+is.hbb <- grep("^Hb[ab]-", rownames(summed.neural))
+neural.hb <- colSums(counts(summed.neural)[is.hbb,])
+ambient.hb <- colSums(ambient[is.hbb,])
+scaled.ambient <- t(t(ambient) * neural.hb/ambient.hb)
+head(scaled.ambient)
+
+alt.prop <- scaled.ambient/counts(summed.neural)
+alt.prop[!is.finite(alt.prop)] <- NA
+alt.non.ambient <- rowMeans(alt.prop, na.rm=TRUE) <= 0.1
+summary(alt.non.ambient)
 ```
 
 ### Subtracting ambient counts
