@@ -302,7 +302,7 @@ reducedDim(sce, "UMAP_uwot")
 
 The `SingleCellExperiment` class provides the concept of "alternative Experiments" where we have data for a distinct set of features but the same set of samples/cells.
 The classic application would be to store the per-cell counts for spike-in transcripts; this allows us to retain this data for downstream use but separate it from the `assays` holding the counts for endogenous genes.
-The separation is particularly important as such alternative features often need to be processed separately, see Chapter \@ref(intergrating-with-protein-abundance) for examples on antibody-derived tags.
+The separation is particularly important as such alternative features often need to be processed separately, see Chapter \@ref(integrating-with-protein-abundance) for examples on antibody-derived tags.
 
 If we have data for alternative feature sets, we can store it in our `SingleCellExperiment` as an alternative Experiment.
 For example, if we have some data for spike-in transcripts, we first create a separate `SummarizedExperiment` object:

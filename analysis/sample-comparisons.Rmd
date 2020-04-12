@@ -48,7 +48,7 @@ only noting that we have already merged cells from all samples into the same coo
 and clustered the merged dataset to obtain a common partitioning across all samples (Chapter \@ref(clustering)).
 A brief inspection of the results indicates that clusters contain similar contributions from all batches with only modest differences associated with td-Tomato expression (Figure \@ref(fig:tsne-initial)).
 
-```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.caption="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
+```{r tsne-initial, fig.wide=TRUE, fig.asp=0.5, fig.cap="$t$-SNE plot of the WT chimeric dataset, where each point represents a cell and is colored according to td-Tomato expression (left) or batch of origin (right). Cluster numbers are superimposed based on the median coordinate of cells assigned to that cluster."}
 library(scater)
 table(colLabels(merged), merged$tomato)
 table(colLabels(merged), merged$pool)

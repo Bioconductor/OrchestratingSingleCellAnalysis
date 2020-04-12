@@ -506,7 +506,7 @@ If we had started our analysis with the **filtered** count matrix, we could go s
 We would not need to run `emptyDrops()` manually as shown here, and indeed, attempting to do so would lead to nonsensical results if not outright software errors.
 Nonetheless, it may still be desirable to load the **unfiltered** matrix and apply `emptyDrops()` ourselves, on occasions where more detailed inspection or control of the cell-calling statistics is desired.
 
-## Removing low-quality cells
+## Removing low-quality cells {#quality-control-discarded}
 
 Once low-quality cells have been identified, we can choose to either remove them or mark them.
 Removal is the most straightforward option and is achieved by subsetting the `SingleCellExperiment` by column.

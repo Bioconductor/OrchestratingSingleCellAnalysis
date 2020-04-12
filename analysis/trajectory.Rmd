@@ -48,7 +48,7 @@ sce.nest
 The `r Biocpkg("TSCAN")` package employs a simple yet effective approach to trajectory reconstruction.
 It clusters cells to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the cell coordinates and then forms the minimum spanning tree (MST) across centroids.
 The MST is simply an undirected acyclic graph that passes through each centroid exactly once and can be thought of as the most parsimonious structure that captures the transitions between clusters.
-We demonstrate below on the Nestorowa dataset (Figure \@ref(fig:tscan-nest-mst)), computing the centroids in the low-dimensional space to take advantage of data compaction and denoising (Chapter \@ref(reduced-dimensions)).
+We demonstrate below on the Nestorowa dataset (Figure \@ref(fig:tscan-nest-mst)), computing the centroids in the low-dimensional space to take advantage of data compaction and denoising (Chapter \@ref(dimensionality-reduction)).
 
 ```{r tscan-nest-mst, fig.cap="Minimum spanning tree constructed using a _TSCAN_-like algorithm in the Nestorowa HSC dataset. Each node represents a cluster and is labelled according to the cluster number."}
 # TODO: get the TSCAN authors to allow me to plug in existing
@@ -132,7 +132,7 @@ plot(reducedDim(sce.sling, "PCA"), col = plotcol, pch=16, asp = 1)
 lines(SlingshotDataSet(sce.sling), lwd=2, col='black')
 ```
 
-For other dimensionality reduction results, we color by the pseudotime ordering to identify the direction of the trajectory (Figure \@ref(traj-princurve-umap-nest)).
+For other dimensionality reduction results, we color by the pseudotime ordering to identify the direction of the trajectory (Figure \@ref(fig:traj-princurve-umap-nest)).
 This is effectively a continuous generalization of the coloring by cluster assignment observed in other chapters.
 
 ```{r traj-princurve-umap-nest, fig.cap="UMAP plot of the Nestorowa HSC dataset, where each point is a cell and is colored by the _slingshot_ pseudotime ordering."}

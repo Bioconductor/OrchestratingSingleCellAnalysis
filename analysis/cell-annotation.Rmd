@@ -364,7 +364,7 @@ milk <- getMarkerEffects(cur.markers[c("Csn2", "Csn3"),])
 stopifnot(all(as.matrix(milk)>0))
 ```
 
-```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.asp="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
+```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.cap="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
     x="label", colour_by="label")
 ```

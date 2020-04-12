@@ -371,7 +371,7 @@ plotTSNE(sce.pbmc, colour_by=I(kgraph.clusters))
 The obvious benefit of this approach over direct graph-based clustering is the speed improvement.
 We avoid the need to identifying nearest neighbors for each cell and the construction of a large intermediate graph,
 while benefiting from the relative interpretability of graph-based clusters compared to those from $k$-means.
-This approach also mitigates the "inflation" effect discussed in Section \@ref(fig:clustering-graph).
+This approach also mitigates the "inflation" effect discussed in Section \@ref(clustering-graph).
 Each centroid serves as a representative of a region of space that is roughly similar in volume,
 ameliorating differences in cell density that can cause (potentially undesirable) differences in resolution.
 
