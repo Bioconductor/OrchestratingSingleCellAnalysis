@@ -35,11 +35,11 @@ setupBookChapters <- function(dir=".") {
     if (!file.exists(basic)) {
         system2("git", c("submodule", "add", "https://github.com/Bioconductor/OSCABase"))
     } else {
-        system2("git", c("submodule", "update", "--remote"))
+        system2("git", c("submodule", "update", "--remote", "--merge"))
     }
 
-    file.copy(file.path(basic, "intro", "index.Rmd"), "index.Rmd")
-    file.copy(file.path(basic, "ref.bib"), "ref.bib")
+    file.copy(file.path(basic, "intro", "index.Rmd"), "index.Rmd", overwrite=TRUE)
+    file.copy(file.path(basic, "ref.bib"), "ref.bib", overwrite=TRUE)
 
     .uplift(part=1, 
         files=file.path(basic, "intro",
