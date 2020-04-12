@@ -251,7 +251,7 @@ We demonstrate the application of NMF on the @zeisel2015brain dataset using the 
 As with the PCA results, `runNMF()` stores the per-cell coordinates in the `"NMF"` entry of the `reducedDims()` of the output, which we could then use directly for downstream steps like clustering.
 However, the main benefit of NMF over PCA is that we can directly interpret the individual factors based on the identity of the highly weighted genes in the basis matrix $W$ and the affected cells in the coordinate matrix $H$ (Figure \@ref(fig:heat-nmf-zeisel)).
 
-```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
+```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp=0.5, fig.cap="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
 set.seed(101001)
 nmf.zeisel <- runNMF(sce.zeisel, ncomponents=10, subset_row=top.zeisel)
 

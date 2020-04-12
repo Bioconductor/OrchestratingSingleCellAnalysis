@@ -144,9 +144,9 @@ sce.sling <- runUMAP(sce.sling, dimred="PCA")
 sce.sling$cell.type <- sce.sling$FACS <- NULL
 
 library(viridis)
-gg <- ggcells(sce.sling, mapping=aes(x=UMAP.1, 
+ggcells(sce.sling, mapping=aes(x=UMAP.1, 
         y=UMAP.2, col=slingPseudotime_1)) +
-     geom_point() + scale_color_viridis()
+    geom_point() + scale_color_viridis()
 ```
 
 The previous `slingshot()` call assumed that all cells in the dataset were part of a single one-dimensional trajectory,
