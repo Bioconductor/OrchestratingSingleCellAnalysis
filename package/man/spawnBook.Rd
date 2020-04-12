@@ -4,7 +4,7 @@
 \alias{spawnBook}
 \title{Set up the book repository}
 \usage{
-spawnBook(dir)
+spawnBook(dir = ".")
 }
 \arguments{
 \item{dir}{String containing the path to the (possibly existing) book repository.}

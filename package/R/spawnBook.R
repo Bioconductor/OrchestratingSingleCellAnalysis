@@ -15,7 +15,7 @@
 #' @author Aaron Lun
 #'
 #' @export 
-spawnBook <- function(dir) {
+spawnBook <- function(dir=".") {
     if (absent <- !dir.exists(dir)) {
         dir.create(dir)
     }
@@ -29,6 +29,10 @@ spawnBook <- function(dir) {
     }
 
     setupBookChapters()
+
+    # Updating the bib file.
+    bib <- file.path("OSCABase", "ref.bib")
+    file.copy(bib, basename(bib))
 
     # Copying over various bookdown required files.
     others <- list.files(file.path("OSCABase", "sundries"), full.names=TRUE)
