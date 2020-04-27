@@ -121,7 +121,7 @@ Clusters that are too coarse will fail to separate doublets from other cells, wh
 The method is also somewhat biased towards clusters with fewer cells, where the reduction in power is more likely to result in a low `N`.
 (Fortunately, this is a desirable effect as doublets should be rare in a properly performed scRNA-seq experiment.)
 
-## Doublet detection by simulation
+## Doublet detection by simulation {#doublet-simulation}
 
 The other doublet detection strategy involves _in silico_ simulation of doublets from the single-cell expression profiles [@dahlin2018single].
 This is performed using the `doubletCells()` function from `r Biocpkg("scran")`, which will:
@@ -185,6 +185,8 @@ This will use the spike-in size factors to scale the contribution of each cell t
 
 ## Doublet detection in multiplexed experiments
 
+### Background
+
 For multiplexed samples [@kang2018multiplexed;@stoekius2018hashing], we can identify doublet cells based on the cells that have multiple labels.
 The idea here is that cells from the same sample are labelled in a unique manner, either implicitly with genotype information or experimentally with hashing tag oligos (HTOs).
 Cells from all samples are then mixed together and the multiplexed pool is subjected to scRNA-seq, avoiding batch effects and simplifying the logistics of processing a large number of samples.
@@ -209,6 +211,8 @@ hto.counts <- as.matrix(hto.counts[1:8,])
 dim(hto.counts)
 hto.counts[,1:3]
 ```
+
+### Identifying inter-sample doublets
 
 Before we proceed to doublet detection, we simplify the problem by first identifying the barcodes that contain cells.
 This is most conventionally done using the gene expression matrix for the same set of barcodes, as shown in Section \@ref(qc-droplets).
@@ -269,9 +273,86 @@ plot(hash.stats$LogFC, hash.stats$LogFC2,
     col=colors)
 ```
 
-Again, we recommend _not_ removing the likely doublets but only marking them.
-This is because hashing will not identify all doublets, most obviously those formed between cells from the same sample.
-Marking allows us to use "guilt by association" to identify neighboring unlabelled doublets, avoiding problems with small residual clusters comprised solely of intra-sample doublets.
+### Guilt by association for unmarked doublets
+
+One obvious limitation of this approach is that doublets of cells marked with the same HTO are not detected.
+In a simple multiplexing experiment involving $N$ samples with similar numbers of cells,
+we would expect around $1/N$ of all doublets to involve cells from the same sample.
+For typical values of $N$ of 5 to 12, this may still be enough to cause the formation of misleading doublet clusters even after the majority of known doublets are removed.
+To avoid this, we recover the remaining intra-sample doublets based on their similarity with known doublets in gene expression space (hence, "guilt by association").
+We illustrate by loading the gene expression data for this study:
+
+```{r, cache=TRUE}
+gname <- "GSM2895282_Hashtag-RNA.umi.txt.gz"
+untar(hash.tar, files=gname, exdir=tempdir())
+
+# Reading it in as a sparse matrix in a SingleCellExperiment.
+library(scater)
+gene.counts <- readSparseCounts(file.path(tempdir(), gname))
+sce.hash <- SingleCellExperiment(list(counts=gene.counts))
+
+# Subsetting to all barcodes detected as cells. Requires an intersection,
+# because `hto.counts` and `gene.counts` are not the same dimensions! 
+common <- intersect(colnames(sce.hash), rownames(hash.stats))
+sce.hash <- sce.hash[,common]
+colData(sce.hash) <- hash.stats[common,]
+
+sce.hash
+```
+
+For each cell, we calculate the proportion of its nearest neighbors that are known doublets.
+Intra-sample doublets should have high proportions under the assumption that their gene expression profiles are similar to inter-sample doublets involving the same combination of cell states/types.
+Unlike in Section \@ref(doublet-simulation), the use of experimentally derived doublet calls avoids any assumptions about the relative quantity of total RNA or the probability of doublet formation across different cell types.
+
+```{r}
+# Performing a quick-and-dirty analysis to get some PCs to use
+# for nearest neighbor detection inside doubletRecovery().
+library(scran)
+sce.hash <- logNormCounts(sce.hash)
+dec.hash <- modelGeneVar(sce.hash)
+top.hash <- getTopHVGs(dec.hash, n=1000)
+set.seed(1011110)
+sce.hash <- runPCA(sce.hash, subset_row=top.hash, ncomponents=20)
+
+# Recovering the intra-sample doublets:
+hashed.doublets <- doubletRecovery(sce.hash, use.dimred="PCA",
+    doublets=sce.hash$Doublet, samples=table(sce.hash$Best))
+hashed.doublets
+```
+
+The `doubletRecovery()` function also returns explicit intra-sample doublet predictions based on the doublet neighbor proportions.
+Given the distribution of cells across multiplexed samples in `samples=`, we estimate the fraction of doublets that would not be observed from the HTO counts.
+This is converted into an absolute number based on the number of observed doublets; the top set of libraries with the highest proportions are then marked as intra-sample doublets (Figure \@ref(fig:tsne-hash))
+
+```{r tsne-hash, fig.asp=1, fig.width=10, fig.cap="$t$-SNE plots for gene expression data from the cell hashing study, where each point is a cell and is colored by the doublet proportion (top left), whether or not it is a known inter-sample doublet (top right) and whether it is a predicted intra-sample doublet (bottom left)."}
+set.seed(1000101001)
+sce.hash <- runTSNE(sce.hash, dimred="PCA")
+sce.hash$proportion <- hashed.doublets$proportion
+sce.hash$predicted <- hashed.doublets$predicted
+
+gridExtra::grid.arrange(
+    plotTSNE(sce.hash, colour_by="proportion") + ggtitle("Doublet proportions"),
+    plotTSNE(sce.hash, colour_by="Doublet") + ggtitle("Known doublets"),
+    ggcells(sce.hash) +
+        geom_point(aes(x=TSNE.1, y=TSNE.2), color="grey") +
+        geom_point(aes(x=TSNE.1, y=TSNE.2), color="red", 
+            data=function(x) x[x$predicted,]) +
+        ggtitle("Predicted intra-sample doublets"),
+    ncol=2        
+)
+```
+
+As an aside, it is worth noting that even known doublets may not necessarily have high doublet neighbor proportions.
+This is typically observed for doublets involving cells of the same type or state, which are effectively intermixed in gene expression space with the corresponding singlets.
+The latter are much more abundant in most (well-controlled) experiments, which results in low proportions for the doublets involved (Figure \@ref(fig:doublet-prop-hash-dist)).
+This effect can generally be ignored given the mostly harmless nature of these doublets.
+
+```{r doublet-prop-hash-dist, fig.cap="Distribution of doublet neighbor proportions for all cells in the cell hashing study, stratified by doublet detection status."}
+state <- ifelse(hashed.doublets$predicted, "predicted",
+    ifelse(hashed.doublets$known, "known", "singlet"))
+ggplot(as.data.frame(hashed.doublets)) + 
+    geom_violin(aes(x=state, y=proportion)) 
+```
 
 ## Further comments 
 
