@@ -62,10 +62,10 @@ High proportions are indicative of poor-quality cells [@islam2014quantitative;@i
 The reasoning is that, in the presence of modest damage, the holes in the cell membrane permit efflux of individual transcript molecules but are too small to allow mitochondria to escape, leading to a relative enrichment of mitochondrial transcripts.
 
 For each cell, we calculate these QC metrics using the `perCellQCMetrics()` function from the `r BiocStyle::Biocpkg("scater")` package [@mccarthy2017scater].
-The `sum` column contains the total count for each cell,
-the `detected` column contains the number of detected genes,
-`subsets_Mito_percent` contains the percentage of reads mapped to mitochondrial transcripts (based on Ensembl annotation)
-and `altexps_ERCC_percent` contains the percentage of reads mapped to ERCC transcripts.
+The `sum` column contains the total count for each cell and the `detected` column contains the number of detected genes.
+The `subsets_Mito_percent` column contains the percentage of reads mapped to mitochondrial transcripts.
+(For demonstration purposes, we show two different approaches of determining the genomic location of each transcript.)
+Finally, the `altexps_ERCC_percent` column contains the percentage of reads mapped to ERCC transcripts.
 
 ```{r}
 # Retrieving the mitochondrial transcripts using genomic locations included in
@@ -87,7 +87,7 @@ df
 ```
 
 Alternatively, users may prefer to use the `addPerCellQC()` function.
-This automatically appends the per-cell QC statistics to the `colData` of the `SingleCellExperiment` object,
+This computes and appends the per-cell QC statistics to the `colData` of the `SingleCellExperiment` object,
 allowing us to retain all relevant information in a single object for later manipulation.
 
 ```{r}
@@ -140,8 +140,10 @@ This is loosely motivated by the fact that such a filter will retain 99% of non-
 
 For the 416B data, we identify cells with log-transformed library sizes that are more than 3 MADs below the median. 
 A log-transformation is used to improve resolution at small values when `type="lower"`.
-In particular, it guarantees that the threshold is not a negative value, which would be meaningless for quality control on these metrics.
-Moreover, these metrics can occasionally exhibit a heavy right tail, and the log-transformation makes the distribution seem more normal to justify the 99% rationale mentioned above.
+Specifically, it guarantees that the threshold is not a negative value, which would be meaningless for a non-negative metric.
+Furthermore, it is not uncommon for the distribution of library sizes to exhibit a heavy right tail; 
+the log-transformation avoids inflation of the MAD in a manner that might compromise outlier detection on the left tail.
+(More generally, it makes the distribution seem more normal to justify the 99% rationale mentioned above.)
 
 ```{r}
 qc.lib2 <- isOutlier(df$sum, log=TRUE, type="lower")
@@ -154,15 +156,17 @@ qc.nexprs2 <- isOutlier(df$detected, log=TRUE, type="lower")
 ```
 
 `isOutlier()` will also return the exact filter thresholds for each metric in the attributes of the output vector.
-These is useful for checking whether the automatically selected thresholds are appropriate.
+These are useful for checking whether the automatically selected thresholds are appropriate.
 
 ```{r}
 attr(qc.lib2, "thresholds")
 attr(qc.nexprs2, "thresholds")
 ```
 
-We identify outliers for the proportion-based metrics in a similar manner.
-Here, no transformation is performed as we are aiming to identify and remove large outliers that should already be clearly distinguishable from zero.
+We identify outliers for the proportion-based metrics with the same function.
+These distributions frequently exhibit a heavy right tail, but unlike the two previous metrics, it is the right tail itself that contains the putative low-quality cells.
+Thus, we do not perform any transformation to shrink the tail - rather, our hope is that the cells in the tail are identified as large outliers.
+(While it is theoretically possible to obtain a meaningless threshold above 100%, this is rare enough to not be of practical concern.)
 
 ```{r}
 qc.spike2 <- isOutlier(df$altexps_ERCC_percent, type="higher")
@@ -171,7 +175,7 @@ qc.mito2 <- isOutlier(df$subsets_Mito_percent, type="higher")
 attr(qc.mito2, "thresholds")
 ```
 
-A cell that is an outlier for any of these metrics is considered to be of low-quality and discarded.
+A cell that is an outlier for any of these metrics is considered to be of low quality and discarded.
 
 ```{r}
 discard2 <- qc.lib2 | qc.nexprs2 | qc.spike2 | qc.mito2
