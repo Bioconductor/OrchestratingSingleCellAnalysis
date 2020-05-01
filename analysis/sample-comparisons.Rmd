@@ -584,7 +584,7 @@ sce.tal1
 
 We will perform a DE analysis between WT and KO cells labelled as "neural crest".
 We observe that the strongest DEGs are the hemoglobins, which are downregulated in the injected cells.
-This is rather surprising as cells undergoing neuronal development should not express hemoglobins in the first place.
+This is rather surprising as these cells are distinct from the erythroid lineage and should not express hemoglobins at all. 
 The most sober explanation is that the background samples contain more hemoglobin transcripts in the ambient solution due to leakage from erythrocytes (or their precursors) during sorting and dissociation.
 
 ```{r}
@@ -615,6 +615,10 @@ topTags(res.neural, n=10)
 tab <- topTags(res.neural)$table
 stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
 ```
+
+As an aside, it is worth mentioning that the "replicates" in this study are more technical than biological,
+so some exaggeration of the significance of the effects is to be expected.
+Nonetheless, it is a useful dataset to demonstrate some strategies for mitigating issues caused by ambient contamination.
 
 ### Discarding ambient DEGs
 
@@ -652,16 +656,19 @@ stopifnot(identical(as.integer(colnames(ambient)), summed.neural$sample))
 ```
 
 For each sample, we determine the maximum proportion of the count for each gene that could be attributed to ambient contamination.
-This is done by scaling the ambient profile in `ambient` and computing the $p$-value for observing a count equal to or lower than that in `summed.neural`; we then identify the maximum scaling factor for a given threshold on the (combined) $p$-value.
+This is done by scaling the ambient profile in `ambient` to obtain a per-gene expected count from ambient contamination, with which we compute the $p$-value for observing a count equal to or lower than that in `summed.neural`. 
+We perform this for a range of scaling factors and identify the largest factor that yields a $p$-value above a given threshold.
 The scaled ambient profile represents the upper bound of the contribution to each sample from ambient contamination.
 We deliberately use an upper bound so that our next step will aggressively remove any gene that is potentially problematic.
 
 ```{r}
 # Looping over all samples and computing the maximum proportion of 
 # counts explained by ambient contamination in each sample.
-max.ambient <- lapply(seq_len(ncol(ambient)), function(i) {
-    maximumAmbience(counts(summed.neural)[,i], ambient[,i], mode="proportion")
-})
+max.ambient <- list()
+for (i in seq_len(ncol(ambient))) {
+    max.ambient[[i]] <- maximumAmbience(counts(summed.neural)[,i], 
+        ambient[,i], mode="proportion")
+}
 
 max.ambient <- do.call(cbind, max.ambient)
 dimnames(max.ambient) <- dimnames(ambient)
@@ -723,9 +730,9 @@ subtracted[is.hbb,]
 ```
 
 Another tempting approach is to use interaction models to implicitly subtract the ambient effect during GLM fitting.
-The assumption would be that, for genuine DEGs, the log-fold change within cells is larger in magnitude than those in the ambient solution (where the effect would be diluted by contributions from cell types where the gene is not DE).
-However, this is not always the case; a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to the rather awkward conclusion that the WT neural crest cells are expressing hemoglobin beyond that explained by ambient contamination.
-In addition, per-gene subtraction will fail to consistently detect DEGs that occur in all cell types as there is no longer a dilution effect being applied to the log-fold change in the ambient solution.
+The assumption is that, for a genuine DEG, the log-fold change within cells is larger in magnitude than that in the ambient solution.
+This is based on the expectation that any DE in the latter is "diluted" by contributions from cell types where that gene is not DE.
+Unfortunately, this is not always the case; a DE analysis of the ambient counts indicates that the hemoglobin log-fold change is actually stronger in the neural crest cells compared to the ambient solution, which leads to the rather awkward conclusion that the WT neural crest cells are expressing hemoglobin beyond that explained by ambient contamination.
 
 ```{r}
 # Re-using keep.neural to simplify comparison.
@@ -746,17 +753,26 @@ stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
 stopifnot(abs(tab["Hbb-y","logFC"]) < abs(topTags(res.neural)$table["Hbb-y", "logFC"]))
 ```
 
+One possible explanation is that erythrocyte fragments are present in the cell-containing libraries but are not used to estimate the ambient profile, presumably because the UMI counts are too high for fragment-containing libraries to be treated as empty.
+Technically speaking, this is not incorrect as, after all, those libraries are not actually empty (Section \@ref(qc-droplets)).
+In effect, every cell in the WT sample is a fractional multiplet with partial erythrocyte identity from the included fragments, which results in stronger log-fold changes between genotypes for hemoglobin compared to those for the ambient solution.
+
+That aside, there are other issues with implicit subtraction in the fitted GLM that warrant caution with its use.
+This strategy precludes detection of DEGs that are common to all cell types as there is no longer a dilution effect being applied to the log-fold change in the ambient solution.
+It requires inclusion of the ambient profiles in the model, which is cause for at least some concern as they are unlikely to have the same degree of variability as the cell-derived pseudo-bulk profiles.
+Interpretation is also complicated by the fact that we are only interested in more extreme log-fold chages - 
+
 <!--
 Full interaction code, in case anyone's unconvinced.
 
 ```{r, eval=FALSE}
 s <- factor(rep(1:4, 2))
 new.geno <- rep(rep(c("KO", "WT"), each=2), 2)
-ambient <- rep(c("N", "Y"), each=4)
-design.amb <- model.matrix(~0 + s + new.geno:ambient)
+is.ambient <- rep(c("N", "Y"), each=4)
+design.amb <- model.matrix(~0 + s + new.geno:is.ambient)
 
 # Get to full rank:
-design.amb <- design.amb[,!grepl("ambientY", colnames(design.amb))] 
+design.amb <- design.amb[,!grepl("is.ambientY", colnames(design.amb))] 
 
 # Syntactically valid colnames:
 colnames(design.amb) <- make.names(colnames(design.amb)) 
@@ -764,20 +780,21 @@ design.amb
 ```
 
 ```{r, eval=FALSE}
+y.amb <- DGEList(cbind(counts(summed.neural), ambient)
 y.amb <- y.amb[filterByExpr(y.amb, group=s),]
 y.amb <- calcNormFactors(y.amb)
 y.amb <- estimateDisp(y.amb, design.amb)
 fit.amb <- glmQLFit(y.amb, design.amb, robust=TRUE)    
 
-res.ko <- glmTreat(fit.amb, coef="new.genoKO.ambientN")
+res.ko <- glmTreat(fit.amb, coef="new.genoKO.is.ambientN")
 summary(decideTests(res.ko))
 topTags(res.ko, n=10)
 
-res.wt <- glmTreat(fit.amb, coef="new.genoWT.ambientN")
+res.wt <- glmTreat(fit.amb, coef="new.genoWT.is.ambientN")
 summary(decideTests(res.wt))
 topTags(res.wt, n=10)
 
-con <- makeContrasts(new.genoKO.ambientN - new.genoWT.ambientN, levels=design.amb)
+con <- makeContrasts(new.genoKO.is.ambientN - new.genoWT.is.ambientN, levels=design.amb)
 res.amb <- glmTreat(fit.amb, contrast=con)
 summary(decideTests(res.amb))
 topTags(res.amb, n=10)
