@@ -760,7 +760,7 @@ In effect, every cell in the WT sample is a fractional multiplet with partial er
 That aside, there are other issues with implicit subtraction in the fitted GLM that warrant caution with its use.
 This strategy precludes detection of DEGs that are common to all cell types as there is no longer a dilution effect being applied to the log-fold change in the ambient solution.
 It requires inclusion of the ambient profiles in the model, which is cause for at least some concern as they are unlikely to have the same degree of variability as the cell-derived pseudo-bulk profiles.
-Interpretation is also complicated by the fact that we are only interested in more extreme log-fold chages - 
+Interpretation is also complicated by the fact that we are only interested in log-fold changes that are more extreme in the cells compared to the ambient solution; a non-zero interaction term is not sufficient for removing spurious DE.
 
 <!--
 Full interaction code, in case anyone's unconvinced.
