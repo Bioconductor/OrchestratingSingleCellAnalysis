@@ -330,8 +330,11 @@ de.allantois <- de.allantois[order(de.allantois$PValue),]
 de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
 
 sizeFactors(summed.filt) <- NULL
-plotExpression(logNormCounts(summed.filt), features=rownames(de.allantois)[1],
-    x="tomato", colour_by="tomato", other_fields="label") + facet_wrap(~label)
+plotExpression(logNormCounts(summed.filt), 
+    features=rownames(de.allantois)[1],
+    x="tomato", colour_by="tomato", 
+    other_fields="celltype.mapped") + 
+    facet_wrap(~celltype.mapped)
 ```
 
 We also list the labels that were skipped due to the absence of replicates or contrasts.
