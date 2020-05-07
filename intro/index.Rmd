@@ -12,7 +12,7 @@ description: "Online companion to 'Orchestrating Single-Cell Analysis with Bioco
 
 # Welcome {-}
 
-<a href="https://bioconductor.org"><img src="cover.png" width="200" alt="Bioconductor Sticker" align="right" style="margin: 0 1em 0 1em" /></a> 
+<a href="https://bioconductor.org"><img src="https://github.com/Bioconductor/BiocStickers/raw/master/Bioconductor/Bioconductor.gif" width="200" alt="Bioconductor Sticker" align="right" style="margin: 0 1em 0 1em" /></a> 
 
 This is the website for __"Orchestrating Single-Cell Analysis with Bioconductor"__, a book that teaches users some common workflows for the analysis of single-cell RNA-seq data (scRNA-seq). This book will teach you how to make use of cutting-edge Bioconductor tools to process, analyze, visualize, and explore scRNA-seq data. Additionally, it serves as an online companion for the manuscript __"Orchestrating Single-Cell Analysis with Bioconductor"__. 
 
