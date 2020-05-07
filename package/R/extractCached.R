@@ -99,15 +99,14 @@ extractCached <- function(prefix, chunk, objects, flexible=TRUE, envir=topenv(pa
 
 .flexible_location_finder <- function(prefix) {
     if (!file.exists(paste0(prefix, ".Rmd"))) {
-        tmp <- file.path("../workflows", prefix)
-
-        if (file.exists(paste0(tmp, ".Rmd"))) {
-            prefix <- tmp
-        } else {
+        # Checking whether we're compiling the book or not.
+        if (dir.exists("docs")) {
             potential <- list.files(pattern=sprintf("P[0-9]+_W[0-9]+\\.%s\\.Rmd$", prefix))
             if (length(potential)) {
                 prefix <- sub("\\.Rmd$", "", potential[1])
             }
+        } else {
+            prefix <- file.path("../workflows", prefix)
         }
     }
 

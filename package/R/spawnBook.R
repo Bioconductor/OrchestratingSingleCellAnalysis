@@ -2,7 +2,8 @@
 #'
 #' Initialize or update the repository containing the book contents.
 #'
-#' @param dir String containing the path to the (possibly existing) book repository.
+#' @param src String containing a path to the directory containing the \pkg{OSCABase} contents.
+#' @param dir String containing a path to a directory in which the compiled book is to reside.
 #'
 #' @return
 #' If \code{dir} does not already exist, a Git repository is created at that location.
@@ -15,24 +16,19 @@
 #' @author Aaron Lun
 #'
 #' @export 
-spawnBook <- function(dir=".") {
-    if (absent <- !dir.exists(dir)) {
-        dir.create(dir)
-    }
+spawnBook <- function(src, dir) {
+    dir.create(dir, showWarnings=FALSE)
+    src <- normalizePath(src)
 
     wd <- getwd()
     setwd(dir)
     on.exit(setwd(wd))
 
-    if (absent) {
-        system2("git", "init")
-    }
-
-    setupBookChapters()
+    setupBookChapters(src, ".")
 
     # Copying over various bookdown required files.
-    others <- list.files(file.path("OSCABase", "sundries"), full.names=TRUE)
-    file.copy(others, basename(others))
+    others <- list.files(file.path(src, "sundries"), full.names=TRUE)
+    file.copy(others, basename(others), overwrite=TRUE)
     
     invisible(NULL)
 }
