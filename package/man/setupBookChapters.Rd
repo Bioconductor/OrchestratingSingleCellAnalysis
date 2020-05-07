@@ -4,13 +4,14 @@
 \alias{setupBookChapters}
 \title{Set up the book materials}
 \usage{
-setupBookChapters(dir = ".")
+setupBookChapters(src, dir)
 }
 \arguments{
-\item{dir}{String containing a path to a Git repository in which the book is to reside.}
+\item{src}{String containing a path to the directory containing the \pkg{OSCABase} contents.}
+
+\item{dir}{String containing a path to a directory in which the compiled book is to reside.}
 }
 \value{
-Creates or updates a Git submodule for the \pkg{OSCAbase} repository inside \code{dir}.
 Creates or updates the Rmarkdown files comprising the book's contents.
 Returns \code{NULL} invisibly.
 }
