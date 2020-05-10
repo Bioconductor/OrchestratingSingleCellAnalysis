@@ -2,10 +2,9 @@
 #'
 #' Create the raw materials to compile the book given the files in the \pkg{OSCAbase} repository.
 #'
-#' @param dir String containing a path to a Git repository in which the book is to reside.
+#' @inheritParams spawnBook
 #' 
 #' @return
-#' Creates or updates a Git submodule for the \pkg{OSCAbase} repository inside \code{dir}.
 #' Creates or updates the Rmarkdown files comprising the book's contents.
 #' Returns \code{NULL} invisibly.
 #'
@@ -26,23 +25,17 @@
 #' @author Aaron Lun
 #'
 #' @export
-setupBookChapters <- function(dir=".") {
+setupBookChapters <- function(src, dir) {
+    src <- normalizePath(src)
     wd <- getwd()
     setwd(dir)
     on.exit(setwd(wd))
 
-    basic <- "OSCABase"
-    if (!file.exists(basic)) {
-        system2("git", c("submodule", "add", "https://github.com/Bioconductor/OSCABase"))
-    } else {
-        system2("git", c("submodule", "update", "--remote", "--merge"))
-    }
-
-    file.copy(file.path(basic, "intro", "index.Rmd"), "index.Rmd", overwrite=TRUE)
-    file.copy(file.path(basic, "ref.bib"), "ref.bib", overwrite=TRUE)
+    file.copy(file.path(src, "intro", "index.Rmd"), "index.Rmd", overwrite=TRUE)
+    file.copy(file.path(src, "ref.bib"), "ref.bib", overwrite=TRUE)
 
     .uplift(part=1, 
-        files=file.path(basic, "intro",
+        files=file.path(src, "intro",
             c(
                 "introduction.Rmd",
                 "learning-r-and-bioconductor.Rmd",
@@ -53,7 +46,7 @@ setupBookChapters <- function(dir=".") {
     )
 
     .uplift(part=2,
-        files=file.path(basic, "analysis",
+        files=file.path(src, "analysis",
             c(
                 "overview.Rmd",
                 "quality-control.Rmd",
@@ -78,7 +71,7 @@ setupBookChapters <- function(dir=".") {
     )
 
     .uplift(part=.workflow_part,
-        files=file.path(basic, "workflows",
+        files=file.path(src, "workflows",
             c(
                 "lun-416b.Rmd",
                 "zeisel-brain.Rmd",
@@ -100,7 +93,7 @@ setupBookChapters <- function(dir=".") {
     )
 
     .uplift(part=4,
-        files=file.path(basic, "about",
+        files=file.path(src, "about",
             c(
                 "about-the-contributors.Rmd",
                 "bibliography.Rmd"

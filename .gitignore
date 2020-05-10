@@ -2,3 +2,7 @@
 *_files
 *.html
 .Rproj.user
+
+release/
+devel/
+*.rds

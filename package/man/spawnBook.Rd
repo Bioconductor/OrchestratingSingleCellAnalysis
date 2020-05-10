@@ -4,10 +4,12 @@
 \alias{spawnBook}
 \title{Set up the book repository}
 \usage{
-spawnBook(dir = ".")
+spawnBook(src, dir)
 }
 \arguments{
-\item{dir}{String containing the path to the (possibly existing) book repository.}
+\item{src}{String containing a path to the directory containing the \pkg{OSCABase} contents.}
+
+\item{dir}{String containing a path to a directory in which the compiled book is to reside.}
 }
 \value{
 If \code{dir} does not already exist, a Git repository is created at that location.

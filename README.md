@@ -2,10 +2,9 @@
 
 ## Overview
 
-This repository contains the basic ingredients for the 
-[Orchestrating Single Cell Analysis](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis) book.
+This repository contains the basic ingredients for the [Orchestrating Single Cell Analysis](https://osca.bioconductor.org) book.
 Developers wanting to contribute scientific content to the book should make pull requests to this repository, 
-the one linked above is just used to host the book content on GitHub Pages.
+the others with `-release` or `-devel` suffixes are just used to host the book content on GitHub Pages.
 Our set-up provides a light code-only repository (this one) for day-to-day developer use,
 which avoids the Git blob bloat from storing PNGs and HTMLs in the other repository.
 It also enables us to automatically reconstruct the section orderings without needing to manually rename the files.
@@ -43,28 +42,20 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 Install the **OSCAUtils** package with `R CMD INSTALL package`.
 
-Run the following code to create a book repository in a new or existing directory `OSCA`:
+Run the following code to compile the book in the `devel` subdirectory,
+which should be pushed [here](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-devel).
 
-```r
-library(OSCAUtils)
-spawnBook("OSCA")
-compileWorkflows("OSCA")
+```sh
+# Where 'Rdevel' is an alias for BioC-devel:
+Rdevel -f deploy.R --args devel
 ```
 
-Setting `fresh=FALSE` in `compileWorkflows()` will avoid deleting old caches for a faster compilation,
-though it is recommended to routinely compile with `fresh=TRUE` to avoid problems with silently invalidated caches.
+Run the following code to compile the book in the `release` subdirectory,
+which should be pushed [here](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-release).
 
-### To build the book
-
-To compile the book in its entirety, the following code will create the book in a subdirectory (in this case `OSCA/docs/`).
-
-```r
-setwd("OSCA") # process must be started in the book directory
-bookdown::render_book("index.Rmd", "bookdown::gitbook",
-    quiet = FALSE, output_dir = "docs", new_session = TRUE)
+```sh
+R -f deploy.R --args release
 ```
-
-Note that for pushing figures to the main book repository, the `Cairo` library is required so that images are rendered as PNG files (see the `chapterPreamble()` function of the `OSCAUtils` package).
 
 ### To contribute reports
 
