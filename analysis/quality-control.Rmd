@@ -60,6 +60,7 @@ Thus, high proportions are indicative of poor-quality cells where endogenous RNA
 - In the absence of spike-in transcripts, the proportion of reads mapped to genes in the mitochondrial genome can be used.
 High proportions are indicative of poor-quality cells [@islam2014quantitative;@ilicic2016classification], presumably because of loss of cytoplasmic RNA from perforated cells.
 The reasoning is that, in the presence of modest damage, the holes in the cell membrane permit efflux of individual transcript molecules but are too small to allow mitochondria to escape, leading to a relative enrichment of mitochondrial transcripts.
+For single-nuclei RNA-seq experiments, high proportions are also useful as they can mark cells where the cytoplasm has not been successfully stripped.
 
 For each cell, we calculate these QC metrics using the `perCellQCMetrics()` function from the `r BiocStyle::Biocpkg("scater")` package [@mccarthy2017scater].
 The `sum` column contains the total count for each cell and the `detected` column contains the number of detected genes.
