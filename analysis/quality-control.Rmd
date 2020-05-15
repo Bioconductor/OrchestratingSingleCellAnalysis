@@ -75,16 +75,20 @@ location <- rowRanges(sce.416b)
 is.mito <- any(seqnames(location)=="MT")
 
 # ALTERNATIVELY: using resources in AnnotationHub to retrieve chromosomal
-# locations given the Ensembl IDs. Same result.
+# locations given the Ensembl IDs; this should yield the same result.
 library(AnnotationHub)
 ens.mm.v97 <- AnnotationHub()[["AH73905"]]
 chr.loc <- mapIds(ens.mm.v97, keys=rownames(sce.416b),
     keytype="GENEID", column="SEQNAME")
-is.mito <- which(chr.loc=="MT")
+is.mito.alt <- which(chr.loc=="MT")
 
 library(scater)
 df <- perCellQCMetrics(sce.416b, subsets=list(Mito=is.mito))
 df
+```
+
+```{r, echo=FALSE}
+stopifnot(identical(which(is.mito), is.mito.alt))
 ```
 
 Alternatively, users may prefer to use the `addPerCellQC()` function.
@@ -228,13 +232,18 @@ This allows `isOutlier()` to accommodate systematic differences in the QC metric
 
 We will again illustrate using the 416B dataset, which contains two experimental factors - plate of origin and oncogene induction status.
 We combine these factors together and use this in the `batch=` argument to `isOutlier()` via `quickPerCellQC()`.
-This results in the removal of more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
+This results in the removal of slightly more cells as the MAD is no longer inflated by (i) systematic differences in sequencing depth between batches and (ii) differences in number of genes expressed upon oncogene induction.
 
 ```{r}
 batch <- paste0(sce.416b$phenotype, "-", sce.416b$Plate)
 batch.reasons <- quickPerCellQC(df, percent_subsets=c("subsets_Mito_percent",
     "altexps_ERCC_percent"), batch=batch)
 colSums(as.matrix(batch.reasons))
+```
+
+```{r, echo=FALSE}
+stopifnot(all(colSums(as.matrix(batch.reasons)) >= colSums(as.matrix(reasons))))
+stopifnot(sum(as.matrix(batch.reasons)) >= sum(as.matrix(reasons)))
 ```
 
 That said, the use of `batch=` involves the stronger assumption that most cells in each batch are of high quality.
@@ -263,6 +272,10 @@ without.blocking <- plotColData(sce.grun, x="donor", y="altexps_ERCC_percent",
     colour_by=I(discard.ercc2))
 
 gridExtra::grid.arrange(with.blocking, without.blocking, ncol=2)
+```
+
+```{r, echo=FALSE}
+stopifnot(sum(discard.ercc,na.rm=TRUE)*2 <= sum(discard.ercc2, na.rm=TRUE))
 ```
 
 To identify problematic batches, one useful rule of thumb is to find batches with QC thresholds that are _themselves_ outliers compared to the thresholds of other batches.
@@ -312,8 +325,9 @@ We consider this to be a risky strategy as it can remove high-quality cells in r
 
 It is good practice to inspect the distributions of QC metrics (Figure \@ref(fig:qc-dist-416b)) to identify possible problems.
 In the most ideal case, we would see normal distributions that would justify the 3 MAD threshold used in outlier detection.
-A large proportion of cells in another mode suggests that the QC metrics might be correlated with some biological state, potentially leading to the loss of distinct cell types during filtering.
-Batches with systematically poor values for any metric can also be quickly identified for further troubleshooting or outright removal, as done in Figure \@ref(fig:qc-plot-pancreas) above.
+A large proportion of cells in another mode suggests that the QC metrics might be correlated with some biological state, potentially leading to the loss of distinct cell types during filtering;
+or that there were inconsistencies with library preparation for a subset of cells, a not-uncommon phenomenon in plate-based protocols.
+Batches with systematically poor values for any metric can then be quickly identified for further troubleshooting or outright removal, much like in Figure \@ref(fig:qc-plot-pancreas) above.
 
 ```{r qc-dist-416b, fig.asp=2, fig.wide=TRUE, fig.cap="Distribution of QC metrics for each batch and phenotype in the 416B dataset. Each point represents a cell and is colored according to whether it was discarded, respectively."}
 colData(sce.416b) <- cbind(colData(sce.416b), df)
@@ -352,7 +366,9 @@ plotColData(sce.416b, x="sum", y="subsets_Mito_percent",
 
 Comparison of the ERCC and mitochondrial percentages can also be informative (Figure \@ref(fig:qc-mito2-416b)).
 Low-quality cells with small mitochondrial percentages, large spike-in percentages and small library sizes are likely to be stripped nuclei, i.e., they have been so extensively damaged that they have lost all cytoplasmic content.
-Conversely, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
+On the other hand, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
+This interpretation also applies for single-nuclei studies but our focus is reversed:
+the stripped nuclei become the libraries of interest while the undamaged cells are considered to be low quality.
 
 ```{r qc-mito2-416b, fig.asp=1, fig.wide=TRUE, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the percentage of reads assigned to ERCC transcripts for each phenotype and batch."}
 plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
@@ -364,9 +380,9 @@ plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
 For larger experiments, a more typical example of such plots is provided in Figure \@ref(fig:qc-mito-spike-zeisel) using data from a mouse brain dataset [@zeisel2015brain].
 We can see that these metrics exhibit weak correlations to each other, 
 presumably a manifestation of a common underlying effect of cell damage.
-The weakness of the correlations highlights the utility of using several metrics to capture different aspects of technical quality.
-(Of course, the flipside is that these metrics may also represent different aspects of biology,
-increasing the risk of discarding entire cell types as discussed in Section \@ref(outlier-assumptions).)
+The weakness of the correlations motivates the use of several metrics to capture different aspects of technical quality.
+Of course, the flipside is that these metrics may also represent different aspects of biology,
+increasing the risk of discarding entire cell types as discussed in Section \@ref(outlier-assumptions).
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("zeisel-brain", "variance-modelling", 
