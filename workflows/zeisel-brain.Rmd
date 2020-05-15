@@ -30,8 +30,8 @@ We also fetch the Ensembl gene IDs, just in case we need them later.
 
 ```{r gene-annotation}
 library(org.Mm.eg.db)
-rowData(sce.zeisel) <- mapIds(org.Mm.eg.db, keys=rownames(sce.zeisel),
-    keytype="SYMBOL", column="ENSEMBL")
+rowData(sce.zeisel)$Ensembl <- mapIds(org.Mm.eg.db, 
+    keys=rownames(sce.zeisel), keytype="SYMBOL", column="ENSEMBL")
 ```
 
 ## Quality control
