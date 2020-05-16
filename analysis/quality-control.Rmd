@@ -355,54 +355,40 @@ gridExtra::grid.arrange(
 
 Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics.
 The aim is to confirm that there are no cells with both large total counts and large mitochondrial counts, to ensure that we are not inadvertently removing high-quality cells that happen to be highly metabolically active (e.g., hepatocytes).
-In this case, we do not observe any points in the top-right corner in Figure \@ref(fig:qc-mito-416b).
-
-```{r qc-mito-416b, fig.asp=1, fig.wide=TRUE, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size for each phenotype and batch."}
-plotColData(sce.416b, x="sum", y="subsets_Mito_percent", 
-    colour_by="discard", other_fields=c("block", "phenotype")) +
-    facet_grid(block~phenotype) +
-    theme(panel.border = element_rect(color = "grey"))
-```
-
-Comparison of the ERCC and mitochondrial percentages can also be informative (Figure \@ref(fig:qc-mito2-416b)).
-Low-quality cells with small mitochondrial percentages, large spike-in percentages and small library sizes are likely to be stripped nuclei, i.e., they have been so extensively damaged that they have lost all cytoplasmic content.
-On the other hand, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
-This interpretation also applies for single-nuclei studies but our focus is reversed:
-the stripped nuclei become the libraries of interest while the undamaged cells are considered to be low quality.
-
-```{r qc-mito2-416b, fig.asp=1, fig.wide=TRUE, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the percentage of reads assigned to ERCC transcripts for each phenotype and batch."}
-plotColData(sce.416b, x="altexps_ERCC_percent", y="subsets_Mito_percent",
-    colour_by="discard", other_fields=c("block", "phenotype")) +
-    facet_grid(block~phenotype) + 
-    theme(panel.border = element_rect(color = "grey"))
-```
-
-For larger experiments, a more typical example of such plots is provided in Figure \@ref(fig:qc-mito-spike-zeisel) using data from a mouse brain dataset [@zeisel2015brain].
-We can see that these metrics exhibit weak correlations to each other, 
-presumably a manifestation of a common underlying effect of cell damage.
-The weakness of the correlations motivates the use of several metrics to capture different aspects of technical quality.
-Of course, the flipside is that these metrics may also represent different aspects of biology,
-increasing the risk of discarding entire cell types as discussed in Section \@ref(outlier-assumptions).
+We demonstrate using data from a larger experiment involving the mouse brain [@zeisel2015brain];
+in this case, we do not observe any points in the top-right corner in Figure \@ref(fig:qc-mito-zeisel) that might potentially correspond to metabolically active, undamaged cells.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("zeisel-brain", "variance-modelling", 
-    c("sce.zeisel", "dec.zeisel"))
+extractCached("zeisel-brain", "gene-annotation", "sce.zeisel")
 ```
 
-```{r qc-mito-spike-zeisel, fig.asp=1, fig.wide=TRUE, fig.cap="Percentage of UMIs assigned to mitochondrial transcripts in the Zeisel brain dataset, plotted against the total number of UMIs (top) or the percentage assigned to spike-in transcripts (bottom). Each point represents a cell and is colored according to whether it was considered low-quality and discarded."}
+```{r qc-mito-zeisel, fig.cap="Percentage of UMIs assigned to mitochondrial transcripts in the Zeisel brain dataset, plotted against the total number of UMIs (top). Each point represents a cell and is colored according to whether it was considered low-quality and discarded."}
 sce.zeisel <- addPerCellQC(sce.zeisel, 
     subsets=list(Mt=rowData(sce.zeisel)$featureType=="mito"))
+
 qc <- quickPerCellQC(colData(sce.zeisel), 
     percent_subsets=c("altexps_ERCC_percent", "subsets_Mt_percent"))
 sce.zeisel$discard <- qc$discard
 
-gridExtra::grid.arrange(
-    plotColData(sce.zeisel, x="sum", y="subsets_Mt_percent",
-        colour_by="discard"),
-    plotColData(sce.zeisel, x="altexps_ERCC_percent", y="subsets_Mt_percent",
-        colour_by="discard")
-)
+plotColData(sce.zeisel, x="sum", y="subsets_Mt_percent", colour_by="discard")
 ```
+
+Comparison of the ERCC and mitochondrial percentages can also be informative (Figure \@ref(fig:qc-mito-spike-zeisel)).
+Low-quality cells with small mitochondrial percentages, large spike-in percentages and small library sizes are likely to be stripped nuclei, i.e., they have been so extensively damaged that they have lost all cytoplasmic content.
+On the other hand, cells with high mitochondrial percentages and low ERCC percentages may represent undamaged cells that are metabolically active. 
+This interpretation also applies for single-nuclei studies but with a switch of focus:
+the stripped nuclei become the libraries of interest while the undamaged cells are considered to be low quality.
+
+```{r qc-mito-spike-zeisel, fig.cap="Percentage of UMIs assigned to mitochondrial transcripts in the Zeisel brain dataset, plotted against the percentage of UMIs assigned to spike-in transcripts (bottom). Each point represents a cell and is colored according to whether it was considered low-quality and discarded."}
+plotColData(sce.zeisel, x="altexps_ERCC_percent", y="subsets_Mt_percent",
+    colour_by="discard")
+```
+
+We see that all of these metrics exhibit weak correlations to each other, 
+presumably a manifestation of a common underlying effect of cell damage.
+The weakness of the correlations motivates the use of several metrics to capture different aspects of technical quality.
+Of course, the flipside is that these metrics may also represent different aspects of biology,
+increasing the risk of discarding entire cell types as discussed in Section \@ref(outlier-assumptions).
 
 ## Cell calling for droplet data {#qc-droplets}
 
