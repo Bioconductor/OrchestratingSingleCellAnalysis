@@ -721,7 +721,7 @@ summary(alt.non.ambient)
 Any highly expressed cell type-specific gene is a good candidate for this procedure,
 most typically in cell types that are highly specialized towards manufacturing a protein product.
 Aside from hemoglobin, we have immunoglobulins in populations containing B cells,
-or insulin and glucagon in pancreas datasets (Figure \@ref(viol-gcg-lawlor)).
+or insulin and glucagon in pancreas datasets (Figure \@ref(fig:viol-gcg-lawlor)).
 The experimental setting may also provide some genes that must only be present in the ambient solution;
 for example, the mitochondrial transcripts can be used to estimate ambient contamination in single-nucleus RNA-seq,
 while _Xist_ can be used for datasets involving mixtures of male and female cells
