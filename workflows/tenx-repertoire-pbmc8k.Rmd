@@ -1,4 +1,4 @@
-# Human PBMC 10X dataset (surface proteins)
+# Human PBMC with surface proteins (10X Genomics)
 
 ```{r unref-setup, echo=FALSE, results="asis"}
 library(OSCAUtils)
@@ -11,9 +11,7 @@ Here, we describe a brief analysis of _yet another_ peripheral blood mononuclear
 Data are publicly available from the [10X Genomics website](https://support.10xgenomics.com/single-cell-vdj/datasets/3.0.0/vdj_v1_mm_c57bl6_pbmc_5gex), from which we download the filtered gene/barcode count matrices for gene expression and cell surface proteins.
 Note that most of the repertoire-related steps will be discussed in Chapter \@ref(repertoire-seq), this workflow mostly provides the baseline analysis for the expression data.
 
-## Analysis code
-
-### Data loading
+## Data loading
 
 ```{r loading}
 library(BiocFileCache)
@@ -29,7 +27,7 @@ sce.pbmc <- read10xCounts(file.path(tempdir(), "filtered_feature_bc_matrix"))
 sce.pbmc <- splitAltExps(sce.pbmc, rowData(sce.pbmc)$Type)
 ```
 
-### Quality control
+## Quality control
 
 ```{r}
 unfiltered <- sce.pbmc
@@ -83,7 +81,7 @@ plotColData(unfiltered, x="sum", y="subsets_Mito_percent",
     colour_by="discard") + scale_x_log10()
 ```
 
-### Normalization
+## Normalization
 
 Computing size factors for the gene expression and ADT counts.
 
@@ -116,7 +114,7 @@ plot(librarySizeFactors(altExp(sce.pbmc)), sizeFactors(altExp(sce.pbmc)), pch=16
     main="Antibody capture", log="xy")
 ```
 
-### Dimensionality reduction
+## Dimensionality reduction
 
 We omit the PCA step for the ADT expression matrix, given that it is already so low-dimensional,
 and progress directly to $t$-SNE and UMAP visualizations.
@@ -129,7 +127,7 @@ set.seed(1000000)
 altExp(sce.pbmc) <- runUMAP(altExp(sce.pbmc))
 ```
 
-### Clustering
+## Clustering
 
 We perform graph-based clustering on the ADT data and use the assignments as the column labels of the alternative Experiment.
 

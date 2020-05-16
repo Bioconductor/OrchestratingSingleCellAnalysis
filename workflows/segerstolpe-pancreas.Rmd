@@ -89,7 +89,7 @@ gridExtra::grid.arrange(
 colSums(as.matrix(qc))
 ```
 
-### Normalization
+## Normalization
 
 We don't normalize the spike-ins as there are some cells with no spike-in counts.
 
@@ -109,7 +109,7 @@ plot(librarySizeFactors(sce.seger), sizeFactors(sce.seger), pch=16,
     xlab="Library size factors", ylab="Deconvolution factors", log="xy")
 ```
 
-### Variance modelling
+## Variance modelling
 
 We do not use cells with no spike-ins for variance modelling.
 Donor AZ also has very low spike-in counts and is subsequently ignored.
@@ -134,7 +134,7 @@ for (i in colnames(blocked.stats)) {
 }
 ```
 
-### Dimensionality reduction
+## Dimensionality reduction
 
 ```{r dimensionality-reduction}
 library(BiocSingular)
@@ -143,7 +143,7 @@ sce.seger <- runPCA(sce.seger, subset_row=chosen.hvgs, ncomponents=25)
 sce.seger <- runTSNE(sce.seger, dimred="PCA")
 ```
 
-### Clustering
+## Clustering
 
 ```{r clustering}
 snn.gr <- buildSNNGraph(sce.seger, use.dimred="PCA")

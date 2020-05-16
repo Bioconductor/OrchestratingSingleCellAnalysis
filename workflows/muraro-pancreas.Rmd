@@ -89,7 +89,7 @@ plot(librarySizeFactors(sce.muraro), sizeFactors(sce.muraro), pch=16,
     xlab="Library size factors", ylab="Deconvolution factors", log="xy")
 ```
 
-### Variance modelling
+## Variance modelling
 
 We block on a combined plate and donor factor.
 
