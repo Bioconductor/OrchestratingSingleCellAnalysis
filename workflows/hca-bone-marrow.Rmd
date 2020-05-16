@@ -20,11 +20,6 @@ sce.bone <- HCAData('ica_bone_marrow')
 sce.bone$Donor <- sub("_.*", "", sce.bone$Barcode)
 ```
 
-```{r testsubsample, eval=FALSE, echo=FALSE, include=FALSE}
-set.seed(1234)
-sce.bone <- sce.bone[, sample(ncol(sce.bone), 1000)]
-```
-
 We use symbols in place of IDs for easier interpretation later.
 
 ```{r gene-annotation}
@@ -84,7 +79,7 @@ sce.bone <- logNormCounts(sce.bone, size_factors = sce.bone$sum)
 summary(sizeFactors(sce.bone))
 ```
 
-### Variance modeling
+## Variance modeling
 
 We block on the donor of origin to mitigate batch effects during HVG selection.
 We select a larger number of HVGs to capture any batch-specific variation that might be present.
@@ -95,7 +90,7 @@ dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor, BPPARAM=bpp)
 top.bone <- getTopHVGs(dec.bone, n=5000)
 ```
 
-```{r unref-hca-bone-var, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the HCA bone marrow dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
+```{r unref-hca-bone-var, fig.height=12, fig.width=6, fig.cap="Per-gene variance as a function of the mean for the log-expression values in the HCA bone marrow dataset. Each point represents a gene (black) with the mean-variance trend (blue) fitted to the variances."}
 par(mfrow=c(4,2))
 blocked.stats <- dec.bone$per.block
 for (i in colnames(blocked.stats)) {
@@ -146,15 +141,15 @@ sce.bone <- runUMAP(sce.bone, dimred="MNN",
 
 ## Clustering
 
-Graph-based clustering generates an excessively large intermediate graph, so we will switch to $k$-means instead.
-We err on the side of overclustering to ensure that the major cell types are distinguished; in fact, this is actually useful for resolving fine structure with such a large number of cells.
-Some parameter fiddling is required to improve convergence with a large number of points.
+Graph-based clustering generates an excessively large intermediate graph so we will instead use a two-step approach with $k$-means.
+We generate 1000 small clusters that are subsequently aggregated into more interpretable groups with a graph-based method.
 
 ```{r clustering}
 set.seed(1000)
-kout.bone <- kmeans(reducedDim(sce.bone, "MNN"), 
-    centers=40, iter.max=1000, algorithm="MacQueen") 
-colLabels(sce.bone) <- factor(kout.bone$cluster)
+clust.bone <- clusterSNNGraph(sce.bone, use.dimred="MNN", 
+    use.kmeans=TRUE, kmeans.centers=1000)
+colLabels(sce.bone) <- factor(clust.bone)
+table(colLabels(sce.bone))
 ```
 
 We observe mostly balanced contributions from different samples to each cluster (Figure \@ref(fig:unref-hca-bone-ab)), consistent with the expectation that all samples are replicates from different donors.
@@ -167,7 +162,7 @@ pheatmap(log10(tab+10), color=viridis::viridis(100))
 
 ```{r, echo=FALSE}
 # Checking that it is, in fact, pretty well-mixed.
-stopifnot(all(tab>10))
+stopifnot(all(tab>100))
 ```
 
 ```{r unref-hca-bone-umap, fig.asp=1.2, fig.cap="UMAP plots of the HCA bone marrow dataset after merging. Each point represents a cell and is colored according to the assigned cluster (top) or the donor of origin (bottom)."}
@@ -178,14 +173,6 @@ gridExtra::grid.arrange(
     plotUMAP(sce.bone, colour_by="label"),
     plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 )
-```
-
-We end up with quite a few clusters, several of which are likely to be closely related to each other and thus redundant.
-These can be easily identified by further clustering on the cluster centroids in `kout.bone` (Figure \@ref(fig:unref-hca-bone-hclust)), with the aim being to avoid unnecessary manual annotation of close relatives.
-
-```{r unref-hca-bone-hclust, fig.cap="Hierarchical clustering of the $k$-means cluster centroids from the PBMC dataset."}
-bone.clust <- hclust(dist(kout.bone$centers))
-plot(bone.clust)
 ```
 
 ## Differential expression
@@ -201,12 +188,12 @@ We visualize the top markers for a randomly chosen cluster using a "dot plot" in
 The presence of upregulated genes like _LYZ_, _S100A8_ and _VCAN_ is consistent with a monocyte identity for this cluster.
 
 ```{r, echo=FALSE}
-cluster.choice <- "1"
+cluster.choice <- "5"
 ```
 
 ```{r unref-hca-bone-dotplot, fig.cap=sprintf("Heatmap of log~2~-fold changes for the top marker genes (rows) of cluster %s compared to all other clusters (columns).", cluster.choice)}
-top.markers <- markers.bone[["1"]]
-best <- top.markers[top.markers$Top <= 5,]
+top.markers <- markers.bone[["5"]]
+best <- top.markers[top.markers$Top <= 10,]
 lfcs <- getMarkerEffects(best)
 
 library(pheatmap)
