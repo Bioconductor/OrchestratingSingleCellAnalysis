@@ -40,21 +40,13 @@ Also note the `chapterPreamble()` code chunk that is required at the top of each
 
 ### To build the workflows
 
-Install the **OSCAUtils** package with `R CMD INSTALL package`.
+Install the **rebook** package from https://github.com/LTLA/rebook.
 
-Run the following code to compile the book in the `devel` subdirectory,
-which should be pushed [here](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-devel).
+Run:
 
-```sh
-# Where 'Rdevel' is an alias for BioC-devel:
-Rdevel -f deploy.R --args devel
-```
-
-Run the following code to compile the book in the `release` subdirectory,
-which should be pushed [here](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-release).
-
-```sh
-R -f deploy.R --args release
+```r
+bookdown::render_book("index.Rmd", "bookdown::gitbook",
+    quiet = FALSE, output_dir = "docs", new_session = TRUE)
 ```
 
 ### To contribute reports
