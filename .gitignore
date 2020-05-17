@@ -2,7 +2,11 @@
 *_files
 *.html
 .Rproj.user
+*.md
+!README.md
 
-release/
-devel/
+*.R
 *.rds
+*.png
+raw_data/
+*.swp
