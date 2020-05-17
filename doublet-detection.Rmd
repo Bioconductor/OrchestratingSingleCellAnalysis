@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Doublet detection 
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -32,7 +32,7 @@ The main difference between these two methods is whether or not they need cluste
 We will demonstrate the use of these methods on 10X Genomics data from a droplet-based scRNA-seq study of the mouse mammary gland [@bach2017differentiation].
 
 ```{r, results='asis', echo=FALSE}
-extractCached("bach-mammary", "clustering", c("sce.mam", "top.mam"))
+extractCached("bach-mammary.Rmd", "clustering", c("sce.mam", "top.mam"))
 ```
 
 ```{r}

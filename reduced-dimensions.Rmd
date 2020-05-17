@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Dimensionality reduction
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -29,7 +29,7 @@ and enables effective plotting of the data, for those of us who are not capable 
 We will use the @zeisel2015brain dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("zeisel-brain", "variance-modelling", 
+extractCached("zeisel-brain.Rmd", "variance-modelling", 
     c("sce.zeisel", "dec.zeisel"))
 ```
 
@@ -134,7 +134,7 @@ This is done using the `denoisePCA()` function with the variance modelling resul
 To illustrate, we use this strategy to pick the number of PCs in the 10X PBMC dataset.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("tenx-unfiltered-pbmc4k", "variance-modelling", 
+extractCached("tenx-unfiltered-pbmc4k.Rmd", "variance-modelling", 
     c("sce.pbmc", "dec.pbmc", "top.pbmc"))
 ```
 

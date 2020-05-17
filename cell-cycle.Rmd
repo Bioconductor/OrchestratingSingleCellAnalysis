@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Cell cycle assignment
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -19,7 +19,7 @@ Many of the key events in the cell cycle (e.g., passage through checkpoints) are
 We demonstrate using the 416B dataset, which is known to contain actively cycling cells after oncogene induction.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("lun-416b", "clustering", "sce.416b")
+extractCached("lun-416b.Rmd", "clustering", "sce.416b")
 ```
 
 ```{r}

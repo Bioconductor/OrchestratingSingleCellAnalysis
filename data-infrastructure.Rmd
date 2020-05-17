@@ -13,7 +13,7 @@ To this end, the `SingleCellExperiment` class (from the `r Biocpkg("SingleCellEx
 This class implements a data structure that stores all aspects of our single-cell data - gene-by-cell expression data, per-cell metadata and per-gene annotation (Figure \@ref(fig:sce-structure)) - and manipulate them in a synchronized manner.
 
 ```{r sce-structure, fig.wide=TRUE, echo=FALSE, fig.cap="Overview of the structure of the `SingleCellExperiment` class. Each row of the assays corresponds to a row of the `rowData` (pink shading), while each column of the assays corresponds to a column of the `colData` and `reducedDims` (yellow shading)."}
-library(OSCAUtils)
+library(rebook)
 knitr::include_graphics(
     fetchImage("SingleCellExperiment.png")
 )

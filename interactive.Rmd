@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Interactive data exploration {#interactive-sharing}
 
 ```{r setup, echo=FALSE, results="asis", message=FALSE}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 library(iSEE)
 ```
@@ -36,7 +36,7 @@ An instance of an interactive `iSEE` application can be launched with any data s
 In its simplest form, this is done simply by calling `iSEE(sce)` with the `sce` data object as the sole argument, as demonstrated here with the 10X PBMC dataset (Figure \@ref(fig:iSEE-default)).
 
 ```{r, results='asis', echo=FALSE}
-extractCached("tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k.Rmd", "clustering", "sce.pbmc")
 ```
 
 ```{r}

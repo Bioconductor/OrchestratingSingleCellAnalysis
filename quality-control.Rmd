@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Quality Control
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -36,7 +36,7 @@ This step is commonly referred to as quality control (QC) on the cells.
 We will demonstrate using a small scRNA-seq dataset from @lun2017assessing, which is provided with no prior QC so that we can apply our own procedures.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("lun-416b", "loading", "sce.416b")
+extractCached("lun-416b.Rmd", "loading", "sce.416b")
 ```
 
 ```{r}
@@ -359,7 +359,7 @@ We demonstrate using data from a larger experiment involving the mouse brain [@z
 in this case, we do not observe any points in the top-right corner in Figure \@ref(fig:qc-mito-zeisel) that might potentially correspond to metabolically active, undamaged cells.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("zeisel-brain", "gene-annotation", "sce.zeisel")
+extractCached("zeisel-brain.Rmd", "gene-annotation", "sce.zeisel")
 ```
 
 ```{r qc-mito-zeisel, fig.cap="Percentage of UMIs assigned to mitochondrial transcripts in the Zeisel brain dataset, plotted against the total number of UMIs (top). Each point represents a cell and is colored according to whether it was considered low-quality and discarded."}

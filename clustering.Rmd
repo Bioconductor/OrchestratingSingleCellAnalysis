@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Clustering
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -21,7 +21,7 @@ Clustering is thus a critical step for extracting biological insights from scRNA
 Here, we demonstrate the application of several commonly used methods with the 10X PBMC dataset. 
 
 ```{r, results='asis', echo=FALSE}
-extractCached("tenx-unfiltered-pbmc4k", "dimensionality-reduction", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k.Rmd", "dimensionality-reduction", "sce.pbmc")
 ```
 
 ```{r}
@@ -406,7 +406,7 @@ Nonetheless, we will still demonstrate the application of hierarchical clusterin
 As the PBMC dataset is too large, we will demonstrate on the 416B dataset instead.
 
 ```{r, results='asis', echo=FALSE}
-extractCached("lun-416b", "dimensionality-reduction", "sce.416b")
+extractCached("lun-416b.Rmd", "dimensionality-reduction", "sce.416b")
 ```
 
 ```{r}

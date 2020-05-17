@@ -1,7 +1,7 @@
 # Grun mouse HSC (CEL-seq) {#merged-hcsc}
 
 ```{r unref-setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble(use_cache = TRUE)
 ```
 

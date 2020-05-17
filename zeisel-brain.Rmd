@@ -1,7 +1,7 @@
 # Zeisel mouse brain (STRT-Seq)
 
 ```{r unref-setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble(use_cache = TRUE)
 ```
 

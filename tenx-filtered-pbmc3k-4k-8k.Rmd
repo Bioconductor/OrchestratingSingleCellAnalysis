@@ -1,7 +1,7 @@
 # Filtered human PBMCs (10X Genomics)
 
 ```{r unref-setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble(use_cache = TRUE)
 ```
 

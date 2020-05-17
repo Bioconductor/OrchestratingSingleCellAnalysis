@@ -7,7 +7,7 @@ bibliography: ../ref.bib
 # Cell type annotation
 
 ```{r setup, echo=FALSE, results="asis"}
-library(OSCAUtils)
+library(rebook)
 chapterPreamble()
 ```
 
@@ -46,7 +46,7 @@ These built-in references are often good enough for most applications, provided 
 We will demonstrate on the 10X PBMC dataset using a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated].
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("tenx-unfiltered-pbmc4k", "clustering", "sce.pbmc")
+extractCached("tenx-unfiltered-pbmc4k.Rmd", "clustering", "sce.pbmc")
 ```
 
 ```{r}
@@ -117,7 +117,7 @@ and we want to use that knowledge to annotate a new dataset in an automated mann
 To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("muraro-pancreas", "normalization", "sce.muraro")
+extractCached("muraro-pancreas.Rmd", "normalization", "sce.muraro")
 ```
 
 ```{r}
@@ -132,7 +132,7 @@ We use the same call to `SingleR()` but with `de.method="wilcox"` to identify ma
 This re-uses the same machinery from Chapter \@ref(marker-detection), and indeed, further options to fine-tune the test procedure can be passed via the `de.args` argument.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("segerstolpe-pancreas", "normalization", "sce.seger")
+extractCached("segerstolpe-pancreas.Rmd", "normalization", "sce.seger")
 ```
 
 ```{r}
@@ -171,7 +171,7 @@ This does not require matching of individual cells to the expression values of t
 We demonstrate this approach using neuronal cell type markers derived from the @zeisel2015brain study.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("zeisel-brain", "normalization", c("sce.zeisel"))
+extractCached("zeisel-brain.Rmd", "normalization", c("sce.zeisel"))
 ```
 
 ```{r}
@@ -314,7 +314,7 @@ This identifies the pathways and processes that are (relatively) active in each 
 We demonstrate on the mouse mammary dataset from @bach2017differentiation, using markers that are identified by `findMarkers()` as being upregulated at a log-fold change threshold of 1.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("bach-mammary", "clustering", "sce.mam")
+extractCached("bach-mammary.Rmd", "clustering", "sce.mam")
 ```
 
 ```{r}
