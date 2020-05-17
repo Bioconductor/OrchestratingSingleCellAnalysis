@@ -48,7 +48,7 @@ rmd_files: ["index.Rmd",
     "nestorowa-hsc.Rmd",
     "pijuan-embryo.Rmd",
     "bach-mammary.Rmd",
-    "hca-bone-marrow.Rmd"
+    "hca-bone-marrow.Rmd",
     # Part 4, other crap:
     "about-the-contributors.Rmd",
     "bibliography.Rmd"]
