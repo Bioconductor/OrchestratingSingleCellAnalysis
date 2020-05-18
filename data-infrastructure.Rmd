@@ -15,7 +15,8 @@ This class implements a data structure that stores all aspects of our single-cel
 ```{r sce-structure, fig.wide=TRUE, echo=FALSE, fig.cap="Overview of the structure of the `SingleCellExperiment` class. Each row of the assays corresponds to a row of the `rowData` (pink shading), while each column of the assays corresponds to a column of the `colData` and `reducedDims` (yellow shading)."}
 library(rebook)
 knitr::include_graphics(
-    fetchImage("SingleCellExperiment.png")
+    file.path("https://raw.githubusercontent.com/Bioconductor/OSCABase/images/images",
+        "SingleCellExperiment.png")
 )
 ```
 

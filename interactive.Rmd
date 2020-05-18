@@ -15,7 +15,7 @@ library(iSEE)
 ```{r, eval=!exists("SCREENSHOT"), include=FALSE}
 # Borrowing the methodology used by https://github.com/iSEE/screenshots
 SCREENSHOT <- function(x, ...) {
-    path <- fetchImage(x)
+    path <- file.path("https://raw.githubusercontent.com/Bioconductor/OSCABase/images/images", x)
     knitr::include_graphics(path)
 }
 ```

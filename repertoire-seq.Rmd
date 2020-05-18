@@ -12,7 +12,7 @@ chapterPreamble()
 ```
 
 ```{r, fig.cap="This page is under construction.", echo=FALSE}
-path <- fetchImage("placeholder_yuno.jpg")
+path <- file.path("https://raw.githubusercontent.com/Bioconductor/OSCABase/images/images", "placeholder_yuno.jpg")
 knitr::include_graphics(path)
 ```
 

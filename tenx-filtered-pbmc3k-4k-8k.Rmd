@@ -153,7 +153,7 @@ merged.pbmc <- do.call(fastMNN, c(normed.sce,
     list(subset.row=combined.hvg, BSPARAM=RandomParam())))
 ```
 
-We use the percentage of lost variance as a measure.
+We use the percentage of lost variance as a diagnostic measure.
 
 ```{r}
 metadata(merged.pbmc)$merge.info$lost.var
