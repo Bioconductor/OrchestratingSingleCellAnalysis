@@ -4,7 +4,7 @@
 
 ```{r unref-setup, echo=FALSE, results="asis"}
 library(rebook)
-chapterPreamble(use_cache = TRUE)
+chapterPreamble(cache=TRUE)
 ```
 
 ## Introduction
