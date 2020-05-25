@@ -41,30 +41,24 @@ extractCached("nestorowa-hsc.Rmd", "clustering", "sce.nest")
 sce.nest
 ```
 
-## Obtaining pseudo-times
+## Obtaining pseudotime orderings
 
 ### Cluster-based minimum spanning tree
 
-The `r Biocpkg("TSCAN")` package employs a simple yet effective approach to trajectory reconstruction.
+The `r Biocpkg("TSCAN")` algorithm uses a simple yet effective approach to trajectory reconstruction.
 It clusters cells to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the cell coordinates and then forms the minimum spanning tree (MST) across centroids.
 The MST is simply an undirected acyclic graph that passes through each centroid exactly once and can be thought of as the most parsimonious structure that captures the transitions between clusters.
-We demonstrate below on the Nestorowa dataset (Figure \@ref(fig:tscan-nest-mst)), computing the centroids in the low-dimensional space to take advantage of data compaction and denoising (Chapter \@ref(dimensionality-reduction)).
+We demonstrate below on the Nestorowa dataset, computing the cluster centroids in the low-dimensional PC space to take advantage of data compaction and denoising (Chapter \@ref(dimensionality-reduction)).
 
-```{r tscan-nest-mst, fig.cap="Minimum spanning tree constructed using a _TSCAN_-like algorithm in the Nestorowa HSC dataset. Each node represents a cluster and is labelled according to the cluster number."}
-# TODO: get the TSCAN authors to allow me to plug in existing
-# dimensionality reduction and clustering results, rather than
-# forcing users to go along with their defaults.
+```{r}
 library(scater)
 by.cluster <- aggregateAcrossCells(sce.nest, ids=colLabels(sce.nest))
 centroids <- reducedDim(by.cluster, "PCA")
 
-dmat <- dist(centroids)
-dmat <- as.matrix(dmat)
-g <- igraph::graph.adjacency(dmat, mode = "undirected", weighted = TRUE)
-mst <- igraph::minimum.spanning.tree(g)
-
-set.seed(1000)
-plot(mst)
+# Using an implementation of the TSCAN algorithm in scran:
+library(scran)
+mst <- createClusterMST(centroids)
+mst
 ```
 
 For reference, we can draw the same lines between the centroids in a $t$-SNE plot (Figure \@ref(fig:tscan-nest-tsne)).
@@ -73,146 +67,46 @@ Keep in mind that the MST is generated from distances in the PC space and is mer
 its interpretation is not compromised by the distortions required to obtain a two-dimensional visualization.
 
 ```{r tscan-nest-tsne, fig.cap="$t$-SNE plot of the Nestorowa HSC dataset, where each point is a cell and is colored according to its cluster assignment. The MST obtained using a _TSCAN_-like algorithm is overlaid on top."}
-# TODO: stuff this into a function somewhere.
-pairs <- Matrix::which(mst[] > 0, arr.ind=TRUE)
-coords <- reducedDim(by.cluster, "TSNE")
-group <- rep(seq_len(nrow(pairs)), 2)
-stuff <- data.frame(rbind(coords[pairs[,1],], coords[pairs[,2],]), group)
-
+line.data <- connectClusterMST(reducedDim(by.cluster, "TSNE"), mst=mst)
 plotTSNE(sce.nest, colour_by="label") + 
-    geom_line(data=stuff, mapping=aes(x=X1, y=X2, group=group))
+    geom_line(data=line.data, mapping=aes(x=dim1, y=dim2, group=edge))
 ```
 
-We obtain a pseudotime ordering by projecting the cells onto the MST.
+We obtain a pseudotime ordering by projecting the cells onto the MST with `orderClusterMST()`.
 In other words, we move each cell onto the edge of the MST to which it is closest;
 the pseudotime is then calculated as the distance along the MST from this new position to a "root node".
 For our purposes, we will arbitrarily pick one of the endpoint nodes as the root,
 though a more careful choice based on the biological annotation of each node may yield more relevant orderings
 (e.g., picking a node corresponding to a more pluripotent state).
+Here, multiple sets of pseudotimes are reported for a branched trajectory where each ordering corresponds 
+to one path from the root node to one of the terminal nodes.
 
-```{r tscan-nest-pseudo, fig.cap="$t$-SNE plot of the Nestorowa HSC dataset, where each point is a cell and is colored according to its pseudo-time value. The MST obtained using a _TSCAN_-like algorithm is overlaid on top."}
-# TODO: for the love of god, we definitely need to move this into a function!
-.map2edges <- function(points, center, edge.ends, previous) {
-    all.distances <- list()
-    all.pseudo <- list()
-    edge.len <- list()
+```{r tscan-nest-pseudo, fig.cap="$t$-SNE plot of the Nestorowa HSC dataset, where each point is a cell and is colored according to its pseudotime value. The MST obtained using a _TSCAN_-like algorithm is overlaid on top."}
+tscan.pseudo <- orderClusterMST(reducedDim(sce.nest, "PCA"), 
+    ids=colLabels(sce.nest), centers=centroids, mst=mst)
+head(tscan.pseudo)
 
-    # Computing distance of each point from each edge.
-    # Edges defined from 'center' to 'edge.ends'.
-    for (i in rownames(edge.ends)) {
-        edge.end <- edge.ends[i,]
-        delta <- center - edge.end
-        max.d <- sqrt(sum(delta^2))
-        delta <- delta/max.d
-
-        centered <- t(t(points) - center)
-        proj <- as.numeric(centered %*% delta)
-        proj <- pmax(0, pmin(proj, max.d))
-        mapped <- outer(proj, delta)
-
-        dist <- sqrt(rowSums((centered - mapped)^2))
-        all.distances[[i]] <- dist
-        all.pseudo[[i]] <- proj
-        edge.len[[i]] <- max.d
-    }
-
-    all.distances <- do.call(cbind, all.distances)
-    all.pseudo <- do.call(cbind, all.pseudo)
-    chosen <- colnames(all.distances)[max.col(-all.distances)]
-
-    # Flipping the distance of points to the previous node,
-    # in order to enforce a directional pseudo-time.
-    dist.previous <- 0
-    if (!is.na(previous)) {
-        on.previous <- chosen==previous
-        dist.previous <- edge.len[[previous]]
-        previous.proj <- dist.previous - all.pseudo[on.previous,previous,drop=FALSE]
-
-        if (all(on.previous)) {
-            return(list(dist=dist.previous, pseudo=list(previous.proj)))
-        }
-    }
-
-    # Filling out the branches, where points are NA for a branch's
-    # pseudo-time if they were assigned to another branch.
-    output <- list()
-    for (leftover in setdiff(rownames(edge.ends), previous)) {
-        empty <- rep(NA_real_, nrow(points))
-        if (!is.na(previous)) {
-            empty[on.previous] <- previous.proj
-        }
-        current <- chosen==leftover
-        empty[current] <- all.pseudo[current,leftover]
-        output[[leftover]] <- empty
-    }
-
-    list(dist=dist.previous, pseudo=output)
-}
-
-originals <- reducedDim(sce.nest, "PCA")
-cluster <- colLabels(sce.nest)
-starting.cluster <- names(igraph::V(mst)[igraph::degree(mst)==1])[1]
-collated <- list()
-
-latest <- starting.cluster
-parents <- NA_character_ 
-progress <- list(rep(NA_real_, length(cluster)))
-cumulative <- 0
-
-while (length(latest)) {
-    new.latest <- new.parents <- character(0)
-    new.progress <- list()
-    new.cumulative <- numeric(0)
-
-    for (i in seq_along(latest)) {
-        curnode <- latest[i]
-        all.neighbors <- names(igraph::adjacent_vertices(mst, curnode, mode="all")[[1]])
-        in.cluster <- cluster==curnode 
-
-        mapped <- .map2edges(originals[in.cluster,,drop=FALSE], center=centroids[curnode,], 
-            edge.ends=centroids[all.neighbors,,drop=FALSE], previous=parents[i])
-        edge.len <- mapped$dist
-        pseudo <- mapped$pseudo
-
-        collected.progress <- list()
-        for (j in seq_along(pseudo)) {
-            sofar <- progress[[i]] # yes, using 'i' here.
-            sofar[in.cluster] <- pseudo[[j]] + cumulative[i]
-            collected.progress[[j]] <- sofar
-        }
-
-        all.children <- setdiff(all.neighbors, parents[i])
-        if (length(all.children)==0) {
-            collated[[curnode]] <- collected.progress[[1]]
-        } else {
-            new.latest <- c(new.latest, all.children)
-            new.parents <- c(new.parents, rep(curnode, length(all.children)))
-            new.progress <- c(new.progress, collected.progress)
-            new.cumulative <- c(new.cumulative, rep(cumulative[i] + edge.len, length(all.children)))
-        }
-    }
-
-    latest <- new.latest
-    parents <- new.parents
-    progress <- new.progress
-    cumulative <- new.cumulative
-}
-tscan.pseudo <- do.call(cbind, collated)
-
-plotTSNE(sce.nest, colour_by=I(rowMeans(tscan.pseudo, na.rm=TRUE)), text_by="label") +
-    geom_line(data=stuff, mapping=aes(x=X1, y=X2, group=group))
+plotTSNE(sce.nest, colour_by=I(rowMeans(tscan.pseudo, na.rm=TRUE)), 
+        text_by="label", text_colour="red") +
+    geom_line(data=line.data, mapping=aes(x=dim1, y=dim2, group=edge))
 ```
 
-`r Biocpkg("TSCAN")` gains several advantages from using clusters to form the MST.
+```{r, echo=FALSE, results="hide"}
+stopifnot(ncol(tscan.pseudo) > 1L)
+```
+
+The `r Biocpkg("TSCAN")` approach gains several advantages from using clusters to form the MST.
 The most obvious is that of computational speed as calculations are performed over clusters rather than cells.
 The relative coarseness of clusters protects against the per-cell noise that would otherwise reduce the stability of the MST.
 The interpretation of the MST is also relatively straightforward as it uses the same clusters as the rest of the analysis,
 allowing us to recycle previous knowledge about the biological annotations assigned to each cluster.
 
-However, the reliance on clustering is also a double-edged sword.
-If the clusters are not sufficiently granular, it is possible for `r Biocpkg("TSCAN")` to overlook a trajectory if the entirety of the trajectory occurs in a single cluster.
-In addition, the MST does poorly at handling more complex events like cycles (e.g., the cell cycle, obviously) or bubbles (e.g., multiple differentation paths to the same terminal cell type).
-Whether or not this is a problem depends on the complexity of the global structure of the population of interest. 
+However, the reliance on clustering is a double-edged sword.
+If the clusters are not sufficiently granular, 
+it is possible for `r Biocpkg("TSCAN")` to overlook a trajectory if the entirety of the trajectory occurs in a single cluster.
+In addition, the MST does poorly at handling more complex events like cycles 
+(e.g., the cell cycle, obviously) or bubbles (e.g., multiple differentation paths to the same terminal cell type).
+Whether or not this is a practical problem depends on the complexity of the global structure of the population of interest. 
 
 ### Principal curves
 
