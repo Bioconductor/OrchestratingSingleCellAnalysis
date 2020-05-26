@@ -199,7 +199,98 @@ lines(SlingshotDataSet(sce.sling3), lwd=2, col='black')
 
 ### Changes along a trajectory
 
+Once we have constructed a trajectory, the next step is to interpret the underlying biology based on its DE genes.
+The aim here is to find the genes that exhibit significant changes in expression across pseudotime,
+as these are the most likely to have driven the formation of the trajectory in the first place.
+The overall strategy is to fit a linear model to the per-gene expression with respect to pseudotime,
+allowing us to obtain inferences about the significance of any association.
+
+To demonstrate, we will identify genes with significant changes with respect to one of the TSCAN pseudotimes in the Nestorowa data.
+We use `testLinearModel()` to fit a natural spline with 5 degrees of freedom to the expression of each gene,
+allowing us to model a range of non-linear relationships in the data.
+We then perform an analysis of variance (ANOVA) to determine if any of the spline coefficients are significantly non-zero,
+i.e., there is some significant trend with respect to pseudotime.
+
+```{r}
+# Considering cells assigned to the first path through the TSCAN MST:
+first.pseudo <- tscan.pseudo[,1]
+keep <- !is.na(first.pseudo) & colLabels(sce.nest)!="7"
+first.pseudo <- first.pseudo[keep]
+sub.y <- logcounts(sce.nest)[,keep]
+
+# Testing for (potentially non-linear) associations in expression:
+library(scran)
+basis <- splines::ns(first.pseudo, 5)
+design <- model.matrix(~basis)
+pseudo1 <- testLinearModel(sub.y, design=design, coefs=2:ncol(design))
+pseudo1[order(pseudo1$p.value),]
+```
+
+In practice, it is helpful to pair the ANOVA results with a fit from a much simpler model
+where we assume that there exists a linear relationship between expression and the pseudotime.
+This yields a quick summary of the overall direction of change (i.e., positive or negative);
+in contrast, the magnitude and sign of the spline coefficients cannot be easily interpreted.
+
+```{r}
+design.lfc <- model.matrix(~first.pseudo)
+pseudo1.lfc <- testLinearModel(sub.y, design=design.lfc)
+
+# Collecting desired annotation and statistics into one DataFrame:
+pseudo1.final <- cbind(
+    rowData(sce.nest)[,"SYMBOL",drop=FALSE],
+    pseudo1.lfc[,"logFC",drop=FALSE], 
+    pseudo1[,c("p.value", "FDR")])
+
+# Ordering by the most significant genes on the ANOVA p-values:
+sorted <- pseudo1.final[order(pseudo1.final$p.value),]
+```
+
+Examination of the top downregulated genes suggests that this pseudotime represents a transition away from myeloid identity,
+based on the decrease in expression of genes such as _Mpo_ and _Plac8_ (Figure \@ref(fig:nest-1-simple-down)).
+
+```{r nest-1-simple-down, fig.asp=3, fig.width=6, fig.cap="Expression of the top 10 genes that decrease in expression with increasing pseudotime along the first path in the MST of the Nestorowa dataset. Each point represents a cell that is mapped to this path and is colored by the assigned cluster."}
+up.left <- sorted[sorted$logFC < 0,]
+head(up.left, 10)
+best <- head(rownames(up.left), 10)
+plotExpression(sce.nest, features=best,
+    x=I(tscan.pseudo[,1]), colour_by="label")
+```
+
+```{r, echo=FALSE, results="hide"}
+stopifnot(all("Mpo", "Plac8") %in% head(up.left$SYMBOL, 10))
+```
+
+Conversely, the later parts of the pseudotime may correspond to a more stem-like state based on upregulation of genes like _Hlf_.
+There is also increased expression of genes associated with the lymphoid lineage (e.g., _Ltb_),
+consistent with reduced commitment to the myeloid lineage at earlier pseudotime values. 
+
+```{r nest-1-simple-up, fig.asp=3, fig.width=6, fig.cap="Expression of the top 10 genes that increase in expression with increasing pseudotime along the first path in the MST of the Nestorowa dataset. Each point represents a cell that is mapped to this path and is colored by the assigned cluster."}
+up.right <- sorted[sorted$logFC > 0,]
+head(up.right, 10)
+best <- head(rownames(up.right), 10)
+plotExpression(sce.nest, features=best, 
+    x=I(tscan.pseudo[,1]), colour_by="label")
+```
+
+It is worth pointing out that the $p$-values here should be taken with some skepticism.
+The same fundamental problems described in Section \@ref(p-value-invalidity) remain;
+the $p$-values are computed from the same data used to define the trajectory,
+and there is only a sample size of 1 in this analysis regardless of the number of cells.
+Nonetheless, the $p$-value is still useful for prioritizing interesting genes 
+in the same manner that it is used to identify markers between clusters.
+
+```{r, eval=FALSE, echo=FALSE}
+# This takes far, far too long.
+keep <- !is.na(tscan.pseudo[,1])
+library(tradeSeq)
+fit <- fitGAM(counts(sce.nest)[,keep], 
+    pseudotime=tscan.pseudo[keep,1],
+    cellWeights=rep(1, sum(keep)))
+```
+
 ### Changes between lineages
+
+
 
 ## Finding the root
 
