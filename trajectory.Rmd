@@ -197,52 +197,65 @@ lines(SlingshotDataSet(sce.sling3), lwd=2, col='black')
 
 ## Characterizing trajectories
 
-### Changes along a trajectory
+### Overview
 
-Once we have constructed a trajectory, the next step is to interpret the underlying biology based on its DE genes.
+Once we have constructed a trajectory, the next step is to characterize the underlying biology based on its DE genes.
 The aim here is to find the genes that exhibit significant changes in expression across pseudotime,
 as these are the most likely to have driven the formation of the trajectory in the first place.
-The overall strategy is to fit a linear model to the per-gene expression with respect to pseudotime,
+The overall strategy is to fit a model to the per-gene expression with respect to pseudotime,
 allowing us to obtain inferences about the significance of any association.
+We can then prioritize interesting genes as those with low $p$-values for further investigation.
+
+We will not attempt to cover the diversity of options available for model fitting in this section.
+Instead, to demonstrate the relevant principles,
+we will use the simplest strategy of fitting a linear model to the log-expression values 
+with respect to (a non-linear function of) the pseudotime.
+More complex approaches involving generalized additive models
+are available in the `r Biocpkg("tradeSeq")` and `r Biocpkg("monocle")` packages;
+interested readers are referred to their documentation.
+
+### Changes along a trajectory
 
 To demonstrate, we will identify genes with significant changes with respect to one of the TSCAN pseudotimes in the Nestorowa data.
-We use `testLinearModel()` to fit a natural spline with 5 degrees of freedom to the expression of each gene,
+We use the `testPseudotime()` utility to fit a natural spline to the expression of each gene,
 allowing us to model a range of non-linear relationships in the data.
 We then perform an analysis of variance (ANOVA) to determine if any of the spline coefficients are significantly non-zero,
 i.e., there is some significant trend with respect to pseudotime.
 
 ```{r}
-# Considering cells assigned to the first path through the TSCAN MST:
-first.pseudo <- tscan.pseudo[,1]
-keep <- !is.na(first.pseudo) & colLabels(sce.nest)!="7"
-first.pseudo <- first.pseudo[keep]
-sub.y <- logcounts(sce.nest)[,keep]
-
-# Testing for (potentially non-linear) associations in expression:
 library(scran)
-basis <- splines::ns(first.pseudo, 5)
-design <- model.matrix(~basis)
-pseudo1 <- testLinearModel(sub.y, design=design, coefs=2:ncol(design))
-pseudo1[order(pseudo1$p.value),]
+pseudo <- testPseudotime(sce.nest, pseudotime=tscan.pseudo[,1])
+pseudo$SYMBOL <- rowData(sce.nest)$SYMBOL
+pseudo[order(pseudo$p.value),]
 ```
 
 In practice, it is helpful to pair the ANOVA results with a fit from a much simpler model
 where we assume that there exists a linear relationship between expression and the pseudotime.
-This yields a quick summary of the overall direction of change (i.e., positive or negative);
-in contrast, the magnitude and sign of the spline coefficients cannot be easily interpreted.
+This yields an interpretable summary of the overall direction of change in the `logFC` field above,
+complementing the more poweful spline-based model used to populate the `p.value` field.
+(In contrast, the magnitude and sign of the spline coefficients cannot be easily interpreted.)
+
+```{r, echo=FALSE}
+offender <- "7"
+o <- order(pseudo$p.value)
+stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o]))) > 2)
+```
+
+To simplify the results, we will repeat our analysis after filtering out cluster `r offender`.
+This cluster seems to contain a set of B cell precursors that are located at one end of the trajectory,
+causing immunoglobulins to dominate the set of DE genes and masking more subtle effects.
 
 ```{r}
-design.lfc <- model.matrix(~first.pseudo)
-pseudo1.lfc <- testLinearModel(sub.y, design=design.lfc)
+discard <- "7"
+keep <- colLabels(sce.nest)!=discard
+pseudo <- testPseudotime(sce.nest[,keep], pseudotime=tscan.pseudo[keep,1])
+pseudo$SYMBOL <- rowData(sce.nest)$SYMBOL
+sorted <- pseudo[order(pseudo$p.value),]
+```
 
-# Collecting desired annotation and statistics into one DataFrame:
-pseudo1.final <- cbind(
-    rowData(sce.nest)[,"SYMBOL",drop=FALSE],
-    pseudo1.lfc[,"logFC",drop=FALSE], 
-    pseudo1[,c("p.value", "FDR")])
-
-# Ordering by the most significant genes on the ANOVA p-values:
-sorted <- pseudo1.final[order(pseudo1.final$p.value),]
+```{r, echo=FALSE}
+stopifnot(identical(discard, offender))
+stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o]))) == 0)
 ```
 
 Examination of the top downregulated genes suggests that this pseudotime represents a transition away from myeloid identity,
@@ -272,7 +285,11 @@ plotExpression(sce.nest, features=best,
     x=I(tscan.pseudo[,1]), colour_by="label")
 ```
 
-It is worth pointing out that the $p$-values here should be taken with some skepticism.
+```{r, echo=FALSE, results="hide"}
+stopifnot(all("Hlf", "Ltb") %in% head(up.right$SYMBOL, 10))
+```
+
+It is worth pointing out that the magnitudes of these $p$-values should be treated with some skepticism.
 The same fundamental problems described in Section \@ref(p-value-invalidity) remain;
 the $p$-values are computed from the same data used to define the trajectory,
 and there is only a sample size of 1 in this analysis regardless of the number of cells.
