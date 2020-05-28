@@ -286,28 +286,129 @@ plotExpression(sce.nest, features=best,
 ```
 
 ```{r, echo=FALSE, results="hide"}
-stopifnot(all("Hlf", "Ltb") %in% head(up.right$SYMBOL, 10))
+stopifnot(all(c("Hlf", "Ltb") %in% head(up.right$SYMBOL, 10)))
 ```
 
-It is worth pointing out that the magnitudes of these $p$-values should be treated with some skepticism.
-The same fundamental problems described in Section \@ref(p-value-invalidity) remain;
+```{r, eval=FALSE, echo=FALSE}
+## This takes far, far too long.
+#keep <- !is.na(tscan.pseudo[,1])
+#library(tradeSeq)
+#fit <- fitGAM(counts(sce.nest)[,keep], 
+#    pseudotime=tscan.pseudo[keep,1],
+#    cellWeights=rep(1, sum(keep)))
+```
+
+### Changes between paths
+
+A more advanced analysis involves looking for differences in expression between paths of a branched trajectory.
+This is most interesting for cells close to the branch point between two or more paths
+where the differential expression analysis may highlight genes is responsible for the branching event.
+The general strategy here is to fit one trend to the unique part of each path immediately following the branch point,
+followed by a comparison of the fits between paths.
+
+To this end, a particularly tempting approach is to perform another ANOVA with our spline-based model
+and test for significant differences in the spline parameters between paths.
+While this can be done with `testPseudotime()`, 
+we do not do so because the magnitude of the pseudotime has little meaning across lineages.
+A pseudotime value of $x$ in one path of the MST does not, in general, have any relation to the same value $x$ in another path;
+this compromises any comparison of trends as we cannot reliably say that they are being fitted to comparable $x$-axes. 
+
+Rather, we employ the much simpler _ad hoc_ approach of fitting a spline to each trajectory and comparing the sets of DE genes.
+To demonstrate, we focus on the cluster containing the branch point in the Nestorowa-derived MST.
+We recompute the pseudotimes so that changes in expression are detected with respect to separation of paths from each other,
+allowing us to detect genes that are associated with the divergence of the branches.
+
+```{r}
+starter <- "3"
+tscan.pseudo2 <- orderClusterMST(reducedDim(sce.nest, "PCA"), 
+    ids=colLabels(sce.nest), centers=centroids, mst=mst, 
+    start=starter)
+```
+
+```{r, echo=FALSE}
+stopifnot(igraph::degree(mst, starter) == 3)
+```
+
+We then apply `testPseudotime()` to each path involving cluster `r starter`.
+We subset our analysis to only that cluster's cells so as to focus on DE events close to the branch point.
+Because we are operating over a relatively short pseudotime interval, we do not expect complex trends
+and so we set `df=1` (i.e., a linear trend) to avoid problems from overfitting. 
+
+```{r}
+keep <- colLabels(sce.nest) == starter
+sub.nest <- sce.nest[,keep]
+
+pseudo1 <- testPseudotime(sub.nest, df=1, pseudotime=tscan.pseudo2[keep,1])
+pseudo1$SYMBOL <- rowData(sce.nest)$SYMBOL
+pseudo1[order(pseudo1$p.value),]
+
+pseudo2 <- testPseudotime(sub.nest, df=1, pseudotime=tscan.pseudo2[keep,2])
+pseudo2$SYMBOL <- rowData(sce.nest)$SYMBOL
+pseudo2[order(pseudo2$p.value),]
+
+pseudo3 <- testPseudotime(sub.nest, df=1, pseudotime=tscan.pseudo2[keep,3])
+pseudo3$SYMBOL <- rowData(sce.nest)$SYMBOL
+pseudo3[order(pseudo3$p.value),]
+```
+
+We informally compare these results by looking for genes that are significant 
+in our path of interest and are not significant or changing in the opposite direction in the other paths.
+We use the raw $p$-values to look for non-significant genes 
+in order to increase the stringency of the definition of unique genes in our path.
+
+```{r}
+only3 <- pseudo3[which(pseudo3$FDR <= 0.05 & 
+    (pseudo2$p.value >= 0.05 | sign(pseudo1$logFC)!=sign(pseudo3$logFC)) &
+    (pseudo2$p.value >= 0.05 | sign(pseudo2$logFC)!=sign(pseudo3$logFC))),]
+only3[order(only3$p.value),]
+```
+
+We observe upregulation of interesting genes such as _Gata2_, _Cd9_ and _Apoe_ in this path,
+along with downregulation of _Flt3_ (Figure \@ref(fig:nest-3-versus)).
+One might speculate that this path leads to a less differentiated HSC state compared to the other directions.
+
+```{r nest-3-versus, fig.asp=1, fig.width=6, fig.cap="$t$-SNE plots of cells in the cluster containing the branch point of the MST in the Nestorowa dataset. Each point is a cell colored by the expression of a gene of interest and the relevant edges of the MST are overlaid on top."}
+# Showing only the lines to/from our cluster of interest.
+line.data.sub <- line.data[grepl("^3--", line.data$edge) |
+    grepl("--3$", line.data$edge),]
+ggline <- geom_line(data=line.data.sub, 
+    mapping=aes(x=dim1, y=dim2, group=edge))
+
+gridExtra::grid.arrange(
+    plotTSNE(sub.nest, colour_by="ENSMUSG00000042817") + 
+        ggtitle("Flt3") + ggline,
+    plotTSNE(sub.nest, colour_by="ENSMUSG00000002985") + 
+        ggtitle("Apoe") + ggline,
+    plotTSNE(sub.nest, colour_by="ENSMUSG00000015053") + 
+        ggtitle("Gata2") + ggline,
+    plotTSNE(sub.nest, colour_by="ENSMUSG00000030342") + 
+        ggtitle("Cd9") + ggline
+)
+```
+
+```{r, echo=FALSE}
+stopifnot(all(c("Flt3", "Cd9", "Gata2", "Apoe") %in% sorted$SYMBOL))
+```
+
+While simple and practical, this comparison strategy is even less statistically defensible than usual.
+The differential testing machinery is not suited to making inferences on the absence of differences,
+and we should not have used the non-significant genes to draw any conclusions.
+Another limitation is that this approach cannot detect differences in the magnitude of the gradient of the trend between paths; 
+a gene that is significantly upregulated in each of two paths but with a sharper gradient in one of the paths will not be DE.
+(Of course, this is only a limitation if the pseudotimes were comparable in the first place.)
+
+### Further comments
+
+The magnitudes of the $p$-values reported here should be treated with some skepticism.
+The same fundamental problems discussed in Section \@ref(p-value-invalidity) remain;
 the $p$-values are computed from the same data used to define the trajectory,
 and there is only a sample size of 1 in this analysis regardless of the number of cells.
 Nonetheless, the $p$-value is still useful for prioritizing interesting genes 
 in the same manner that it is used to identify markers between clusters.
 
-```{r, eval=FALSE, echo=FALSE}
-# This takes far, far too long.
-keep <- !is.na(tscan.pseudo[,1])
-library(tradeSeq)
-fit <- fitGAM(counts(sce.nest)[,keep], 
-    pseudotime=tscan.pseudo[keep,1],
-    cellWeights=rep(1, sum(keep)))
-```
-
-### Changes between lineages
-
-
+Same effects could be achieved with cluster-based marker detection.
+- Smoothness
+- Resolution
 
 ## Finding the root
 
