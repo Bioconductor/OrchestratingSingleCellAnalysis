@@ -205,14 +205,7 @@ as these are the most likely to have driven the formation of the trajectory in t
 The overall strategy is to fit a model to the per-gene expression with respect to pseudotime,
 allowing us to obtain inferences about the significance of any association.
 We can then prioritize interesting genes as those with low $p$-values for further investigation.
-
-We will not attempt to cover the diversity of options available for model fitting in this section.
-Instead, to demonstrate the relevant principles,
-we will use the simplest strategy of fitting a linear model to the log-expression values 
-with respect to (a non-linear function of) the pseudotime.
-More complex approaches involving generalized additive models
-are available in the `r Biocpkg("tradeSeq")` and `r Biocpkg("monocle")` packages;
-interested readers are referred to their documentation.
+A diversity of options are available for model fitting but we will focus on the simplest strategy of fitting a linear model to the log-expression values with respect to the pseudotime; we will discuss some of the more advanced models later.
 
 ### Changes along a trajectory
 
@@ -406,9 +399,46 @@ and there is only a sample size of 1 in this analysis regardless of the number o
 Nonetheless, the $p$-value is still useful for prioritizing interesting genes 
 in the same manner that it is used to identify markers between clusters.
 
-Same effects could be achieved with cluster-based marker detection.
-- Smoothness
-- Resolution
+The previous sections have focused on a very simple and efficient - but largely effective - approach to trend fitting.
+However, more complex strategies are possible involving various generalizations to the concept of linear models.
+For example, generalized additive models (GAMs) are quite popular for pseudotime-based DE analyses 
+as they are able to handle non-normal noise distributions and a greater diversity of non-linear trends.
+We demonstrate the use of the GAM implementation from the `r Biocpkg("tradeSeq")` package on the Nestorowa dataset below.
+Specifically, we will take a leap of faith and assume that our pseudotime values are comparable across paths of the MST,
+allowing us to use the `patternTest()` function to test for significant differences in expression between paths.
+
+```{r}
+# Getting rid of the NA's; using the cell weights
+# to indicate which cell belongs on which path.
+nonna.pseudo <- tscan.pseudo
+nonna.pseudo[is.na(nonna.pseudo)] <- 0
+cell.weights <- !is.na(tscan.pseudo)
+storage.mode(cell.weights) <- "numeric"
+
+# Fitting a GAM on the subset of genes for speed.
+library(tradeSeq)
+fit <- fitGAM(counts(sce.nest)[1:100,], 
+    pseudotime=nonna.pseudo,
+    cellWeights=cell.weights)
+
+res <- patternTest(fit)
+res$Symbol <- rowData(sce.nest)[1:100,"SYMBOL"]
+res <- res[order(res$pvalue),]
+head(res, 10)
+```
+
+From a statistical perspective, the GAM is superior to linear models as the former uses the raw counts.
+This accounts for the idiosyncrasies of the mean-variance relationship for low counts and avoids some problems with spurious trajectories introduced by the log-transformation (Section \@ref(normalization-transformation)).
+However, this sophistication comes at the cost of increased complexity and compute time,
+requiring parallelization via `r Biocpkg("BiocParallel")` even for relatively small datasets.
+
+When a trajectory consists of a series of clusters (as in the Nestorowa dataset),
+pseudotime-based DE tests can be considered a continuous generalization of cluster-based marker detection.
+One would expect to identify similar genes by performing an ANOVA on the per-cluster expression values,
+and indeed, this may be a more interpretable approach as it avoids imposing the assumption that a trajectory exists at all.
+The main benefit of pseudotime-based tests is that they encourage expression to be a smooth function of pseudotime,
+assuming that the degrees of freedom in the trend fit prevents overfitting.
+This smoothness reflects an expectation that changes in expression along a trajectory should be gradual. 
 
 ## Finding the root
 
