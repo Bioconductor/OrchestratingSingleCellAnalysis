@@ -11,11 +11,6 @@ library(rebook)
 chapterPreamble()
 ```
 
-```{r dio-fail, fig.cap="Waiting for Stephanie to finish her PR.", echo=FALSE}
-path <- file.path("https://raw.githubusercontent.com/Bioconductor/OSCABase/images/images", "placeholder_dio.jpg")
-knitr::include_graphics(path)
-```
-
 ## Overview
 
 Many biological processes manifest as a continuum of dynamic changes in the cellular state.
@@ -464,6 +459,21 @@ This smoothness reflects an expectation that changes in expression along a traje
 ## Finding the root
 
 ### Overview
+
+The pseudotime calculations rely on some specification of the root of the trajectory to define "position zero".
+In some cases, this choice has little effect beyond flipping the sign of the gradients of the DE genes.
+In other cases, this choice may necessarily arbitrary depending on the questions being asked,
+e.g., what are the genes driving the transition to or from a particular part of the trajectory?
+However, in situations where the trajectory is associated with a time-dependent biological process, 
+the position on the trajectory corresponding to the earliest timepoint is clearly the best default choice for the root.
+This simplifies interpretation by allowing the pseudotime to be treated as a proxy for real time.
+
+The task of finding a root has some analogies in other fields such as phylogenetics,
+where practitioners can root a tree using outgroups or midpoints.
+However, the problem is fundamentally different; the ancestral nodes are not directly observed in phylogenetic trees
+whereas all states of a trajectory are present in a single-cell dataset.
+This precludes the use of existing methods (e.g., midpoint rooting makes little sense for a trajectory)
+and requires some more bespoke methods that will be discussed below.
 
 ### Entropy-based methods
 
