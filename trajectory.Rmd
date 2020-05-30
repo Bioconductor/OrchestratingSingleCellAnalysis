@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Trajectory Analysis
@@ -54,13 +54,13 @@ but the pseudotime only describes the transition from one end to another and so 
 The big question is how to identify the trajectory from high-dimensional expression data and map individual cells onto it.
 A massive variety of different algorithms are available for doing so [@sealens2019comparison], and while we will demonstrate only a few specific methods below, many of the concepts apply generally to all trajectory inference strategies.
 A more philosophical question is whether a trajectory even exists in the dataset.
-One can intepret a continuum of states as a series of closely related (but distinct) subpopulations, or two mostly well-separated clusters as the endpoints of a trajectory with rare intermediates.
+One can intepret a continuum of states as a series of closely related (but distinct) subpopulations, or two well-separated clusters as the endpoints of a trajectory with rare intermediates.
 The choice between these two perspectives is left to the analyst based on which is more useful, convenient or biologically sensible.
 
 ### Cluster-based minimum spanning tree
 
 The `r Biocpkg("TSCAN")` algorithm uses a simple yet effective approach to trajectory reconstruction.
-It clusters cells to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the cell coordinates and then forms the minimum spanning tree (MST) across centroids.
+It uses the clustering to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the coordinates of its member cells, and then forms the minimum spanning tree (MST) across those centroids.
 The MST is simply an undirected acyclic graph that passes through each centroid exactly once and can be thought of as the most parsimonious structure that captures the transitions between clusters.
 We demonstrate below on the Nestorowa dataset, computing the cluster centroids in the low-dimensional PC space to take advantage of data compaction and denoising (Chapter \@ref(dimensionality-reduction)).
 
@@ -76,9 +76,10 @@ mst
 ```
 
 For reference, we can draw the same lines between the centroids in a $t$-SNE plot (Figure \@ref(fig:tscan-nest-tsne)).
-It is then straightforward to identify interesting clusters such as those at bifurcations or endpoints.
-Keep in mind that the MST is generated from distances in the PC space and is merely being visualized in the $t$-SNE space;
-its interpretation is not compromised by the distortions required to obtain a two-dimensional visualization.
+This allows us to identify interesting clusters such as those at bifurcations or endpoints.
+Note that the MST is generated from distances in the PC space and is merely being visualized in the $t$-SNE space,
+for the same reasons as discussed in Section \@ref(visualization-interpretation);
+this may occasionally result in some visually unappealing plots if the original ordering of clusters is not preserved in the plot.
 
 ```{r tscan-nest-tsne, fig.cap="$t$-SNE plot of the Nestorowa HSC dataset, where each point is a cell and is colored according to its cluster assignment. The MST obtained using a _TSCAN_-like algorithm is overlaid on top."}
 line.data <- connectClusterMST(reducedDim(by.cluster, "TSNE"), mst=mst)
@@ -87,8 +88,8 @@ plotTSNE(sce.nest, colour_by="label") +
 ```
 
 We obtain a pseudotime ordering by projecting the cells onto the MST with `orderClusterMST()`.
-In other words, we move each cell onto the edge of the MST to which it is closest;
-the pseudotime is then calculated as the distance along the MST from this new position to a "root node".
+More specifically, we move each cell onto the closest edge of the MST;
+the pseudotime is then calculated as the distance along the MST to this new position from a "root node".
 For our purposes, we will arbitrarily pick one of the endpoint nodes as the root,
 though a more careful choice based on the biological annotation of each node may yield more relevant orderings
 (e.g., picking a node corresponding to a more pluripotent state).
@@ -100,7 +101,11 @@ tscan.pseudo <- orderClusterMST(reducedDim(sce.nest, "PCA"),
     ids=colLabels(sce.nest), centers=centroids, mst=mst)
 head(tscan.pseudo)
 
-plotTSNE(sce.nest, colour_by=I(rowMeans(tscan.pseudo, na.rm=TRUE)), 
+# Taking the rowMeans just gives us a single pseudo-time for all cells. Cells
+# in segments that are shared across paths have the same pseudo-time value for
+# those paths anyway, so the rowMeans doesn't change anything.
+common.pseudo <- rowMeans(tscan.pseudo, na.rm=TRUE)
+plotTSNE(sce.nest, colour_by=I(common.pseudo), 
         text_by="label", text_colour="red") +
     geom_line(data=line.data, mapping=aes(x=dim1, y=dim2, group=edge))
 ```
@@ -109,7 +114,7 @@ plotTSNE(sce.nest, colour_by=I(rowMeans(tscan.pseudo, na.rm=TRUE)),
 stopifnot(ncol(tscan.pseudo) > 1L)
 ```
 
-The `r Biocpkg("TSCAN")` approach gains several advantages from using clusters to form the MST.
+In the `r Biocpkg("TSCAN")` approach, there are several advantages from using clusters to form the MST.
 The most obvious is that of computational speed as calculations are performed over clusters rather than cells.
 The relative coarseness of clusters protects against the per-cell noise that would otherwise reduce the stability of the MST.
 The interpretation of the MST is also relatively straightforward as it uses the same clusters as the rest of the analysis,
@@ -117,15 +122,16 @@ allowing us to recycle previous knowledge about the biological annotations assig
 
 However, the reliance on clustering is a double-edged sword.
 If the clusters are not sufficiently granular, 
-it is possible for `r Biocpkg("TSCAN")` to overlook a trajectory if the entirety of the trajectory occurs in a single cluster.
-In addition, the MST does poorly at handling more complex events like cycles 
-(e.g., the cell cycle, obviously) or bubbles (e.g., multiple differentation paths to the same terminal cell type).
-Whether or not this is a practical problem depends on the complexity of the global structure of the population of interest. 
+it is possible for `r Biocpkg("TSCAN")` to overlook a trajectory that occurs inside a single cluster.
+The requirement of the MST to pass through each cluster exactly once can lead to excessively circuitous paths in overclustered datasets as well as the formation of irrelevant paths between distinct cell subpopulations.
+The MST also failed to handle more complex events such as "bubbles" (i.e., a bifurcation and then a merging) or cycles.
 
 ### Principal curves
 
-To identify a trajectory, one might imagine simply "fitting" a one-dimensional curve so that it passes through the cloud of cells in the high-dimensional expression space.
-This is the idea behind principal curves [@hastie1989principal], effectively a non-linear generalization of PCA where the axes of most variation are allowed to bend.
+To identify a trajectory, one might imagine simply "fitting" a one-dimensional curve 
+so that it passes through the cloud of cells in the high-dimensional expression space.
+This is the idea behind principal curves [@hastie1989principal], 
+effectively a non-linear generalization of PCA where the axes of most variation are allowed to bend.
 We use the `r Biocpkg("slingshot")` package [@street2018slingshot] to fit a principal curve to the PC coordinates,
 which yields a pseudotime ordering of cells based on their relative positions when projected onto the curve.
 
@@ -245,12 +251,12 @@ complementing the more poweful spline-based model used to populate the `p.value`
 ```{r, echo=FALSE}
 offender <- "7"
 o <- order(pseudo$p.value)
-stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o]))) > 2)
+stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o], 20))) > 5)
 ```
 
-To simplify the results, we will repeat our analysis after filtering out cluster `r offender`.
+To simplify the results, we will repeat our DE analysis after filtering out cluster `r offender`.
 This cluster seems to contain a set of B cell precursors that are located at one end of the trajectory,
-causing immunoglobulins to dominate the set of DE genes and masking more subtle effects.
+causing immunoglobulins to dominate the set of DE genes and mask other interesting effects.
 
 ```{r}
 discard <- "7"
@@ -262,7 +268,8 @@ sorted <- pseudo[order(pseudo$p.value),]
 
 ```{r, echo=FALSE}
 stopifnot(identical(discard, offender))
-stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o]))) == 0)
+o <- order(pseudo$p.value)
+stopifnot(sum(grepl("Ig", head(pseudo$SYMBOL[o], 20))) < 2)
 ```
 
 Examination of the top downregulated genes suggests that this pseudotime represents a transition away from myeloid identity,
@@ -277,7 +284,7 @@ plotExpression(sce.nest, features=best,
 ```
 
 ```{r, echo=FALSE, results="hide"}
-stopifnot(all("Mpo", "Plac8") %in% head(up.left$SYMBOL, 10))
+stopifnot(all(c("Mpo", "Plac8") %in% head(up.left$SYMBOL, 10)))
 ```
 
 Conversely, the later parts of the pseudotime may correspond to a more stem-like state based on upregulation of genes like _Hlf_.
@@ -317,7 +324,7 @@ To this end, a particularly tempting approach is to perform another ANOVA with o
 and test for significant differences in the spline parameters between paths.
 While this can be done with `testPseudotime()`, 
 we do not do so because the magnitude of the pseudotime has little meaning across lineages.
-A pseudotime value of $x$ in one path of the MST does not, in general, have any relation to the same value $x$ in another path;
+A pseudotime value in one path of the MST does not, in general, have any relation to the same value in another path;
 this compromises any comparison of trends as we cannot reliably say that they are being fitted to comparable $x$-axes. 
 
 Rather, we employ the much simpler _ad hoc_ approach of fitting a spline to each trajectory and comparing the sets of DE genes.
