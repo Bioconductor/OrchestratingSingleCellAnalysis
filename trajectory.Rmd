@@ -22,14 +22,12 @@ Many biological processes manifest as a continuum of dynamic changes in the cell
 The most obvious example is that of differentiation into increasingly specialized cell subtypes, but we might also consider phenomena like the cell cycle or immune cell activation that are accompanied by gradual changes in the cell's transcriptome.
 We characterize these processes from single-cell expression data by identifying a "trajectory", i.e., a path through the high-dimensional expression space that traverses the various cellular states associated with a continuous process like differentiation.
 In the simplest case, a trajectory will be a simple path from one point to another,
-but we can also observe more complex trajectories involve branching to multiple endpoints.
+but we can also observe more complex trajectories that branch to multiple endpoints.
 
-A related concept is that of "pseudotime", defined as the positioning of cells along the trajectory that quantifies the relative activity of the underlying biological process.
-For example, the pseudotime for a differentiation trajectory might represent the degree of differentiation from a pluripotent cell to a terminal state.
+The "pseudotime" is defined as the positioning of cells along the trajectory that quantifies the relative activity or progression of the underlying biological process.
+For example, the pseudotime for a differentiation trajectory might represent the degree of differentiation from a pluripotent cell to a terminal state where cells with larger pseudotime values are more differentiated.
 This metric allows us to tackle questions related to the global population structure in a more quantitative manner.
-(It is worth noting that pseudotime is rather poorly named as it may or may not have much to do with actual time.
-For example, one can imagine a continuum of stress states with cells moving in either direction over time, 
-but the pseudotime will only increase in one direction.)
+The most common application is to fit models to gene expression against the pseudotime to identify the genes responsible for generating the trajectory in the first place, especially around interesting branch events.
 
 In this section, we will demonstrate several different approaches to trajectory analysis using the haematopoietic stem cell (HSC) dataset from @nestorowa2016singlecell.
 
@@ -42,6 +40,22 @@ sce.nest
 ```
 
 ## Obtaining pseudotime orderings
+
+### Overview
+
+The pseudotime is simply a number describing the relative position of each cell in the trajectory,
+where cells with larger values are consider to be "after" cells with smaller values.
+Branched trajectories will typically be associated with multiple pseudotimes, one per path through the trajectory;
+these values are not usually comparable across paths. 
+It is worth noting that "pseudotime" is a rather unfortunate name as the trajectory may not have much to do with real-life time.
+For example, one can imagine a continuum of stress states with cells moving in either direction over time, 
+but the pseudotime only describes the transition from one end to another and so will only increase in one direction.
+
+The big question is how to identify the trajectory from high-dimensional expression data and map individual cells onto it.
+A massive variety of different algorithms are available for doing so [@sealens2019comparison], and while we will demonstrate only a few specific methods below, many of the concepts apply generally to all trajectory inference strategies.
+A more philosophical question is whether a trajectory even exists in the dataset.
+One can intepret a continuum of states as a series of closely related (but distinct) subpopulations, or two mostly well-separated clusters as the endpoints of a trajectory with rare intermediates.
+The choice between these two perspectives is left to the analyst based on which is more useful, convenient or biologically sensible.
 
 ### Cluster-based minimum spanning tree
 
