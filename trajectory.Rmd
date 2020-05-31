@@ -468,12 +468,14 @@ However, in situations where the trajectory is associated with a time-dependent 
 the position on the trajectory corresponding to the earliest timepoint is clearly the best default choice for the root.
 This simplifies interpretation by allowing the pseudotime to be treated as a proxy for real time.
 
+<!--
 The task of finding a root has some analogies in other fields such as phylogenetics,
 where practitioners typically root a tree using outgroups or midpoints.
 However, the problem here is fundamentally different; the ancestral nodes are not directly observed in phylogenetic trees
 whereas all states of a trajectory are present in a single-cell dataset.
 This precludes the use of existing phylogenetic methods (e.g., midpoint rooting makes little sense for a trajectory)
 and requires some more bespoke approaches that will be discussed below.
+-->
 
 ### Entropy-based methods
 
@@ -523,9 +525,65 @@ stopifnot(igraph::components(sub)$no==1)
 Of course, this interpretation is fully dependent on whether the underlying assumption is reasonable.
 While the association between diversity and differentiation potential is likely to be generally applicable,
 it may not be sufficiently precise to enable claims on the relative potency of closely related subpopulations.
-Other non-differentiation processes such as stress or metabolic responses may also interfere with this association.
+Other processes such as stress or metabolic responses may also introduce some interference to the entropy calculations.
 
 ### RNA velocity
+
+### Real timepoints
+
+There does, however, exist a gold-standard approach to rooting a trajectory:
+simply collect multiple real-life timepoints over the course of a biological process
+and use the population(s) at the earliest time point as the root.
+This approach experimentally defines a link between pseudotime and real time without requiring any further assumptions.
+To demonstrate, we will use the activated T cell dataset from @richard2018tcell
+where they collected CD8^+^ T cells at various time points after ovalbumin stimulation.
+
+```{r}
+library(scRNAseq)
+sce.richard <- RichardTCellData()
+sce.richard <- sce.richard[,sce.richard$`single cell quality`=="OK"]
+
+# Only using cells treated with the highest affinity peptide 
+# plus the unstimulated cells as time zero.
+sub.richard <- sce.richard[,sce.richard$stimulus %in%
+    c("OT-I high affinity peptide N4 (SIINFEKL)", "unstimulated")]
+sub.richard$time[is.na(sub.richard$time)] <- 0
+table(sub.richard$time)
+```
+
+We run through the standard workflow for single-cell data with spike-ins -
+see Sections \@ref(spike-norm) and \@ref(sec:spikeins) for more details.
+
+```{r}
+sub.richard <- computeSpikeFactors(sub.richard, "ERCC")
+sub.richard <- logNormCounts(sub.richard)
+dec.richard <- modelGeneVarWithSpikes(sub.richard, "ERCC")
+top.hvgs <- getTopHVGs(dec.richard, prop=0.2)
+sub.richard <- denoisePCA(sub.richard, technical=dec.richard, subset.row=top.hvgs)
+```
+
+We can then run our trajectory inference method of choice.
+As we expecting a fairly simple trajectory, we will keep matters simple and use `slingshot()` without any clusters.
+This yields a pseudotime that is strongly associated with real time (Figure \@ref(fig:tcell-pseudotime))
+and from which it is straightforward to identify the best location of the root.
+The rooted trajectory can then be used to determine the "real time equivalent" of other activation stimuli,
+see @richarcd2018tcell for more details.
+
+```{r}
+sub.richard <- slingshot(sub.richard, reducedDim="PCA")
+plot(out$time, out$slingPseudotime_1, 
+    xlab="Time (hours)", ylab="Pseudotime")
+```
+
+```{r, echo=FALSE}
+time.med <- vapply(split(out$slingPseudotime_1, out$time), median, 0)
+stopifnot(!is.unsorted(time.med))
+```
+
+Of course, this strategy relies on careful experimental design to ensure that multiple timepoints are actually collected.
+This requires more planning and resources (i.e., cost!) and is frequently absent from many scRNA-seq studies that only consider a single "snapshot" of the system.
+Generation of multiple timepoints also requires an amenable experimental system where the initiation of the process of interest can be tightly controlled.
+This is often more complex to set up than a strictly observational study, though having causal information arguably makes the data more useful for making inferences.
 
 ## Session information {-}
 
