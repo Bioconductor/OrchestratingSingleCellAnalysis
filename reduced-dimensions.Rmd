@@ -94,10 +94,28 @@ reducedDimNames(sce.zeisel)
 
 How many of the top PCs should we retain for downstream analyses?
 The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
-Using more PCs will avoid discarding biological signal in later PCs, at the cost of retaining more noise.
+Using more PCs will retain more biological signal at the cost of including more noise that might mask said signal.
+Much like the choice of the number of HVGs, it is hard to determine whether an "optimal" choice exists for the number of PCs;
+putting aside the technical variation that is almost always uninteresting,
+one analyst's biological signal may easily be irrelevant noise to another analyst with a different scientific question.
+
 Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
-This is often satisfactory provided it is coupled with sufficient testing of alternative values to explore other perspectives of the data at a different bias-variance trade-off.
+This is often satisfactory as the later PCs explain so little variance that their inclusion or omission has no major effect.
+For example, in the Zeisel dataset, very few PCs explain more than 1\% of the variance in the entire dataset (Figure \@ref(fig:zeisel-scree)) and using, say, 30 $\pm$ 10 PCs would not even amount to four percentage points' worth of difference in variance.
+In fact, the main consequence of using more PCs is simply that downstream calculations take longer as they need to compute over more dimensions, but most PC-related calculations are fast enough that this is not a practical concern.
+
+```{r zeisel-scree, fig.cap="Percentage of variance explained by successive PCs in the Zeisel dataset, shown on a log-scale for visualization purposes."}
+percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
+plot(percent.var, log="y", xlab="PC", ylab="Variance explained (%)")
+```
+
+```{r, echo=FALSE}
+stopifnot(sum(percent.var[20:40]) < 4)
+```
+
 Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of $d$.
+These automated choices are best treated as guidelines as they make some strong assumptions about what variation is "interesting".
+More diligent readers may consider repeating the analysis with a variety of choices of $d$ to explore other perspectives of the dataset at a different bias-variance trade-off, though this tends to be more work than necessary for most questions.
 
 ### Using the elbow point
 
