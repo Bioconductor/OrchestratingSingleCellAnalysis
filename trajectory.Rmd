@@ -416,7 +416,7 @@ Nonetheless, the $p$-value is still useful for prioritizing interesting genes
 in the same manner that it is used to identify markers between clusters.
 
 The previous sections have focused on a very simple and efficient - but largely effective - approach to trend fitting.
-However, more complex strategies are possible involving various generalizations to the concept of linear models.
+Alternatively, we can use more complex strategies that involve various generalizations to the concept of linear models.
 For example, generalized additive models (GAMs) are quite popular for pseudotime-based DE analyses 
 as they are able to handle non-normal noise distributions and a greater diversity of non-linear trends.
 We demonstrate the use of the GAM implementation from the `r Biocpkg("tradeSeq")` package on the Nestorowa dataset below.
@@ -528,6 +528,76 @@ it may not be sufficiently precise to enable claims on the relative potency of c
 Other processes such as stress or metabolic responses may also introduce some interference to the entropy calculations.
 
 ### RNA velocity
+
+Another strategy is to use the concept of "RNA velocity" to identify the root [@lamanno2018rna].
+For a given gene, a high ratio of unspliced to spliced transcripts indicates that that gene is being actively upregulated, 
+under the assumption that the increase in transcription exceeds the capability of the splicing machinery to process the pre-mRNA.
+Conversely, a low ratio indicates that the gene is being downregulated as the rate of production and processing of pre-mRNAs cannot compensate for the degradation of mature transcripts. 
+Thus, we can infer that cells with high and low ratios are moving towards a high- and low-expression state, respectively, 
+allowing us to assign temporal directionality to any trajectory (or even individual cells).
+
+To demonstrate, we will use matrices of spliced and unspliced counts from **INSERT DATASET HERE**.
+The spliced count matrix can be generated in the standard manner
+while the unspliced count matrix considers the entire genomic sequence of the nascent transcript.
+Conveniently, both matrices have the same shape and thus can be stored as separate assays in our usual `SingleCellExperiment`.
+
+```{r}
+library(scuttle)
+sce1 <- mockSCE()
+sce2 <- mockSCE()
+
+exonic <- counts(sce1)
+unspliced <- counts(sce2)
+```
+
+We use the `r basilisk::PyPiLink("scvelo")` Python package [@bergen2019generalizing] to perform the velocity calculations.
+This offers some improvements over the original implementation by @lamanno2018rna, most notably eliminating the need for observed subpopulations at steady state (i.e., where the rates of transcription, splicing and degradation are equal).
+We use the `r Biocpkg("basilisk")` package to provision a Python environment with which we can run `r basilisk::PyPiLink("scvelo")` via `r CRANpkg("reticulate")`.
+We refer readers to the [relevant documentation](https://scvelo.readthedocs.io/) for more details about the Python function calls.
+
+```{r}
+library(basilisk)
+setupBasiliskEnv("scvelo", packages=NULL, pip="scvelo==0.2.1")
+
+output <- basiliskRun(env="scvelo", fun=function(exonic, unspliced) {
+    and <- reticulate::import("anndata")
+    scv <- reticulate::import("scvelo")
+
+    adata <- and$AnnData(exonic, 
+        layers=list(spliced=exonic, unspliced=unspliced))
+    scv$pp$filter_and_normalize(adata)
+    scv$pp$moments(adata) 
+
+    scv$tl$velocity(adata, mode='stochastic')
+    scv$tl$velocity_graph(adata)
+    scv$tl$velocity_pseudotime(adata)
+
+    list(pseudotime=adata$obs$velocity_pseudotime,
+        roots=adata$obs$root_cells,
+        endpoints=adata$obs$end_points)
+}, exonic=counts(sce1), unspliced=counts(sce2))
+```
+
+**Say something about the results here when we actually get some data.**
+
+```{r}
+str(output)
+```
+
+Needless to say, this lunch is not entirely free.
+The inferences rely on a somewhat sophisticated mathematical model that has a few assumptions,
+the most obvious of which being that the transcriptional dynamics are the same across different cell populations.
+The use of unspliced counts increases the sensitivity of the analysis to annotation errors, novel transcripts (e.g., microRNAs in the gene body) and intron retention events that could interfere with the velocity calculations.
+There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for each gene, and if not, whether the lack of information for important genes may bias the resulting velocity estimates.
+(From a purely practical perspective, the main difficulty with RNA velocity is that the unspliced counts are often unavailable.
+This is perhaps unsurprising as users need to go out of their way to generate it from the raw sequencing data.)
+
+<!--
+The most obvious example of a bias is a trajectory driven by a few genes, all of which lack intronic counts. 
+What happens then?
+The trajectory is still there but who knows where the arrows might point?
+-->
+
 
 ### Real timepoints
 
