@@ -89,7 +89,7 @@ even if those entries consist of zero-row `DataFrame`s.
 
     ```{r}
     tra.list <- split(tra, cell.id)
-    tra.list
+    class(tra.list)
     ```
 
 Put together, this is as simple as the following stretch of code (repeated for the beta chain):
@@ -100,9 +100,8 @@ trb.list <- split(DataFrame(trb), factor(trb$barcode, sce.pbmc$Barcode))
 length(trb.list)
 ```
 
-Both of these objects are guaranteed to have a 1:1 mapping to the columns of `sce.pbmc`,
-allowing us to directly store them in the `colData` as additional metadata fields.
-This ensures that any subsetting applied to the dataset is synchronized across both gene expression and repertoire data.
+Both of these objects are guaranteed to have a 1:1 mapping to the columns of `sce.pbmc`, allowing us to directly store them in the `colData` as additional metadata fields.
+This ensures that any subsetting applied to the `SingleCellExperiment` is synchronized across both gene expression and repertoire data.
 
 ```{r}
 sce.pbmc$TRA <- tra.list
@@ -149,7 +148,8 @@ This is functionally equivalent to looping over both the `LogicalList` and `Spli
 For example, we can filter our `SplitDataFrameList` so that each per-cell `DataFrame` only contains sequences with more than 2 UMIs.
 
 ```{r}
-sce.pbmc$TRA[sce.pbmc$TRA[,"umis"] > 2]
+more.than.2 <- sce.pbmc$TRA[sce.pbmc$TRA[,"umis"] > 2]
+head(lengths(more.than.2))
 ```
 
 We can exploit these semantics to quickly assemble complex queries without the need for any other packages.
@@ -206,9 +206,11 @@ keep <- tra[,"full_length"]=="True" &
 tra.sub <- tra[keep]
 ```
 
+### Converting back to `DataFrame`s
+
 If an operation must be performed on the original sequence-level data frame, 
-we can efficiently recover the latter by calling `unlist()` on our `SplitDataFrameList`.
-It is similarly straightforward to regenerate our `SplitDataFrameList` from the data frame by using the little-known `relist()` command. 
+we can efficiently recover it by calling `unlist()` on our `SplitDataFrameList`.
+It is similarly straightforward to regenerate our `SplitDataFrameList` from the data frame by using the `relist()` function.
 This framework permits users to quickly switch between sequence level and cell level perspectives of the repertoire data depending on which is most convenient at any given point in the analysis.
 
 ```{r}
