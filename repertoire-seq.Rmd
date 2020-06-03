@@ -102,6 +102,7 @@ length(trb.list)
 
 Both of these objects are guaranteed to have a 1:1 mapping to the columns of `sce.pbmc`, allowing us to directly store them in the `colData` as additional metadata fields.
 This ensures that any subsetting applied to the `SingleCellExperiment` is synchronized across both gene expression and repertoire data.
+For example, an obvious step might be to subset `sce.pbmc` to only contain T cells so that the TCR analysis is not distorted by other irrelevant cell types.
 
 ```{r}
 sce.pbmc$TRA <- tra.list
@@ -142,7 +143,7 @@ For example, a boolean operation will convert an `IntegerList` into a `LogicalLi
 sce.pbmc$TRA[,"umis"] > 2
 ```
 
-This is where the final form of `SplitDataFrameList` subsetting comes into play.
+This is where the final mode of `SplitDataFrameList` subsetting comes into play.
 If we use a `LogicalList` to subset a `SplitDataFrameList`, we can subset on the individual sequences _within_ each cell.
 This is functionally equivalent to looping over both the `LogicalList` and `SplitDataFrameList` simultaneously and using each logical vector to subset the corresponding `DataFrame`. 
 For example, we can filter our `SplitDataFrameList` so that each per-cell `DataFrame` only contains sequences with more than 2 UMIs.
@@ -179,31 +180,28 @@ barplot(rbind(TRA=tra.counts.prod/ncells, TRB=trb.counts.prod/ncells),
     legend=TRUE, beside=TRUE)
 ```
 
-Alternatively, we may wish to identify sequences that have UMI counts no less than 50% of the largest UMI count for the same cell.
+Alternatively, we may wish to determine the proportion of UMIs assigned to the most abundant sequence in each cell.
+This is easily achieved by applying the `max()` and `sum()` functions on the UMI count "column" 
+(Figure \@ref(fig:tcr-prop-most-abundant)).
 
-```{r}
-# Assigning to a short-name variable for convenience.
-tra <- sce.pbmc$TRA
-
-# Obtaining the maximum UMI count for each cell.
-max.umi <- max(tra[,"umis"])
-
-# Generate a LogicalList indicating which sequences have UMI counts
-# greater than half the maximum UMI count in the same cell.
-keep <- tra[,"umis"] >= max.umi/2
-
-# Examine the distribution of the proportion of sequences in each cell
-# that satisfied our requirements.
-summary(mean(keep))
+```{r tcr-prop-most-abundant, fig.cap="Proportion of UMIs assigned to the most abundant sequence in each cell."}
+umi.data <- sce.pbmc$TRA[,"umis"]
+hist(max(umi.data)/sum(umi.data), xlab="Proportion in most abundant")
 ```
 
-We can identify sequences that are full-length, productive and have the largest UMI count in the cell.
+We can also apply boolean operations on our `LogicalList` objects to perform per-sequence queries.
+The example below filters to retain sequences that are full-length, productive and have the largest UMI count in the cell.
 
 ```{r}
+tra <- sce.pbmc$TRA # assigning to a variable for brevity
+
 keep <- tra[,"full_length"]=="True" &
     tra[,"productive"]=="True" &
     tra[,"umis"] == max(tra[,"umis"])
 tra.sub <- tra[keep]
+
+# How many cells have at least one sequence satisfying all requirements?
+summary(sum(keep) >= 1) 
 ```
 
 ### Converting back to `DataFrame`s
@@ -225,6 +223,40 @@ tra.seq <- cbind(tra.seq, extra.anno)
 tra2 <- relist(tra.seq, tra)
 length(tra2) # Each element represents a cell again.
 ```
+
+While the `SplitDataFrameList` provides a natural representation of the 1:many mapping of cells to sequences,
+many applications require a 1:1 relationship in order to function properly.
+This includes plotting where each cell is a point that is to be colored by a single property,
+or any function that requires cells to be grouped by their characteristics (e.g., DE analysis, aggregation).
+We can use a combination of `List` and `DataFrame` semantics to choose a single representative sequence in cells where multiple sequences are available and fill in the row with `NA`s for cells where no sequences are available.
+
+```{r}
+# We identify the sequence with the most UMIs per cell. 
+best.per.cell <- which.max(tra[,"umis"])
+
+# We convert this into an IntegerList:
+best.per.cell <- as(best.per.cell, "IntegerList")
+
+# And then we use it to subset our SplitDataFrameList:
+collapsed <- tra[best.per.cell]
+
+# Finally unlisting to obtain a DataFrame:
+collapsed <- unlist(collapsed)
+
+collapsed[,1:5]
+```
+
+This can be easily combined with more sophisticated strategies for choosing a representative sequence per cell.
+For example, we might only consider sequences that are full-length and productive to be valid representatives.
+
+```{r}
+# The above code compressed into a one-liner:
+collapsed2 <- unlist(tra.sub[as(which.max(tra.sub[,"umis"]), "IntegerList")])
+nrow(collapsed2)
+```
+
+The `collapsed` objects can then be stored in the `colData` of our `SingleCellExperiment` alongside the `SplitDataFrameList`s for easy retrieval in downstream functions.
+We assume that downstream applications are tolerant of `NA` values for cells that have no sequences.
 
 ### Further analyses 
 
