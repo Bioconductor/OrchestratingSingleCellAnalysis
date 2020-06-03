@@ -246,12 +246,8 @@ table(proposed, clusters)
 ```
 
 ```{r, echo=FALSE}
-library(fossil)
 nonna <- !is.na(proposed)
-stopifnot(rand.index(
-    as.integer(factor(proposed[nonna])),
-    as.integer(factor(clusters[nonna]))
-) > 0.95)
+stopifnot(clusterRand(proposed[nonna], clusters[nonna], mode="index") > 0.95)
 ```
 
 ## Session Info {-}

@@ -1,7 +1,6 @@
 ---
-output:
-  html_document
-bibliography: ../ref.bib
+output: html_document
+bibliography: ref.bib
 ---
 
 # Dealing with big data
@@ -52,11 +51,8 @@ table(Exact=colLabels(sce.pbmc), Approx=clusters$membership)
 
 ```{r, echo=FALSE}
 # Checking that I'm not just talking shit.
-library(fossil)
-stopifnot(rand.index(
-    as.integer(factor(colLabels(sce.pbmc))),
-    as.integer(factor(clusters$membership))
-) > 0.95)
+rand <- clusterRand(colLabels(sce.pbmc), clusters$membership, mode="index")
+stopifnot(rand > 0.95)
 ```
 
 Note that Annoy writes the NN index to disk prior to performing the search.

@@ -1,7 +1,6 @@
 ---
-output:
-  html_document
-bibliography: ../ref.bib
+output: html_document
+bibliography: ref.bib
 ---
 
 # Cell cycle assignment
@@ -197,11 +196,9 @@ stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
 stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
 stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
 
-library(fossil)
-stopifnot(rand.index(
-    as.integer(factor(singler.assignments$labels)),
-    as.integer(factor(assignments$phases))
-) > 0.8)
+library(scran)
+rand <- clusterRand(singler.assignments$labels, assignments$phases, mode="index")
+stopifnot(rand > 0.8)
 ```
 
 The same considerations and caveats described for the `r Biocpkg("SingleR")`-based approach are also applicable here.

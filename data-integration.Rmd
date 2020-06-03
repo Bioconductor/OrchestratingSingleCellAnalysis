@@ -359,12 +359,11 @@ This provides a simple metric that we can use to assess the preservation of vari
 Larger rand indices (i.e., closer to 1) are more desirable, though this must be balanced against the ability of each method to actually remove the batch effect.
 
 ```{r}
-library(fossil)
-ri3k <- rand.index(as.integer(clusters.mnn[rescaled$batch==1]),
-    as.integer(colLabels(pbmc3k)))
+ri3k <- clusterRand(clusters.mnn[rescaled$batch==1],
+    colLabels(pbmc3k), mode="index")
 ri3k
-ri4k <- rand.index(as.integer(clusters.mnn[rescaled$batch==2]),
-    as.integer(colLabels(pbmc4k)))
+ri4k <- clusterRand(clusters.mnn[rescaled$batch==2],
+    colLabels(pbmc4k), mode="index")
 ri4k
 ```
 
