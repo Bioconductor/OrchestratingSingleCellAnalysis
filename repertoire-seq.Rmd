@@ -256,7 +256,63 @@ nrow(collapsed2)
 The `collapsed` objects can then be stored in the `colData` of our `SingleCellExperiment` alongside the `SplitDataFrameList`s for easy retrieval in downstream functions.
 We assume that downstream applications are tolerant of `NA` values for cells that have no sequences.
 
-### Further analyses 
+## Case study for clonotype analyses
+
+Quantification of clonal expansion is the most obvious application of repertoire sequencing data.
+Cells with the same T cell clonotype are assumed to target the same antigen, and any increase in the frequency of a clonotype provides evidence for T cell activation and proliferation upon stimulation by the corresponding antigen.
+Thus, we can gain some insights into the immune activity of each T cell cluster by counting the number of expanded clonotypes in each cluster.
+
+```{r}
+# INSERT ALAKAZAM CODE HERE.
+```
+
+## Repeating for immunoglobulins
+
+The process for the immunoglobulin (Ig) repertoire is largely the same as that for the TCR chains.
+The biggest difference is that now we have three chains - heavy (IGH), lambda (IGL) and kappa (IGK).
+We first pull down the dataset and load in the data frame, noting that it contains one sequence per row.
+
+```{r}
+library(BiocFileCache)
+bfc <- BiocFileCache(ask=FALSE)
+ig.data <- bfcrpath(bfc, file.path(
+    "http://cf.10xgenomics.com/samples/cell-vdj/3.1.0",
+    "vdj_v1_hs_pbmc3/vdj_v1_hs_pbmc3_b_filtered_contig_annotations.csv"))
+ig <- read.csv(ig.data, stringsAsFactors=FALSE)
+nrow(ig)
+head(ig)
+```
+
+We then loop over all of the chains and create a `SplitDataFrameList` for each chain,
+storing it in the `colData` of our `SingleCellExperiment` as previously described.
+
+```{r}
+for (chain in c("IGH", "IGL", "IGK")) {
+    current <- ig[ig$chain=="IGH",]
+    x <- split(DataFrame(current), factor(current$barcode, sce.pbmc$Barcode))
+    colData(sce.pbmc)[[chain]] <- x
+}
+colnames(colData(sce.pbmc))
+```
+
+One can see how we have managed to pack all of the information about this experiment -
+gene expression, protein abundance and repertoire information for both TCR and Ig chains -
+into a single object for convenient handling throughout the rest of the analysis.
+
+```{r}
+sce.pbmc
+```
+
+Many of the analyses that can be performed on the TCR data can also be applied to the Ig repertoire.
+The most interesting difference between the two stems from the fact that immunoglobulins undergo hypersomatic mutation,
+providing additional sequence variation beyond that of the V(D)J rearrangements.
+This allows us to use sequence similarity to create lineage trees involving cells of the same clonotype,
+particularly useful for characterizing Ig microevolution in response to immune challenges like vaccination.
+In practice, this is difficult to achieve in single-cell data as it requires enough cells per clonotype to create a reasonably interesting tree.
+
+```{r}
+# INSERT ALAKAZAM CODE HERE?
+```
 
 ## Session Info {-}
 
