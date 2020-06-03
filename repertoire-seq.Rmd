@@ -44,9 +44,7 @@ sce.pbmc
 colLabels(sce.pbmc) <- colLabels(altExp(sce.pbmc))
 ```
 
-## Analyzing the T cell receptor repertoire
-
-### Data processing
+## Loading the TCR repertoire
 
 First, we obtain the filtered TCR contig annotations for the same set of cells.
 Each row of the resulting data frame contains information about a single TCR component sequence in one cell, broken down into the alleles of the V(D)J genes making up that component (`v_gene`, `d_gene`, `j_gene`) where possible. 
@@ -109,7 +107,7 @@ sce.pbmc$TRA <- tra.list
 sce.pbmc$TRB <- trb.list
 ```
 
-### Leveraging List semantics
+## Leveraging `List` semantics
 
 At this point, it is worth spending some time on the power of the `SplitDataFrameList` and the `List` grammar.
 In the simplest case, the `SplitDataFrameList` can be treated as an ordinary list of `DataFrame`s with one entry per cell.
@@ -204,7 +202,7 @@ tra.sub <- tra[keep]
 summary(sum(keep) >= 1) 
 ```
 
-### Converting back to `DataFrame`s
+## Converting back to `DataFrame`s
 
 If an operation must be performed on the original sequence-level data frame, 
 we can efficiently recover it by calling `unlist()` on our `SplitDataFrameList`.
