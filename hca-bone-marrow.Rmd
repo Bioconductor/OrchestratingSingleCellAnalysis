@@ -44,7 +44,7 @@ sce.bone <- unfiltered <- addPerCellQC(sce.bone, BPPARAM=bpp,
     subsets=list(Mito=which(rowData(sce.bone)$Chr=="MT")))
 
 qc <- quickPerCellQC(colData(sce.bone), batch=sce.bone$Donor,
-    percent_subset="subsets_Mito_percent")
+    sub.fields="subsets_Mito_percent")
 sce.bone <- sce.bone[,!qc$discard]
 ```
 
@@ -86,7 +86,9 @@ We select a larger number of HVGs to capture any batch-specific variation that m
 
 ```{r variance-modelling}
 library(scran)
-dec.bone <- modelGeneVar(sce.bone, block=sce.bone$Donor, BPPARAM=bpp)
+set.seed(1010010101)
+dec.bone <- modelGeneVarByPoisson(sce.bone, 
+    block=sce.bone$Donor, BPPARAM=bpp)
 top.bone <- getTopHVGs(dec.bone, n=5000)
 ```
 
@@ -147,7 +149,7 @@ We generate 1000 small clusters that are subsequently aggregated into more inter
 ```{r clustering}
 set.seed(1000)
 clust.bone <- clusterSNNGraph(sce.bone, use.dimred="MNN", 
-    use.kmeans=TRUE, kmeans.centers=1000)
+    use.kmeans=TRUE, kmeans.centers=1000, k=5)
 colLabels(sce.bone) <- factor(clust.bone)
 table(colLabels(sce.bone))
 ```
@@ -162,7 +164,7 @@ pheatmap(log10(tab+10), color=viridis::viridis(100))
 
 ```{r, echo=FALSE}
 # Checking that it is, in fact, pretty well-mixed.
-stopifnot(all(tab>100))
+stopifnot(all(tab>20))
 ```
 
 ```{r unref-hca-bone-umap, fig.asp=1.2, fig.cap="UMAP plots of the HCA bone marrow dataset after merging. Each point represents a cell and is colored according to the assigned cluster (top) or the donor of origin (bottom)."}
@@ -170,7 +172,7 @@ stopifnot(all(tab>100))
 scrambled <- sample(ncol(sce.bone))
 
 gridExtra::grid.arrange(
-    plotUMAP(sce.bone, colour_by="label"),
+    plotUMAP(sce.bone, colour_by="label", text_by="label"),
     plotUMAP(sce.bone[,scrambled], colour_by="Donor")
 )
 ```
@@ -188,11 +190,11 @@ We visualize the top markers for a randomly chosen cluster using a "dot plot" in
 The presence of upregulated genes like _LYZ_, _S100A8_ and _VCAN_ is consistent with a monocyte identity for this cluster.
 
 ```{r, echo=FALSE}
-cluster.choice <- "5"
+cluster.choice <- "2"
 ```
 
 ```{r unref-hca-bone-dotplot, fig.cap=sprintf("Heatmap of log~2~-fold changes for the top marker genes (rows) of cluster %s compared to all other clusters (columns).", cluster.choice)}
-top.markers <- markers.bone[["5"]]
+top.markers <- markers.bone[["2"]]
 best <- top.markers[top.markers$Top <= 10,]
 lfcs <- getMarkerEffects(best)
 
