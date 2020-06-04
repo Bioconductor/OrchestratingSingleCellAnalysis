@@ -637,16 +637,16 @@ As we expecting a fairly simple trajectory, we will keep matters simple and use 
 This yields a pseudotime that is strongly associated with real time (Figure \@ref(fig:tcell-pseudotime))
 and from which it is straightforward to identify the best location of the root.
 The rooted trajectory can then be used to determine the "real time equivalent" of other activation stimuli,
-see @richarcd2018tcell for more details.
+see @richard2018tcell for more details.
 
-```{r}
+```{r tcell-pseudotime, fig.cap="Pseudotime as a function of real time in the Richard T cell dataset."}
 sub.richard <- slingshot(sub.richard, reducedDim="PCA")
-plot(out$time, out$slingPseudotime_1, 
+plot(sub.richard$time, sub.richard$slingPseudotime_1, 
     xlab="Time (hours)", ylab="Pseudotime")
 ```
 
 ```{r, echo=FALSE}
-time.med <- vapply(split(out$slingPseudotime_1, out$time), median, 0)
+time.med <- vapply(split(sub.richard$slingPseudotime_1, sub.richard$time), median, 0)
 stopifnot(!is.unsorted(time.med))
 ```
 

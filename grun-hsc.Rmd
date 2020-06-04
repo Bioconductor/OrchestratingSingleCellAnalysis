@@ -41,7 +41,7 @@ We block on the protocol used for cell extraction, ignoring the micro-dissected 
 This is based on our judgement that a majority of micro-dissected plates consist of a majority of low-quality cells, compromising the assumptions of outlier detection.
 
 ```{r quality-control}
-library(scater)
+library(scuttle)
 stats <- perCellQCMetrics(sce.grun.hsc)
 qc <- quickPerCellQC(stats, batch=sce.grun.hsc$protocol,
     subset=grepl("sorted", sce.grun.hsc$protocol))
@@ -61,6 +61,7 @@ The library sizes are unusually low for many plates of micro-dissected cells; th
 colData(unfiltered) <- cbind(colData(unfiltered), stats)
 unfiltered$discard <- qc$discard
 
+library(scater)
 gridExtra::grid.arrange(
     plotColData(unfiltered, y="sum", x="sample", colour_by="discard", 
         other_fields="protocol") + scale_y_log10() + ggtitle("Total count") +

@@ -575,9 +575,11 @@ This is very similar to the WT chimera dataset we previously examined, only diff
 _Tal1_ is a transcription factor that has known roles in erythroid differentiation; the aim of the experiment was to determine if blocking of the erythroid lineage diverted cells to other developmental fates.
 (To cut a long story short: yes, it did.)
 
-```{r}
+```{r, cache=FALSE}
 library(MouseGastrulationData)
 sce.tal1 <- Tal1ChimeraData()
+
+library(scuttle)
 rownames(sce.tal1) <- uniquifyFeatureNames(
     rowData(sce.tal1)$ENSEMBL, 
     rowData(sce.tal1)$SYMBOL
