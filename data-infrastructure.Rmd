@@ -173,7 +173,7 @@ Here, we show the first five columns of `colData(sce)` with the quality control 
 
 ```{r}
 sce <- scater::addPerCellQC(sce)
-colData(sce)[, 1:5]
+colData(sce)
 ```
 
 Alternatively, we might want to manually add more fields to the column metadata:
