@@ -38,13 +38,14 @@ sce.nest
 
 ### Overview
 
-The pseudotime is simply a number describing the relative position of each cell in the trajectory,
-where cells with larger values are consider to be "after" cells with smaller values.
+The pseudotime is simply a number describing the relative position of a cell in the trajectory,
+where cells with larger values are consider to be "after" their counterparts with smaller values.
 Branched trajectories will typically be associated with multiple pseudotimes, one per path through the trajectory;
-these values are not usually comparable across paths. 
-It is worth noting that "pseudotime" is a rather unfortunate name as the trajectory may not have much to do with real-life time.
-For example, one can imagine a continuum of stress states with cells moving in either direction over time, 
-but the pseudotime only describes the transition from one end to another and so will only increase in one direction.
+these values are not usually comparable across paths.
+It is worth noting that "pseudotime" is a rather unfortunate term as it may not have much to do with real-life time.
+For example, one can imagine a continuum of stress states where cells move in either direction (or not) over time
+but the pseudotime simply describes the transition from one end of the continuum to the other.
+In trajectories describing time-dependent processes like differentiation, a cell's pseudotime value may be used as a proxy for its relative age, but only if directionality can be inferred (see Section \@ref(finding-the-root)).
 
 The big question is how to identify the trajectory from high-dimensional expression data and map individual cells onto it.
 A massive variety of different algorithms are available for doing so [@sealens2019comparison], and while we will demonstrate only a few specific methods below, many of the concepts apply generally to all trajectory inference strategies.
@@ -556,7 +557,7 @@ For a given gene, a high ratio of unspliced to spliced transcripts indicates tha
 under the assumption that the increase in transcription exceeds the capability of the splicing machinery to process the pre-mRNA.
 Conversely, a low ratio indicates that the gene is being downregulated as the rate of production and processing of pre-mRNAs cannot compensate for the degradation of mature transcripts. 
 Thus, we can infer that cells with high and low ratios are moving towards a high- and low-expression state, respectively, 
-allowing us to assign temporal directionality to any trajectory (or even individual cells).
+allowing us to assign directionality to any trajectory or even individual cells.
 
 To demonstrate, we will use matrices of spliced and unspliced counts from **INSERT DATASET HERE**.
 The spliced count matrix can be generated in the standard manner
@@ -608,18 +609,33 @@ str(output)
 
 Needless to say, this lunch is not entirely free.
 The inferences rely on a somewhat sophisticated mathematical model that has a few assumptions,
-the most obvious of which being that the transcriptional dynamics are the same across different cell populations.
+the most obvious of which being that the transcriptional dynamics are the same across subpopulations.
 The use of unspliced counts increases the sensitivity of the analysis to annotation errors, novel transcripts (e.g., microRNAs in the gene body) and intron retention events that could interfere with the velocity calculations.
-There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for each gene, and if not, whether the lack of information for important genes may bias the resulting velocity estimates.
-(From a purely practical perspective, the main difficulty with RNA velocity is that the unspliced counts are often unavailable.
-This is perhaps unsurprising as users need to go out of their way to generate it from the raw sequencing data.)
+There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for the relevant genes for the process of interest, and if not, whether this lack of information may bias the resulting velocity estimates.
+From a purely practical perspective, the main difficulty with RNA velocity is that the unspliced counts are often unavailable.
 
 <!--
-The most obvious example of a bias is a trajectory driven by a few genes, all of which lack intronic counts. 
+Other assumptions that didn't make the cut to be mentioned:
+
+- Velocities can be reversed to construct the pseudotime,
+i.e., the past location of a cell is defined as the location of other cells that are moving towards that cell.
+Most obviously not the case if there are no longer any observed cells in the past location,
+though this represents a common weakness of all trajectory inference methods.
+
+- The velocity-inferred pseudotime is not a proxy for real time, which I didn't think needed to be said.
+Obviously, these cells were all collected at the same time, so it cannot be a proxy for real time!
+At best it is a proxy for the age of the cells as for other pseudotime values,
+though with the added benefit that it gets past the directionality difficulty.
+
+- There are enough cells still in transit to obtain meaningful pseudotime orderings.
+If this is not the case, the pseudotimes are scrambled, which is not wrong but not useful either.
+Related is the assumption that the velocity-defined pseudotime lies along the relevant continuum.
+A continuum in a steady-state population would simply not be captured.
+
+With respect to bias, the most obvious example is that of a trajectory driven by a few genes, all of which lack intronic counts. 
 What happens then?
 The trajectory is still there but who knows where the arrows might point?
 -->
-
 
 ### Real timepoints
 
