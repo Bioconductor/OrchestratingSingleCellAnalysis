@@ -492,27 +492,28 @@ However, when such prior biological knowledge is not available, we can fall back
 The assumption is that terminally differentiated cells have expression profiles that are highly specialized for their function while multipotent cells have no such constraints - and indeed, may need to have active expression programs for many lineages in preparation for commitment to any of them.
 
 ```{r, echo=FALSE}
-lowest <- c("2", "6")
+lowest <- c("5", "8")
 low.text <- paste(paste(head(lowest, -1), collapse=", "), "and", tail(lowest, 1))
 ```
 
 We quantify the diversity of expression by computing the entropy of the expression profile within each cell [@grun2016denovo;@guo2017slice;@teschendorff2017singlecell], with higher entropy corresponding to greater diversity and thus reduced differentiation.
 To demonstrate, we examine the entropies for each cluster in the Nestorowa HSC dataset (Figure \@ref(fig:entropy-nest)).
-We observe that clusters `r low.text` have the highest entropies - note that the y-axis is flipped here -
+We observe that clusters `r low.text` have the highest entropies, 
 which suggests that they represent the least differentiated state within the trajectory.
 It is also reassuring that these two clusters are adjacent on the MST (Figure \@ref(fig:tscan-nest-tsne)),
 which is consistent with branched differentiation "away" from a single root.
 
-```{r entropy-nest, fig.cap="Distribution of per-cell entropies for each cluster in the Nestorowa dataset. For visualization purposes, the negative entropy is shown on a log-scale. The median entropy for each cluster is shown as a point in the violin plot."}
+```{r entropy-nest, fig.cap="Distribution of per-cell entropies for each cluster in the Nestorowa dataset. The median entropy for each cluster is shown as a point in the violin plot."}
+# TODO: shovel this into a function somewhere.
 library(scuttle)
 nzero <- whichNonZero(counts(sce.nest)) 
-entropy <- - nzero$x * log(nzero$x)
+p <- nzero$x / colSums(counts(sce.nest))[nzero$j]
+entropy <- - p * log(p)
 entropy <- by(entropy, INDICES=nzero$j, FUN=sum)
 
 ent.data <- data.frame(cluster=colLabels(sce.nest), 
     entropy=as.vector(entropy))
-ggplot(ent.data, aes(x=cluster, y=-entropy)) + geom_violin() +
-    scale_y_log10() + ylab("Negative entropy") +
+ggplot(ent.data, aes(x=cluster, y=entropy)) + geom_violin() +
     stat_summary(fun=median, geom="point")
 ```
 
@@ -530,7 +531,23 @@ stopifnot(igraph::components(sub)$no==1)
 Of course, this interpretation is fully dependent on whether the underlying assumption is reasonable.
 While the association between diversity and differentiation potential is likely to be generally applicable,
 it may not be sufficiently precise to enable claims on the relative potency of closely related subpopulations.
-Other processes such as stress or metabolic responses may also introduce some interference to the entropy calculations.
+Indeed, other processes such as stress or metabolic responses may interfere with the entropy comparisons.
+Furthermore, at low counts, the magnitude of the entropy is dependent on sequencing depth 
+in a manner that cannot be corrected by scaling normalization.
+Cells with lower coverage will have lower entropy even if the underlying transcriptional diversity is the same,
+which may confound the interpretation of entropy as a measure of potency.
+
+```{r, echo=FALSE, fig.show='hide'}
+# Demonstration.
+scaling <- c(0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1)
+y <- outer(1:10000/100, scaling)
+y[] <- rpois(length(y), lambda=y)
+
+z <- t(y) / colSums(y)
+ent <- - z * log(z)
+ent[is.na(ent)] <- 0
+plot(scaling, rowSums(ent), log="x", type='b')
+```
 
 ### RNA velocity
 
