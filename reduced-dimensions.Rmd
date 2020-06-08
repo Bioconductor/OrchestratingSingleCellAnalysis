@@ -148,7 +148,7 @@ reducedDimNames(sce.zeisel)
 # purposes, we'll do this to a copy so that we still have full PCs later on.
 sce.zeisel.copy <- sce.zeisel 
 reducedDim(sce.zeisel.copy) <- reducedDim(sce.zeisel.copy)[,1:chosen.elbow]
-ncol(reducedDim(sce.zesiel.copy))
+ncol(reducedDim(sce.zeisel.copy))
 ```
 
 From a practical perspective, the use of the elbow point tends to retain fewer PCs compared to other methods.
@@ -252,6 +252,114 @@ This strategy is the most pragmatic as it directly addresses the role of the bia
 There is no need to preserve biological signal beyond what is distinguishable in later steps.
 However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
 It also requires repeated applications of the clustering procedure on increasing number of PCs, which may be computational expensive.
+
+### Using random matrix theory
+
+We consider the observed (log-)expression matrix to be the sum of 
+(i) a low-rank matrix containing the true biological signal for each cell
+and (ii) a random matrix representing the technical noise in the data. 
+Under this interpretation, we can use random matrix theory to guide the choice of the number of PCs
+based on the properties of the noise matrix.
+
+The Marchenko-Pastur (MP) distribution defines an upper bound on the singular values of a matrix with random i.i.d. entries. 
+Thus, all PCs associated with larger singular values are likely to contain real biological structure -
+or at least, signal beyond that expected by noise - and should be retained [@shekhar2016comprehensive].
+We can implement this scheme using the `chooseMarchenkoPastur()` function from the `r Biocpkg("PCAtools")` package,
+given the dimensionality of the matrix used for the PCA (noting that we only used the HVG subset);
+the variance explained by each PC (not the percentage);
+and the variance of the noise matrix derived from our previous variance decomposition results.
+
+<!--
+We could also use the median of the total variances to account for uninteresting biological noise,
+which would be analogous to fitting the trend to the genes in the first place.
+However, this would weaken the theoretical foundation of i.i.d.'ness for the MP limit.
+-->
+
+```{r}
+# Generating more PCs for demonstration purposes:
+set.seed(10100101)
+sce.zeisel2 <- runPCA(sce.zeisel, subset_row=top.hvgs, 
+    ncomponents=200)
+
+mp.choice <- PCAtools::chooseMarchenkoPastur(
+    .dim=c(length(top.hvgs), ncol(sce.zeisel2)),
+    var.explained=attr(reducedDim(sce.zeisel2), "varExplained"),
+    noise=median(dec.zeisel[top.hvgs,"tech"]))
+
+mp.choice
+```
+
+```{r, echo=FALSE}
+# Check that we haven't capped out.
+stopifnot(mp.choice < 200)
+```
+
+We can then subset the PC coordinate matrix by the first `mp.choice` columns as previously demonstrated.
+It is best to treat this as a guideline only; PCs below the MP limit are not necessarily uninteresting, especially in noisy datasets where the higher `noise` drives a more aggressive choice of $d$.
+Conversely, many PCs above the limit may not be relevant if they are driven by uninteresting biological processes like transcriptional bursting, cell cycle or metabolic variation.
+Morever, the use of the MP distribution is not entirely justified here as the noise distribution differs by abundance for each gene and by sequencing depth for each cell.
+
+In a similar vein, Horn's parallel analysis is commonly used to pick the number of PCs to retain in factor analysis.
+This involves randomizing the input matrix, repeating the PCA and creating a scree plot of the PCs of the randomized matrix.
+The desired number of PCs is then chosen based on the intersection of the randomized scree plot with that of the original matrix (Figure \@ref(fig:zeisel-parallel-pc-choice)).
+Here, the reasoning is that PCs are unlikely to be interesting if they explain less variance that that of the corresponding PC of a random matrix.
+Note that this differs from the MP approach as we are not using the upper bound of randomized singular values to threshold the original PCs.
+
+```{r zeisel-parallel-pc-choice, fig.cap="Percentage of variance explained by each PC in the original matrix (black) and the PCs in the randomized matrix (grey) across several randomization iterations. The red line marks the chosen number of PCs."}
+set.seed(100010)
+horn <- PCAtools::parallelPCA(logcounts(sce.zeisel)[top.hvgs,],
+    BSPARAM=BiocSingular::IrlbaParam(), niters=10)
+horn$n
+
+plot(horn$original$variance, type="b", log="y", pch=16)
+permuted <- horn$permuted
+for (i in seq_len(ncol(permuted))) {
+    points(permuted[,i], col="grey80", pch=16)
+    lines(permuted[,i], col="grey80", pch=16)
+}
+abline(v=horn$n, col="red")
+```
+
+```{r, echo=FALSE}
+# Check that we haven't capped out.
+stopifnot(mp.choice < 50)
+```
+
+The `parallelPCA()` function helpfully emits the PC coordinates in  `horn$original$rotated`,
+which we can subset by `horn$n` and add to the `reducedDims()` of our `SingleCellExperiment`.
+Parallel analysis is reasonably intuitive (as random matrix methods go) and avoids any i.i.d. assumption across genes.
+However, its obvious disadvantage is the not-insignificant computational cost of randomizing and repeating the PCA.
+One can also debate whether the scree plot of the randomized matrix is even comparable to that of the original,
+given that the former includes biological variation and thus cannot be interpreted as purely technical noise.
+This manifests in Figure \@ref(fig:zeisel-parallel-pc-choice) as a consistently higher curve for the randomized matrix due to the redistribution of biological variation to the later PCs.
+
+Another approach is based on optimizing the reconstruction error of the low-rank representation [@gavish2014optimal].
+Recall that PCA produces both the matrix of per-cell coordinates and a rotation matrix of per-gene loadings,
+the product of which recovers the original log-expression matrix. 
+If we subset these two matrices to the first $d$ dimensions, the product of the resulting submatrices serves as an approximation of the original matrix.
+Under certain conditions, the difference between this approximation and the true low-rank signal (i.e., _sans_ the noise matrix) has a defined mininum at a certain number of dimensions.
+This minimum can be defined using the `chooseGavishDonoho()` function from `r Biocpkg("PCAtools")` as shown below.
+
+```{r}
+gv.choice <- PCAtools::chooseGavishDonoho(
+    .dim=c(length(top.hvgs), ncol(sce.zeisel2)),
+    var.explained=attr(reducedDim(sce.zeisel2), "varExplained"),
+    noise=median(dec.zeisel[top.hvgs,"tech"]))
+
+gv.choice
+```
+
+```{r, echo=FALSE}
+# Check that we haven't capped out.
+stopifnot(gv.choice < 200)
+```
+
+The Gavish-Donoho method is appealing as, unlike the other approaches for choosing $d$,
+the concept of the optimum is rigorously defined.
+By minimizing the reconstruction error, we can most accurately represent the true biological variation in terms of the distances between cells in PC space.
+However, there remains some room for difference between "optimal" and "useful";
+for example, noisy datasets may find themselves with very low $d$ as including more PCs will only ever increase reconstruction error, regardless of whether they contain relevant biological variation.
+This approach is also dependent on some strong i.i.d. assumptions about the noise matrix.
 
 <!--
 ## Non-negative matrix factorization
