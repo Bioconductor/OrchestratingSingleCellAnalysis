@@ -95,13 +95,14 @@ reducedDimNames(sce.zeisel)
 How many of the top PCs should we retain for downstream analyses?
 The choice of the number of PCs $d$ is a decision that is analogous to the choice of the number of HVGs to use.
 Using more PCs will retain more biological signal at the cost of including more noise that might mask said signal.
-Much like the choice of the number of HVGs, it is hard to determine whether an "optimal" choice exists for the number of PCs;
-putting aside the technical variation that is almost always uninteresting,
-one analyst's biological signal may easily be irrelevant noise to another analyst with a different scientific question.
+Much like the choice of the number of HVGs, it is hard to determine whether an "optimal" choice exists for the number of PCs.
+Even if we put aside the technical variation that is almost always uninteresting,
+there is no straightforward way to automatically determine which aspects of biological variation are relevant;
+one analyst's biological signal may be irrelevant noise to another analyst with a different scientific question.
 
 Most practitioners will simply set $d$ to a "reasonable" but arbitrary value, typically ranging from 10 to 50.
 This is often satisfactory as the later PCs explain so little variance that their inclusion or omission has no major effect.
-For example, in the Zeisel dataset, very few PCs explain more than 1\% of the variance in the entire dataset (Figure \@ref(fig:zeisel-scree)) and using, say, 30 $\pm$ 10 PCs would not even amount to four percentage points' worth of difference in variance.
+For example, in the Zeisel dataset, few PCs explain more than 1\% of the variance in the entire dataset (Figure \@ref(fig:zeisel-scree)) and using, say, 30 $\pm$ 10 PCs would not even amount to four percentage points' worth of difference in variance.
 In fact, the main consequence of using more PCs is simply that downstream calculations take longer as they need to compute over more dimensions, but most PC-related calculations are fast enough that this is not a practical concern.
 
 ```{r zeisel-scree, fig.cap="Percentage of variance explained by successive PCs in the Zeisel dataset, shown on a log-scale for visualization purposes."}
@@ -135,14 +136,26 @@ abline(v=chosen.elbow, col="red")
 Our assumption is that each of the top PCs capturing biological signal should explain much more variance than the remaining PCs.
 Thus, there should be a sharp drop in the percentage of variance explained when we move past the last "biological" PC.
 This manifests as an elbow in the scree plot, the location of which serves as a natural choice for $d$.
+Once this is identified, we can subset the `reducedDims()` entry to only retain the first $d$ PCs of interest.
+
+```{r}
+# Creating a new entry with only the first 20 PCs, 
+# useful if we still need the full set of PCs later. 
+reducedDim(sce.zeisel, "PCA.elbow") <- reducedDim(sce.zeisel)[,1:chosen.elbow]
+reducedDimNames(sce.zeisel)
+
+# Alternatively, just overwriting the original PCA entry. For demonstration
+# purposes, we'll do this to a copy so that we still have full PCs later on.
+sce.zeisel.copy <- sce.zeisel 
+reducedDim(sce.zeisel.copy) <- reducedDim(sce.zeisel.copy)[,1:chosen.elbow]
+ncol(reducedDim(sce.zesiel.copy))
+```
 
 From a practical perspective, the use of the elbow point tends to retain fewer PCs compared to other methods.
 The definition of "much more variance" is relative so, in order to be retained, later PCs must explain a amount of variance that is comparable to that explained by the first few PCs.
 Strong biological variation in the early PCs will shift the elbow to the left, potentially excluding weaker (but still interesting) variation in the next PCs immediately following the elbow.
 
 ### Using the technical noise
-
-#### Method description
 
 Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold $T$.
 For example, we might retain the top set of PCs that explains 80% of the total variation in the data.
@@ -173,11 +186,8 @@ This choice of $d$ is motivated by the fact that any fewer PCs will definitely d
 (Of course, the converse is not true; there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.)
 From a practical perspective, the `denoisePCA()` approach usually retains more PCs than the elbow point method as the former does not compare PCs to each other and is less likely to discard PCs corresponding to secondary factors of variation.
 The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.
-Thus, whether this is a "better" approach depends on the our willingness to increase noise in order to preserve weaker biological signals.
 
-#### Additional comments
-
-`denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
+Note that `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner.
 By default, the number is bounded within the "reasonable" limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low).
 For example, applying this function to the Zeisel brain data hits the upper limit:
 
@@ -222,39 +232,28 @@ This attempts to capture as many distinct (putative) subpopulations as possible 
 ```{r cluster-pc-choice, fig.cap="Number of clusters detected in the Zeisel brain dataset as a function of the number of PCs. The red unbroken line represents the theoretical upper constraint on the number of clusters, while the grey dashed line is the number of PCs suggested by `getClusteredPCs()`."}
 pcs <- reducedDim(sce.zeisel)
 choices <- getClusteredPCs(pcs)
-metadata(choices)$chosen
+val <- metadata(choices)$chosen
+
 plot(choices$n.pcs, choices$n.clusters,
     xlab="Number of PCs", ylab="Number of clusters")
 abline(a=1, b=1, col="red")
-abline(v=metadata(choices)$chosen, col="grey80", lty=2)
+abline(v=val, col="grey80", lty=2)
+```
+
+We subset the PC matrix by column to retain the first $d$ PCs 
+and assign the subsetted matrix back into our `SingleCellExperiment` object.
+Downstream applications that use the `"PCA.clust"` results in `sce.zeisel` will subsequently operate on the chosen PCs only.
+
+```{r}
+reducedDim(sce.zeisel, "PCA.clust") <- pcs[,1:val]
 ```
 
 This strategy is the most pragmatic as it directly addresses the role of the bias-variance trade-off in downstream analyses, specifically clustering.
 There is no need to preserve biological signal beyond what is distinguishable in later steps.
 However, it involves strong assumptions about the nature of the biological differences between subpopulations - and indeed, discrete subpopulations may not even exist in studies of continuous processes like differentiation.
+It also requires repeated applications of the clustering procedure on increasing number of PCs, which may be computational expensive.
 
-### Putting it together
-
-Once we have chosen $d$, applying it is as simple as subsetting the PC matrix by column.
-We then use the `reducedDim()<-` command to reassign the subsetted matrix back into the `SingleCellExperiment` object.
-For example, if we were to take the top 20 PCs, we would do:
-
-```{r}
-reducedDim(sce.zeisel, "PCA") <- reducedDim(sce.zeisel, "PCA")[,1:20]
-ncol(reducedDim(sce.zeisel, "PCA"))
-```
-
-Downstream applications that use the `"PCA"` dimensionality reduction results in `sce.zeisel` will subsequently operate on the first 20 PCs only.
-Alternatively, some users may prefer to keep the full set of PCs, in which case the top set can be assigned to another name:
-
-```{r}
-reducedDim(sce.zeisel, "PCA_20") <- reducedDim(sce.zeisel, "PCA")[,1:20]
-reducedDimNames(sce.zeisel)
-```
-
-Note that this is not necessary if the desired number of PCs is directly specified in the initial call to `runPCA()`.
-Similarly, `denoisePCA()` will return its chosen number of PCs without requiring further user intervention.
-
+<!--
 ## Non-negative matrix factorization
 
 Non-negative matrix factorization (NMF) involves approximating a matrix by the product of two lower-rank matrices $W$ and $H$,
@@ -269,7 +268,7 @@ We demonstrate the application of NMF on the @zeisel2015brain dataset using the 
 As with the PCA results, `runNMF()` stores the per-cell coordinates in the `"NMF"` entry of the `reducedDims()` of the output, which we could then use directly for downstream steps like clustering.
 However, the main benefit of NMF over PCA is that we can directly interpret the individual factors based on the identity of the highly weighted genes in the basis matrix $W$ and the affected cells in the coordinate matrix $H$ (Figure \@ref(fig:heat-nmf-zeisel)).
 
-```{r heat-nmf-zeisel, fig.wide=TRUE, fig.asp=0.5, fig.cap="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
+```{r heat-nmf-zeisel, eval=FALSE, fig.wide=TRUE, fig.asp=0.5, fig.cap="Heatmaps of the NMF results in the Zeisel brain dataset. Each column represents a factor while each row represents either a cell (left) or a gene (right)."}
 set.seed(101001)
 nmf.zeisel <- runNMF(sce.zeisel, ncomponents=10, subset_row=top.zeisel)
 
@@ -325,6 +324,7 @@ NMF also tends to assign higher weight to high-abundance genes to reduce approxi
 We tend to prefer PCA for general-purpose dimensionality reduction given that the interpretability of NMF is not a critical feature for most scRNA-seq workflows.
 That said, NMF can provide another perspective on our high-dimensional data that can serve as a sanity check for more complicated downstream procedures.
 For example, we would hope that any identified clusters and marker genes would correspond to large values in the $W$ and $H$ matrices for the relevant factors.
+-->
 
 ## Dimensionality reduction for visualization
 
