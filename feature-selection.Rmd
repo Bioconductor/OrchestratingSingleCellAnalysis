@@ -110,7 +110,8 @@ dec.cv2.pbmc[order(dec.cv2.pbmc$ratio, decreasing=TRUE),]
 Both the CV^2^ and the variance of log-counts are effective metrics for quantifying variation in gene expression.
 The CV^2^ tends to give higher rank to low-abundance HVGs driven by upregulation in rare subpopulations, for which the increase in variance on the raw scale is stronger than that on the log-scale.
 However, the variation described by the CV^2^ is less directly relevant to downstream procedures operating on the log-counts, and the reliance on the ratio can assign high rank to uninteresting genes with low absolute variance.
-We generally prefer the use of the variance of log-counts and will use it in the following sections, though the many of the same principles apply to procedures based on the CV^2^.
+We prefer the use of the variance of log-counts and will use it in the following sections 
+though many of the same principles apply to procedures based on the CV^2^.
 
 ### Quantifying technical noise {#sec:spikeins}
 
@@ -360,8 +361,12 @@ summary(b.genes)
 Of course, the downside of focusing on pre-defined genes is that it will limit our capacity to detect novel or unexpected aspects of variation.
 Thus, this kind of focused analysis should be complementary to (rather than a replacement for) the unsupervised feature selection strategies discussed previously.
 
-Alternatively, we can also invert this reasoning to remove genes that are unlikely to be of interest prior to downstream analyses, thus avoiding unwanted variation that interferes with downstream interpretation.
-Common candidates for removal include ribosomal protein genes or mitochondrial genes; for immune cell subsets, we might also be inclined to remove immunoglobulin genes and T cell receptor genes, where clonal expression introduces (possibly irrelevant) population structure.
+Alternatively, we can invert this reasoning to remove genes that are unlikely to be of interest prior to downstream analyses. 
+This eliminates unwanted variation that could mask relevant biology and interfere with interpretation of the results.
+Ribosomal protein genes or mitochondrial genes are common candidates for removal,
+especially in situations with varying levels of cell damage within a population.
+For immune cell subsets, we might also be inclined to remove immunoglobulin genes and T cell receptor genes 
+for which clonal expression introduces (possibly irrelevant) population structure.
 
 ```{r}
 # Identifying ribosomal proteins:
@@ -390,7 +395,8 @@ tcr.discard <- rowData(sce.pbmc)$ID %in% tcr.set
 sum(tcr.discard)
 ```
 
-In practice, we tend to err on the side of caution and abstain from preemptive filtering on biological function until these genes are demonstrably problematic in downstream analyses.
+In practice, we tend to err on the side of caution and abstain from preemptive filtering on biological function 
+until these genes are demonstrably problematic in downstream analyses.
 
 ## Putting it all together {#feature-selection-subsetting}
 
@@ -415,7 +421,6 @@ The downside is that the non-HVGs are discarded from the new `SingleCellExperime
 
 2. We can keep the original `SingleCellExperiment` object and specify the genes to use for downstream functions via an extra argument like `subset.row=`.
 This is useful if the analysis uses multiple sets of HVGs at different steps, whereby one set of HVGs can be easily swapped for another in specific steps.
-However, it can be inconvenient to repeatedly specify the same HVG set across steps.
 
     ```{r}
     # Performing PCA only on the chosen HVGs.
@@ -423,6 +428,22 @@ However, it can be inconvenient to repeatedly specify the same HVG set across st
     sce.pbmc <- runPCA(sce.pbmc, subset_row=chosen)
     reducedDimNames(sce.pbmc)
     ```
+
+    This approach is facilitated by the `rowSubset()` utility,
+    which allows us to easily store one or more sets of interest in our `SingleCellExperiment`.
+    By doing so, we avoid the need to keep track of a separate `chosen` variable
+    and ensure that our HVG set is synchronized with any downstream row subsetting of `sce.pbmc`.
+
+    ```{r}
+    rowSubset(sce.pbmc) <- chosen # stored in the default 'subset'.
+    rowSubset(sce.pbmc, "HVGs.more") <- getTopHVGs(dec.pbmc, prop=0.2)
+    rowSubset(sce.pbmc, "HVGs.less") <- getTopHVGs(dec.pbmc, prop=0.3)
+    colnames(rowData(sce.pbmc))
+    ```
+
+    It can be inconvenient to repeatedly specify the desired feature set across steps,
+    so some downstream functions will automatically subset to the default `rowSubset()` if present in the `SingleCellExperiment`.
+    However, we find that it is generally safest to be explicit about which set is being used for a particular step.
 
 3. We can have our cake and eat it too by (ab)using the "alternative Experiment" system in the `SingleCellExperiment` class.
 Initially designed for storing alternative features like spike-ins or antibody tags, we can instead use it to hold our full dataset while we perform our downstream operations conveniently on the HVG subset.
