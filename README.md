@@ -7,22 +7,15 @@ Developers wanting to contribute scientific content to the book should make pull
 the others with `-release` or `-devel` suffixes are just used to host the book content on GitHub Pages.
 Our set-up provides a light code-only repository (this one) for day-to-day developer use,
 which avoids the Git blob bloat from storing PNGs and HTMLs in the other repository.
-It also enables us to automatically reconstruct the section orderings without needing to manually rename the files.
 
 ## Structure
 
-The repository subdirectories reflect the structure of the book:
+The book is split into four parts:
 
-- `intro`: some introductory sections focusing on how to install and use R and Bioconductor.
-- `analysis`: the meat of the book, where each chapter focuses on a different step of a scRNA-seq analysis.
-- `workflows`: end-to-end analysis Rmarkdown reports with minimal explanatory text.
-- `about`: some bits and pieces about the contributors.
-- `sundries`: some **bookdown**-related bits and pieces.
-- `images`: various static images used throughout the book.
-
-In addition, there is the **OSCAUtils** package in `package`, which provides utilities for book construction.
-
-## Using cached objects
+1. Introductory chapters focusing on how to install and use R and Bioconductor.
+2. Topic chapters, the meat of the book where each chapter describes a different step of a scRNA-seq analysis.
+3. Workflows containing end-to-end analysis Rmarkdown reports with minimal explanatory text.
+4. Appendices containing some bits and pieces about the contributors.
 
 Compilation of the workflows will cache the objects generated after each chunk.
 This allows objects to be quickly re-used in the chapters without having to repeat or rewrite the prior steps.
@@ -31,27 +24,21 @@ also reporting the steps used to generate those objects in a folded code chunk.
 This enables readers of each chapter to inspect the code without interrupting the pedagogical flow.
 
 As a consequence, compilation of many of the chapters depends on compilation of the workflows.
-Thus, all contributors should compile the latter first.
 Those writing new chapters should move all set-up code into a similar workflow 
 and exploit the `extractCached()` to obtain a starting point for their chapter.
 Also note the `chapterPreamble()` code chunk that is required at the top of each chapter to set up the collapsible elements.
 
-## Instructions
-
-### To build the workflows
+## Build instructions
 
 Install the **rebook** package from https://github.com/LTLA/rebook.
-
-Run:
+Then, run the usual **bookdown** invocation, for example:
 
 ```r
 bookdown::render_book("index.Rmd", "bookdown::gitbook",
     quiet = FALSE, output_dir = "docs", new_session = TRUE)
 ```
 
-### To contribute reports
-
-Standard procedure: fork and PR.
+To contribute reports, follow standard procedure: fork and PR.
 
 - All `analysis` chapters must start from a `SingleCellExperiment` object and should be independent of other `analysis` chapters.
 - All `workflow` chapters should use a `SingleCellExperiment` object throughout the various chunks.
