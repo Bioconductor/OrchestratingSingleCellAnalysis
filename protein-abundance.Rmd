@@ -133,6 +133,7 @@ While composition biases are unlikely to compromise exploratory analyses like cl
     While more robust than the ADT library size factors, these geometric mean-based factors are still not entirely correct and will progressively become less accurate as upregulation increases in strength.
 
     ```{r}
+    library(scuttle)
     sf.geo <- geometricSizeFactors(altExp(sce))
     summary(sf.geo)
     ```
