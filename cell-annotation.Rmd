@@ -14,7 +14,7 @@ chapterPreamble()
 
 The most challenging task in scRNA-seq data analysis is arguably the interpretation of the results.
 Obtaining clusters of cells is fairly straightforward, but it is more difficult to determine what biological state is represented by each of those clusters. 
-Doing so requires us to bridge the gap between the current dataset and prior biological knowledge, and the latter is not always available in a consistent and quantitative manner^[For example, it may be somewhere in your bench collaborator's head. Try `ssh`ing into _that_.].
+Doing so requires us to bridge the gap between the current dataset and prior biological knowledge, and the latter is not always available in a consistent and quantitative manner.
 Indeed, even the concept of a "cell type" is [not clearly defined](https://doi.org/10.1016/j.cels.2017.03.006), with most practitioners possessing a "I'll know it when I see it" intuition that is not amenable to computational analysis.
 As such, interpretation of scRNA-seq data is often manual and a common bottleneck in the analysis workflow.
 
@@ -33,10 +33,10 @@ This is a standard classification challenge that can be tackled by standard mach
 Any published and labelled RNA-seq dataset (bulk or single-cell) can be used as a reference, though its reliability depends greatly on the expertise of the original authors who assigned the labels in the first place. 
 
 In this section, we will demonstrate the use of the `r Biocpkg("SingleR")` method [@aran2019reference] for cell type annotation.
-This method assigns labels to cells based on the reference samples with the highest Spearman rank correlations, and thus can be considered a rank-based variant of $k$-nearest-neighbor classification.
-To reduce noise, `r Biocpkg("SingleR")` identifies marker genes between pairs of labels and computes the correlation using only those markers.
-It also performs a fine-tuning step for each cell where calculation of the correlations is repeated with just the marker genes for the top-scoring labels.
+This method assigns labels to cells based on the reference samples with the highest Spearman rank correlations, using only the marker genes between pairs of labels to focus on the relevant differences between cell types.
+It also performs a fine-tuning step for each cell where the correlations are recomputed with just the marker genes for the top-scoring labels.
 This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels.
+Further details can be found in the [_SingleR_ book](https://ltla.github.io/SingleRBook) from which most of the examples here are derived.
 
 ### Using the in-built references
 
@@ -71,22 +71,10 @@ This is largely the case for monocytes and B cells, whereas we see more ambiguit
 plotScoreHeatmap(pred)
 ```
 
-`SingleR()` will attempt to prune out low-quality assignments by marking them as `NA`.
-This is done based on the difference $\Delta_{med}$ of the assigned label's score from the median score within each cell.
-Small $\Delta_{med}$ values indicate that the cell assignment was so uncertain that the reported label is not much better than the bulk of other labels in the reference.
-We set a minimum threshold on the acceptable $\Delta_{med}$ using an outlier-based approach for each label, where labels with $\Delta_{med}$ that are substantially lower than the majority of values for a given label are marked as `NA` (Figure \@ref(fig:singler-dist-pbmc)).
-If necessary, more control over the pruning can be achieved by supplying custom parameters to the `pruneScores()` function.
-
-```{r singler-dist-pbmc, fig.asp=1, fig.wide=TRUE, fig.cap="Distribution of the per-cell $\\Delta_{med}$ for each label. Each panel corresponds to one label and stratifies the population into cells that were assigned to that label and not pruned; cells that were assigned to that label and pruned out; and cells that were not assigned to that label."}
-sum(is.na(pred$pruned.labels))
-plotScoreDistribution(pred)
-```
-
 We compare the assignments with the clustering results to determine the identity of each cluster.
-Ideally, clusters and labels would have a 1:1 relationship, though some nesting is likely depending on the resolution of the clustering algorithm.
-For example, several clusters are nested within the monocyte and B cell labels (Figure \@ref(fig:singler-cluster)), suggesting the the former represent finer subdivisions within the latter.
+Here, several clusters are nested within the monocyte and B cell labels (Figure \@ref(fig:singler-cluster)), indicating that the clustering represents finer subdivisions within the cell types.
 Interestingly, our clustering does not effectively distinguish between CD4^+^ and CD8^+^ T cell labels.
-We attribute this to the presence of other factors of heterogeneity within the T cell subpopulation that have a stronger influence on unsupervised methods than the _a priori_ expected CD4/CD8 distinction.
+This is probably due to the presence of other factors of heterogeneity within the T cell subpopulation (e.g., activation) that have a stronger influence on unsupervised methods than the _a priori_ expected CD4^+^/CD8^+^ distinction.
 
 ```{r singler-cluster, fig.cap="Heatmap of the distribution of cells across labels and clusters in the 10X PBMC dataset. Color scale is reported in the log~10~-number of cells for each cluster-label combination."}
 tab <- table(Assigned=pred$pruned.labels, Cluster=colLabels(sce.pbmc))
@@ -105,13 +93,15 @@ stopifnot(any(xtab["CD8+ T-cells",] > 80, na.rm=TRUE))
 
 This episode highlights some of the differences between reference-based annotation and unsupervised clustering.
 The former explicitly focuses on aspects of the data that are known to be interesting, simplifying the process of biological interpretation.
-However, the cost is that the downstream analysis is restricted by the diversity and resolution of the available labels.
-We suggest applying both strategies and, if major disagreements are present between reference label and cluster assignments, using those discrepancies as the basis for further investigation to discover novel effects.
+However, the cost is that the downstream analysis is restricted by the diversity and resolution of the available labels, a problem that is largely avoided by _de novo_ identification of clusters.
+We suggest applying both strategies to examine the agreement (or lack thereof) between reference label and cluster assignments.
+Any inconsistencies are not necessarily problematic due to the conceptual differences between the two approaches;
+indeed, one could use those discrepancies as the basis for further investigation to discover novel factors of variation in the data.
 
 ### Using custom references
 
-It is also straightforward to apply `r Biocpkg("SingleR")` to user-supplied reference datasets.
-This is most obviously useful when we have an existing dataset that was previously (manually) annotated,
+We can also apply `r Biocpkg("SingleR")` to single-cell reference datasets that are curated and supplied by the user.
+This is most obviously useful when we have an existing dataset that was previously (manually) annotated
 and we want to use that knowledge to annotate a new dataset in an automated manner.
 To illustrate, we will use the @muraro2016singlecell human pancreas dataset as our reference.
 
@@ -121,21 +111,32 @@ extractCached("muraro-pancreas.Rmd", "normalization", "sce.muraro")
 
 ```{r}
 sce.muraro
+
+# Pruning out unknown or unclear labels.
 sce.muraro <- sce.muraro[,!is.na(sce.muraro$label) & 
     sce.muraro$label!="unclear"]
 table(sce.muraro$label)
 ```
 
 Our aim is to assign labels to our test dataset from @segerstolpe2016singlecell.
-We use the same call to `SingleR()` but with `de.method="wilcox"` to identify markers via pairwise Wilcoxon ranked sum tests between labels in the reference dataset.
-This re-uses the same machinery from Chapter \@ref(marker-detection), and indeed, further options to fine-tune the test procedure can be passed via the `de.args` argument.
+We use the same call to `SingleR()` but with `de.method="wilcox"` to identify markers via pairwise Wilcoxon ranked sum tests between labels in the reference Muraro dataset.
+This re-uses the same machinery from Chapter \@ref(marker-detection); further options to fine-tune the test procedure can be passed via the `de.args` argument.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("segerstolpe-pancreas.Rmd", "normalization", "sce.seger")
 ```
 
 ```{r}
-pred.seger <- SingleR(test=sce.seger, ref=sce.muraro, 
+# Converting to FPKM for a more like-for-like comparison to UMI counts.
+# However, results are often still good even when this step is skipped.
+library(AnnotationHub)
+hs.db <- AnnotationHub()[["AH73881"]]
+hs.exons <- exonsBy(hs.db, by="gene")
+hs.exons <- reduce(hs.exons)
+hs.len <- sum(width(hs.exons))
+fpkm.seger <- calculateFPKM(sce.seger, hs.len)
+
+pred.seger <- SingleR(test=fpkm.seger, ref=sce.muraro, 
     labels=sce.muraro$label, de.method="wilcox")
 table(pred.seger$labels)
 ```
@@ -159,7 +160,7 @@ stopifnot(rand > 0.95)
 An interesting question is - given a single-cell reference dataset, is it better to use it directly or convert it to pseudo-bulk values?
 A single-cell reference preserves the "shape" of the subpopulation in high-dimensional expression space, potentially yielding more accurate predictions when the differences between labels are subtle (or at least capturing ambiguity more accurately to avoid grossly incorrect predictions).
 However, it also requires more computational work to assign each cell in the test dataset.
-We tend to prefer using a single-cell reference directly when one is available, though it is unlikely to make much difference when the labels are well-separated.
+We refer to the [other book](https://ltla.github.io/SingleRBook/using-single-cell-references.html#pseudo-bulk-aggregation) for more details on how to achieve a compromise between these two concerns. 
 
 ## Assigning cell labels from gene sets
 
