@@ -610,7 +610,9 @@ str(output)
 Needless to say, this lunch is not entirely free.
 The inferences rely on a somewhat sophisticated mathematical model that has a few assumptions,
 the most obvious of which being that the transcriptional dynamics are the same across subpopulations.
-The use of unspliced counts increases the sensitivity of the analysis to annotation errors, novel transcripts (e.g., microRNAs in the gene body) and intron retention events that could interfere with the velocity calculations.
+The use of unspliced counts increases the sensitivity of the analysis to novel transcripts (e.g., microRNAs in the gene body), 
+intron retention events, annotation errors or quantification ambiguities [@soneson2020preprocessing] 
+that could interfere with the velocity calculations.
 There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for the relevant genes for the process of interest, and if not, whether this lack of information may bias the resulting velocity estimates.
 From a purely practical perspective, the main difficulty with RNA velocity is that the unspliced counts are often unavailable.
 
