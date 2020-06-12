@@ -538,7 +538,50 @@ The average silhouette width across all cells can also be used to choose cluster
 The aim is to maximize the average silhouette width in order to obtain well-separated clusters.
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
-## Evaluating cluster stability {#cluster-bootstrapping}
+## General-purpose cluster diagnostics
+
+### Comparing different clusterings
+
+As previously mentioned, clustering's main purpose is to obtain a discrete summary of the data for further interpretation.
+The diversity of available methods (and the subsequent variation in the clustering results)
+reflects the many different "perspectives" that can be derived from a high-dimensional scRNA-seq dataset.
+It is helpful to determine how these perspectives relate to each other by comparing the clustering results.
+More concretely, we want to know which clusters map to each other across algorithms;
+inconsistencies may be indicative of complex variation that is summarized differently by each clustering procedure.
+
+A simple yet effective approach for comparing two clusterings of the same dataset
+is to create a 2-dimensional table of label frequencies (Figure \@ref(fig:walktrap-v-others)).
+We can further improve the interpretability of this table by computing the proportions of cell assignments,
+which avoids difficulties with dynamic range when visualizing clusters of differing abundances,
+For example, we may be interested in how our Walktrap clusters from Section \@ref(clustering-graph)
+are redistributed when we switch to using Louvain community detection (Figure \@ref(fig:walktrap-v-louvain-prop)).
+Note that this heatmap is best interpreted on a row-by-row basis as the proportions are computed per row
+and there is no guarantee that cell abundances are comparable across columns.
+
+<!--
+No point interpreting it by column, as you'd get multiple 100% values.
+An entry with a larger proportion may have a lower number of cells along a column.
+-->
+
+```{r walktrap-v-louvain-prop, fig.cap="Heatmap of the proportions of cells from each Walktrap cluster (rows) across the Louvain clusters (columns) in the PBMC dataset."}
+tab <- table(Walktrap=clust, Louvain=clust.louvain)
+tab <- tab/rowSums(tab)
+pheatmap(tab, color=viridis::viridis(100), cluster_cols=FALSE, cluster_rows=FALSE)
+```
+
+For clusterings that differ primarily in resolution (usually from different parameterizations of the same algorithm),
+we can use the `r CRANpkg("clustree")` package to visualize the relationships between them.
+Here, the aim is to capture the redistribution of cells from one clustering to another at progressively higher resolution, 
+providing a convenient depiction of how clusters split apart (Figure \@ref(fig:walktrap-res-clustree)).
+This approach is most effective with multiple nested mappings but is less useful when the mappings are "crossed",
+e.g., for comparisons involving theoretically distinct clustering procedures.
+
+```{r walktrap-res-clustree, fig.wide=TRUE, fig.width=10, fig.height=5, fig.cap="Graph of the relationships between the Walktrap clusterings of the PBMC dataset, generated with varying $k$ during the nearest-neighbor graph construction. (A higher $k$ generally corresponds to a lower resolution clustering.) The size of the nodes is proportional to the number of cells in each cluster, and the edges depict cells in one cluster that are reassigned to another cluster at a different resolution. The color of the edges is defined according to the number of reassigned cells and the opacity is defined from the corresponding proportion relative to the size of the lower-resolution cluster."}
+combined <- cbind(k.50=clust.50, k.10=clust, k.5=clust.5)
+clustree(combined, prefix="k.", edge_arrow=FALSE)
+```
+
+### Evaluating cluster stability {#cluster-bootstrapping}
 
 A desirable property of a given clustering is that it is stable to perturbations to the input data [@luxburg2010clustering].
 Stable clusters are logistically convenient as small changes to upstream processing will not change the conclusions;
@@ -573,6 +616,8 @@ Bootstrapping is a general approach for evaluating cluster stability that is com
 The coassignment probability is also more informative than a single per-cluster stability measure as the former considers the relationships between clusters, e.g., unstable separation between $X$ and $Y$ does not penalize the stability of separation between $X$ and another cluster $Z$.
 Of course, one should take these probabilities with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation).
 In addition, it is possible for a poor separation to be highly stable, so highly stable cluster may not necessarily represent some distinct subpopulation.
+
+### Computing clustering purity
 
 ## Subclustering {#subclustering}
 
