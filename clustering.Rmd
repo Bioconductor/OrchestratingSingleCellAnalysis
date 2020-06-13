@@ -1,7 +1,5 @@
 ---
-output:
-  html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Clustering
@@ -473,7 +471,8 @@ table(cluster,
 
 To obtain explicit clusters, we "cut" the tree by removing internal branches such that every subtree represents a distinct cluster.
 This is most simply done by removing internal branches above a certain height of the tree, as performed by the `cutree()` function.
-We generally prefer to use the `r CRANpkg("dynamicTreeCut")` package, which uses the shape of the branches to obtain a more suitable partitioning for complex dendrograms (Figure \@ref(fig:dend-cluster)).
+A more sophisticated variant of this approach is implemented in the `r CRANpkg("dynamicTreeCut")` package,
+which uses the shape of the branches to obtain a better partitioning for complex dendrograms (Figure \@ref(fig:dend-cluster)).
 
 ```{r dend-cluster, fig.cap="Hierarchy of cells in the 416B data set after hierarchical clustering, where each leaf node is a cell that is coloured according to its assigned cluster identity from a dynamic tree cut."}
 library(dynamicTreeCut)
