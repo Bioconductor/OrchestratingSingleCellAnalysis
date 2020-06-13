@@ -638,9 +638,8 @@ dim(coassign)
 ```
 
 The function returns a matrix of coassignment probabilities between every pair of original clusters in `originals` (Figure \@ref(fig:bootstrap-matrix)).
-Each coassignment probability between clusters $X$ and $Y$ represents the probability that a randomly chosen cell from $X$ and a randomly chosen from $Y$ are assigned to the same cluster in the bootstrap replicate.
-High co-assignment probabilities indicate that $X$ is not stable with respect to its separation from $Y$, given that their cells are liable to cluster together in the replicates.
 Ideally, we would hope for high coassignment probabilities on the diagonal (i.e., $X$ cells cluster with themselves) and low probabilities off the diagonal.
+This would indicate that the clustering in the bootstrap replicates are highly consistent with that of the original dataset.
 
 ```{r bootstrap-matrix, fig.cap="Heatmap of coassignment probabilities from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the coassignment probability between that pair of clusters."}
 pheatmap(coassign, cluster_row=FALSE, cluster_col=FALSE,

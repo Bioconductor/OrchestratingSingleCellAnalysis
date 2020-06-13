@@ -354,9 +354,10 @@ heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
 gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
 ```
 
-Finally, we can summarize the agreement between clusterings by computing the Rand index.
-This provides a simple metric that we can use to assess the preservation of variation by different correction methods.
-Larger rand indices (i.e., closer to 1) are more desirable, though this must be balanced against the ability of each method to actually remove the batch effect.
+Finally, we can compute the Rand index (Section \@ref(comparing-different-clusterings))
+to quantify the agreement between the clusterings before and after batch correction. 
+Larger indices are more desirable as this indicates that within-batch heterogeneity is preserved,
+though this must be balanced against the ability of each method to actually perform batch correction.
 
 ```{r}
 ri3k <- clusterRand(clusters.mnn[rescaled$batch==1],
