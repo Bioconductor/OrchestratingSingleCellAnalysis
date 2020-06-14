@@ -564,7 +564,7 @@ The "clustering purity" is defined for each cell as the proportion of neighborin
 Well-separated clusters should exhibit little intermingling and thus high purity values for all member cells,
 as demonstrated below in Figure \@ref(fig:pbmc-box-purities).
 Median purity values are consistently greater than 0.9,
-indicating that most cells in each cluster have a majority of neighbors from the same cluster.
+indicating that most cells in each cluster are primarily surrounded by other cells from the same cluster.
 
 ```{r pbmc-box-purities, fig.wide=TRUE, fig.cap="Distribution of cluster purities across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of the cluster contributing the largest proportion of its neighbors."}
 pure.pbmc <- clusterPurity(sce.pbmc, clusters=clust, use.dimred="PCA") 
@@ -578,6 +578,7 @@ ggplot(pure.data, aes(x=cluster, y=purity, colour=maximum)) +
 ```
 
 ```{r, echo=FALSE}
+by.cluster <- split(pure.pbmc$purity, clust)
 med.by.clust <- vapply(by.cluster, median, 0)
 stopifnot(all(med.by.clust > 0.9))
 ```
