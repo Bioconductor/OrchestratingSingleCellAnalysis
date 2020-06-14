@@ -504,11 +504,11 @@ stopifnot(sum(xtab[fault,] > 0) == 2)
 stopifnot(sum(xtab[fault,]==0) == 2)
 ```
 
-### Assessing cluster separation
+### Assessing cluster separation {#silhouette-width}
 
 We check the separation of the clusters using the silhouette width (Figure \@ref(fig:silhouette416b)).
-For each cell, we compute the average distance to cells in each other cluster.
-We then compute the minimum of these average distances across all clusters, as well as the average distance to cells in the same cluster.
+For each cell, we compute the average distance to all cells in the same cluster.
+We also compute the average distance to all cells in another cluster, taking the minimum of the averages across all other clusters.
 The silhouette width for each cell is defined as the difference between these two values divided by their maximum.
 Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters.
 
@@ -538,6 +538,59 @@ The aim is to maximize the average silhouette width in order to obtain well-sepa
 This can be helpful to automatically obtain a "reasonable" clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.
 
 ## General-purpose cluster diagnostics
+
+### Cluster separation, redux
+
+We previously introduced the silhouette width in the context of hierarchical clustering (Section \@ref(silhouette-width)).
+While this can be applied with other clustering algorithms, 
+it requires calculation of all pairwise distances between cells and is not scalable for larger cdatasets.
+In such cases, we instead use an approximate approach that replaces the average of the distances with the distance to the average (i.e., centroid) of each cluster, with some tweaks to account for the distance due to the within-cluster variance.
+This is implemented in the `clusterSilhouette()` function from `r Biocpkg("scran")`,
+allowing us to quickly identify poorly separate clusters with mostly negative widths (Figure \@ref(fig:pbmc-silhouette)).
+
+```{r pbmc-silhouette, fig.wide=TRUE, fig.cap="Distribution of the approximate silhouette width across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of its own cluster if its silhouette width is positive and that of the closest other cluster if the width is negative."}
+sil.approx <- clusterSilhouette(sce.pbmc, clusters=clust, use.dimred="PCA") 
+
+sil.data <- as.data.frame(sil.approx)
+sil.data$closest <- factor(ifelse(sil.data$width > 0, clust, sil.data$other))
+sil.data$cluster <- factor(clust)
+
+ggplot(sil.data, aes(x=cluster, y=width, colour=closest)) + 
+    ggbeeswarm::geom_quasirandom(method="smiley")
+```
+
+Alternatively, we can quantify the degree to which cells from multiple clusters intermingle in expression space.
+The "clustering purity" is defined for each cell as the proportion of neighboring cells that are assigned to the same cluster.
+Well-separated clusters should exhibit little intermingling and thus high purity values for all member cells,
+as demonstrated below in Figure \@ref(fig:pbmc-box-purities).
+Median purity values are consistently greater than 0.9,
+indicating that most cells in each cluster have a majority of neighbors from the same cluster.
+
+```{r pbmc-box-purities, fig.wide=TRUE, fig.cap="Distribution of cluster purities across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of the cluster contributing the largest proportion of its neighbors."}
+pure.pbmc <- clusterPurity(sce.pbmc, clusters=clust, use.dimred="PCA") 
+
+pure.data <- as.data.frame(pure.pbmc)
+pure.data$maximum <- factor(pure.data$maximum)
+pure.data$cluster <- factor(clust)
+
+ggplot(pure.data, aes(x=cluster, y=purity, colour=maximum)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+```
+
+```{r, echo=FALSE}
+med.by.clust <- vapply(by.cluster, median, 0)
+stopifnot(all(med.by.clust > 0.9))
+```
+
+The main difference between these two methods is that the purity is ignorant of the intra-cluster variance.
+This may or may not be desirable depending on what level of heterogeneity is of interest.
+In addition, the purity will - on average - only decrease with increasing cluster number/resolution,
+making it less effective for choosing between different clusterings.
+However, regardless of the chosen method, it is worth keeping in mind that poor separation is not synonymous with poor quality. 
+In fact, poorly separated clusters will often be observed in non-trivial analyses of scRNA-seq data 
+where the aim is to characterize closely related subtypes or states.
+These diagnostics are best used to guide interpretation by highlighting clusters that require more investigation
+rather than to rule out poorly separated clusters altogether. 
 
 ### Comparing different clusterings
 
@@ -650,8 +703,6 @@ Bootstrapping is a general approach for evaluating cluster stability that is com
 The coassignment probability is also more informative than a single per-cluster stability measure as the former considers the relationships between clusters, e.g., unstable separation between $X$ and $Y$ does not penalize the stability of separation between $X$ and another cluster $Z$.
 Of course, one should take these probabilities with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation).
 In addition, it is possible for a poor separation to be highly stable, so highly stable cluster may not necessarily represent some distinct subpopulation.
-
-### Computing clustering purity
 
 ## Subclustering {#subclustering}
 
