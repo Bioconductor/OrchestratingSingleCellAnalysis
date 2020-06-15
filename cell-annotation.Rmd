@@ -145,6 +145,8 @@ hs.db <- AnnotationHub()[["AH73881"]]
 hs.exons <- exonsBy(hs.db, by="gene")
 hs.exons <- reduce(hs.exons)
 hs.len <- sum(width(hs.exons))
+
+library(scuttle)
 fpkm.seger <- calculateFPKM(sce.seger, hs.len)
 
 pred.seger <- SingleR(test=fpkm.seger, ref=sce.muraro, 
