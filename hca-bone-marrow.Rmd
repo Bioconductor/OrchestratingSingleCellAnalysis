@@ -218,8 +218,10 @@ Nonetheless, it is often sufficient for a quick assignment of cluster identity, 
 ```{r cell-type-classification}
 se.aggregated <- sumCountsAcrossCells(sce.bone, id=colLabels(sce.bone))
 
-library(SingleR)
+library(celldex)
 hpc <- HumanPrimaryCellAtlasData()
+
+library(SingleR)
 anno.single <- SingleR(se.aggregated, ref = hpc, labels = hpc$label.main,
     assay.type.test="sum")
 anno.single
