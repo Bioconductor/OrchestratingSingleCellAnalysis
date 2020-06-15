@@ -322,7 +322,7 @@ abline(v=horn$n, col="red")
 
 ```{r, echo=FALSE}
 # Check that we haven't capped out.
-stopifnot(mp.choice < 50)
+stopifnot(horn$n < 50)
 ```
 
 The `parallelPCA()` function helpfully emits the PC coordinates in  `horn$original$rotated`,
