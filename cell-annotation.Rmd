@@ -38,11 +38,12 @@ It also performs a fine-tuning step for each cell where the correlations are rec
 This aims to resolve any ambiguity between those labels by removing noise from irrelevant markers for other labels.
 Further details can be found in the [_SingleR_ book](https://ltla.github.io/SingleRBook) from which most of the examples here are derived.
 
-### Using the in-built references
+### Using existing references
 
-`r Biocpkg("SingleR")` contains a number of built-in reference datasets, mostly assembled from bulk RNA-seq or microarray data of sorted cell types.
-These built-in references are often good enough for most applications, provided that they contain the cell types that are expected in the test population.
-We will demonstrate on the 10X PBMC dataset using a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated].
+For demonstration purposes, we will use one of the 10X PBMC datasets as our test.
+While we have already applied quality control, normalization and clustering for this dataset, this is not strictly necessary.
+It is entirely possible to run `SingleR()` on the raw counts without any _a priori_ quality control
+and filter on the annotation results at one's leisure - see the book for an explanation.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("tenx-unfiltered-pbmc4k.Rmd", "clustering", "sce.pbmc")
@@ -52,13 +53,23 @@ extractCached("tenx-unfiltered-pbmc4k.Rmd", "clustering", "sce.pbmc")
 sce.pbmc
 ```
 
-We label our PBMCs using the `SingleR()` function with the main cell type labels in the reference.
+The `r Biocpkg("celldex")` contains a number of curated reference datasets, mostly assembled from bulk RNA-seq or microarray data of sorted cell types.
+These references are often good enough for most applications provided that they contain the cell types that are expected in the test population.
+Here, we will use a reference constructed from Blueprint and ENCODE data [@martens2013blueprint;@encode2012integrated];
+this is obtained by calling the `BlueprintEncode()` function to construct a `SummarizedExperiment` containing log-expression values with curated labels for each sample.
+
+```{r}
+library(celldex)
+ref <- BlueprintEncodeData()
+ref
+```
+
+We call the `SingleR()` function to annotate each of our PBMCs with the main cell type labels from the Blueprint/ENCODE reference.
 This returns a `DataFrame` where each row corresponds to a cell in the test dataset and contains its label assignments.
 Alternatively, we could use the labels in `ref$label.fine`, which provide more resolution at the cost of speed and increased ambiguity in the assignments.
 
 ```{r}
 library(SingleR)
-ref <- BlueprintEncodeData()
 pred <- SingleR(test=sce.pbmc, ref=ref, labels=ref$label.main)
 table(pred$labels)
 ```
