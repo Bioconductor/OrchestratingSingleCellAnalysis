@@ -107,35 +107,33 @@ This will be a recurring theme throughout the chapter, which suggests that cell 
 
 ## Using reference profiles
 
-Cell cycle assignment can be considered a specialized case of cell annotation, which suggests that the strategies described in Chapter \@ref(cell-type-annotation) can be applied here.
-For example, given a reference dataset containing mouse ESCs with known cell cycle phases [@buettner2015computational], we could use `r Biocpkg("SingleR")` to determine the phase of each cell in a test dataset.
+Cell cycle assignment can be considered a specialized case of cell annotation, which suggests that the strategies described in Chapter \@ref(cell-type-annotation) can also be applied here.
+Given a reference dataset containing cells of known cell cycle phase, we could use methods like `r Biocpkg("SingleR")` to determine the phase of each cell in a test dataset.
+We demonstrate on a reference of mouse ESCs from @buettner2015computational that were sorted by cell cycle phase prior to scRNA-seq.
 
 ```{r}
 library(scRNAseq)
 sce.ref <- BuettnerESCData()
+sce.ref <- logNormCounts(sce.ref)
 sce.ref
 ```
 
-We use the reference dataset to identify phase-specific markers from genes with annotated roles in cell cycle.
-The use of prior annotation aims to avoid detecting markers for other biological processes that happen to be correlated with the cell cycle in the reference dataset, which would reduce classification performance if those processes are absent or uncorrelated in the test dataset.
+We will restrict the annotation process to a subset of genes with _a priori_ known roles in cell cycle.
+This aims to avoid detecting markers for other biological processes that happen to be correlated with the cell cycle in the reference dataset, which would reduce classification performance if those processes are absent or uncorrelated in the test dataset.
 
 ```{r}
-# Find genes that are present in both datasets and are cell cycle-related.
+# Find genes that are cell cycle-related.
 library(org.Mm.eg.db)
 cycle.anno <- select(org.Mm.eg.db, keytype="GOALL", keys="GO:0007049", 
     columns="ENSEMBL")[,"ENSEMBL"]
-candidates <- Reduce(intersect, 
-    list(rownames(sce.ref), rowData(sce.416b)$ENSEMBL, cycle.anno))
-str(candidates)
 
-# Identifying markers between cell cycle phases.
-sce.ref <- logNormCounts(sce.ref)
-phase.stats <- pairwiseWilcox(logcounts(sce.ref), sce.ref$phase, 
-    direction="up", subset.row=candidates)
-cycle.markers <- getTopMarkers(phase.stats[[1]], phase.stats[[2]])
+# Find the genes that are present in both datasets as well.
+candidates <- intersect(cycle.anno, rownames(sce.ref))
+candidates <- intersect(candidates, rowData(sce.416b)$ENSEMBL)
+str(candidates)
 ```
 
-We use the identified markers to assign labels to the 416B data with the `SingleR()` function.
+We use the `SingleR()` function to assign labels to the 416B data based on the cell cycle phases in the ESC reference.
 Cluster 1 mostly consists of G1 cells while the other clusters have more cells in the other phases, which is broadly consistent with our conclusions from the cyclin-based analysis.
 Unlike the cyclin-based analysis, this approach yields "absolute" assignments of cell cycle phase that do not need to be interpreted relative to other cells in the same dataset.
 
@@ -145,8 +143,9 @@ test.data <- logcounts(sce.416b)
 rownames(test.data) <- rowData(sce.416b)$ENSEMBL
 
 library(SingleR)
-assignments <- SingleR(test.data, ref=sce.ref,
-    label=sce.ref$phase, genes=cycle.markers)
+assignments <- SingleR(test.data[candidates,], ref=sce.ref[candidates,],
+    de.method="wilcox", label=sce.ref$phase)
+
 tab <- table(assignments$labels, colLabels(sce.416b))
 tab
 ```
@@ -171,7 +170,7 @@ gridExtra::grid.arrange(
 ```
 
 ```{r, echo=FALSE}
-stopifnot("ENSMUSG00000027985" %in% cycle.markers$G1$G2M)
+stopifnot("ENSMUSG00000027985" %in% metadata(assignments)$de.genes$G1$G2M)
 ```
 
 Thus, a healthy dose of skepticism is required when interpreting these assignments.
@@ -185,7 +184,7 @@ chisq.test(tab[,1:2])
 
 ## Using the `cyclone()` classifier
 
-The prediction method described by @scialdone2015computational is another approach for classifying cells into cell cycle phases.
+The method described by @scialdone2015computational is yet another approach for classifying cells into cell cycle phases.
 Using a reference dataset, we first compute the sign of the difference in expression between each pair of genes.
 Pairs with changes in the sign across cell cycle phases are chosen as markers.
 Cells in a test dataset can then be classified into the appropriate phase, based on whether the observed sign for each marker pair is consistent with one phase or another.
@@ -244,31 +243,58 @@ The most common approach is to use a linear model to simply regress out the phas
 library(batchelor)
 sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
 
+# The corrected matrix can then be used for downstream analyses:
+sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected")
+```
+
+Similarly, for functions that support blocking, we can use the cell cycle phase assignments as a blocking factor.
+
+```{r}
 # Similar use in related functions that support blocking:
 dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", 
     block=assignments$phases)
 marker.nocycle <- findMarkers(sce.416b, block=assignments$phases)
 ```
 
-That said, we do not consider adjusting for cell cycle to be a necessary step in routine scRNA-seq analyses.
+That said, we do not consider adjusting for cell cycle to be necessary in routine scRNA-seq analyses.
 In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
 Any attempt at removal would also need to assume that the cell cycle effect is orthogonal to other biological processes.
-For example, regression would potentially remove interesting signal if cell cycle activity varied across clusters or conditions, with a prime example being the increased proliferation of activated T cells [@richard2018tcell]. 
-We suggest only performing cell cycle adjustment on an as-needed basis in populations with clear cell cycle effects.
+Otherwise, regression would remove interesting signal if cell cycle activity varied across clusters or conditions. 
+This is not an uncommon occurence with, e.g., increased proliferation of T cells upon activation [@richard2018tcell] and changes in cell cycle phase progression across developmental stages [@roccio2013predicting].
 
-Alternatively, users may consider just excluding cell cycle-related genes from downstream analysis.
-This should remove most of the cell cycle effect without making strong assumptions about orthogonality.
-Of course, this will not remove the effect of the cell cycle in genes with no annotated role in the cell cycle, but in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle.
+We suggest only performing cell cycle adjustment on an as-needed basis in cases with clear (and unwanted!) cell cycle effects.
+Moreoever, regression should be applied separately to the subset of the dataset for each subpopulation or cluster,
+which reduces the risk of interference from differences in cell cycle behavior across clusters.
+Any characterization of gene expression should use the uncorrected data with blocking (Section \@ref(using-corrected-values)), 
+which is a sanity check that protects against distortions introduced by the adjustment.
 
-```{r}
-library(org.Mm.eg.db)
-cc.genes <- select(org.Mm.eg.db, keys="GO:0007049", keytype="GOALL", column="ENSEMBL")
-sce.416b.uncycle <- sce.416b[!rowData(sce.416b)$ENSEMBL %in% cc.genes$ENSEMBL,]
+Alternatively, users may consider just excluding cell cycle-related genes from the downstream analysis.
+This removes the immediate contributors to the cell cycle effect without requiring any assumptions about orthogonality.
+The downside of this approach is that it will not remove the cell cycle effect in genes with no annotated role in the cell cycle,
+as demonstrated in Figure \@ref(fig:leng-nocycle) with the @leng2015oscope dataset containing phase-sorted ESCs.
+However, in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle - say, cell fate decisions [@soufi2016cycling].
 
-# Proceed with the rest of the analysis. Note that in this case, oncogene
-# induction is quite strongly associated with the cell cycle but is considered
-# to be a separate effect, so removal of the cell cycle-related genes does not
-# change the clustering much.
+```{r leng-nocycle, fig.cap="PCA plot of the Leng ESC dataset, generated after removal of cell cycle and division related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
+library(org.Hs.eg.db)
+division.genes <- select(org.Hs.eg.db, keys=c(
+        "GO:0008283", # cell proliferation 
+        "GO:0051301", # cell division
+        "GO:0007049", # cell cycle
+        "GO:0006278"  # DNA replication
+    ),
+    keytype="GOALL", column="SYMBOL")
+length(division.genes)
+
+# Performing an analysis without the cell cycle-related genes.
+library(scRNAseq)
+sce.leng <- LengESCData()
+leftovers <- setdiff(rownames(sce.leng), division.genes[,"SYMBOL"])
+sce.nocycle <- sce.leng[leftovers,]
+
+sce.nocycle <- logNormCounts(sce.nocycle, assay.type="normcounts")
+dec.nocycle <- modelGeneVar(sce.nocycle)
+sce.nocycle <- runPCA(sce.nocycle, subset_row=getTopHVGs(dec.nocycle, n=1000))
+plotPCA(sce.nocycle, colour_by="Phase")
 ```
 
 ## Session Info {-}
