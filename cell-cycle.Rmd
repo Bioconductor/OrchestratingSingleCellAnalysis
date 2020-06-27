@@ -32,7 +32,7 @@ Cyclin D is expressed throughout but peaks at G1; cyclin E is expressed highest 
 Inspection of the relative expression of cyclins across the population can often be sufficient to determine the relative cell cycle activity in each cluster (Figure \@ref(fig:heat-cyclin)).
 For example, cluster 1 is likely to be in G1 while the other clusters are scattered across the later phases.
 
-```{r heat-cyclin, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the 416B dataset."}
+```{r heat-cyclin, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the 416B dataset. Each column represents a cell that is sorted by the cluster of origin."}
 cyclin.genes <- grep("^Ccn[abde][0-9]$", rowData(sce.416b)$SYMBOL)
 cyclin.genes <- rownames(sce.416b)[cyclin.genes]
 cyclin.genes
@@ -50,11 +50,9 @@ stopifnot(all(lfc[c("Ccnd1", "Ccnd2"),] > 0))
 stopifnot(all(lfc[c("Ccna2", "Ccnb1", "Ccne1"),] < 0))
 ```
 
-The 416B dataset is somewhat unusual as each cluster maps cleanly onto a distinct phase of the cell cycle.
-This separation is not typically seen in more heterogeneous datasets where the cell cycle is only a secondary factor of variation.
-Fortunately, it is not strictly necessary to know the exact phase of each cell or cluster to answer most cycle-related questions.
-For example, we can use standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin, which would imply that a subpopulation contains more cells in the corresponding cell cycle phase.
-The same logic applies to comparisons between treatment conditions, as described in Chapter \@ref(multi-sample-comparisons).
+We can use this approach to make statements about the relative cell cycle activity across clusters.
+In this case, we apply standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin between clusters, which would imply that a subpopulation contains more cells in the corresponding cell cycle phase.
+The same logic applies to comparisons between treatment conditions as described in Chapter \@ref(multi-sample-comparisons).
 
 ```{r}
 library(scran)
@@ -71,10 +69,41 @@ library(scran)
 stopifnot(all(getMarkerEffects(markers[[4]][c("Ccnb1"),]) > 0.5))
 ```
 
-Direct examination of cyclin expression is easily to understand, interpret and experimentally validate.
-However, it is best suited for statements about relative cell cycle activity; for example, we would find it difficult to assign cell cycle phase in Figure \@ref(fig:heat-cyclin) without the presence of clusters spanning all phases to provide benchmarks for "high" and "low" expression of each cyclin.
-We also assume that cyclin expression is not affected by biological processes other than the cell cycle, which may be a strong assumption in some cases, e.g., malignant cells.
-This strategy is strongly dependent on having good sequencing coverage of the cyclins, which is less of an issue for the whole-of-transcriptome methods described below that use information from more genes.
+This approach assumes that cyclin expression is not affected by biological processes other than the cell cycle.
+This is a strong assumption in highly heterogeneous populations where cyclins may perform cell-type-specific roles.
+For example, using the Grun HSC dataset [@grun2016denovo], we see an upregulation of cyclin D2 in sorted HSCs (Figure \@ref(fig:heat-cyclin-grun)) that is consistent with a particular reliance on D-type cyclins in these cells [@steinman2002cell;@kozar2004mouse].
+
+```{r, results="asis"}
+extractCached("grun-hsc.Rmd", "clustering", "sce.grun.hsc")
+```
+
+```{r heat-cyclin-grun, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the Grun HSC dataset. Each column represents a cell that is sorted by the cluster of origin and extraction protocol."}
+# Switching the row names for a nicer plot.
+rownames(sce.grun.hsc) <- uniquifyFeatureNames(rownames(sce.grun.hsc),
+    rowData(sce.grun.hsc)$SYMBOL)
+
+cyclin.genes <- grep("^Ccn[abde][0-9]$", rowData(sce.grun.hsc)$SYMBOL)
+cyclin.genes <- rownames(sce.grun.hsc)[cyclin.genes]
+
+plotHeatmap(sce.grun.hsc, order_columns_by="label",
+    cluster_rows=FALSE, features=sort(cyclin.genes),
+    colour_columns_by="protocol")
+```
+
+```{r, echo=FALSE}
+markers.prot <- findMarkers(sce.grun.hsc, sce.grun.hsc$protocol,
+    subset.row=cyclin.genes, test.type="wilcox", direction="up")
+stopifnot(identical(rownames(markers.prot[["sorted hematopoietic stem cells"]])[1], "Ccnd2"))
+
+markers.neut <- findMarkers(sce.grun.hsc, 
+    subset.row=c("Ccna2", "S100a8"),
+    test.type="wilcox", direction="up")
+stopifnot(all(markers.neut[["2"]]$p.value <= 0.000001))
+```
+
+Admittedly, this is merely a symptom of a more fundamental issue -
+that the cell cycle is not independent of the other processes that are occurring in a cell.
+This will be a recurring theme throughout the chapter, which suggests that cell cycle inferences are best used in comparisons between closely related cell types where there are fewer changes elsewhere that might interfere with interpretation.
 
 ## Using reference profiles
 
