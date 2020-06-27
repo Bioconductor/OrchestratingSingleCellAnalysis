@@ -8,6 +8,7 @@ chapterPreamble(cache=TRUE)
 ## Introduction
 
 This performs an analysis of the mouse haematopoietic stem cell (HSC) dataset generated with CEL-seq [@grun2016denovo].
+Despite its name, this dataset actually contains both sorted HSCs and a population of micro-dissected bone marrow cells.
 
 ## Data loading
 
