@@ -241,21 +241,15 @@ rand <- clusterRand(new.labels, sce.tasic$broad_type, mode="index")
 stopifnot(rand > 0.95)
 ```
 
-Another simple diagnostic metric is the difference $\Delta_{AUC}$ between the maximum and median AUCs for each cell.
-An umambiguous assignment should manifest as a large $\Delta_{AUC}$ for that cell (Figure \@ref(fig:aucell-boxplots)), while small differences indicate that the assignment is uncertain.
-If necessary, we can remove uncertain assignments by applying a minimum threshold on the $\Delta_{AUC}$, e.g., to achieve greater agreement with the clustering results or prior annotation.
-The example below identifies small outlier $\Delta_{AUC}$ values under the assumption that most cells are correctly assigned and that there is only modest heterogeneity within each label.
+As a diagnostic measure, we examine the distribution of AUCs across cells for each label (Figure \@ref(fig:auc-dist)).
+In heterogeneous populations, the distribution for each label should be bimodal with one high-scoring peak containing cells of that cell type and a low-scoring peak containing cells of other types.
+The gap between these two peaks can be used to derive a threshold for whether a label is "active" for a particular cell.
+(In this case, we simply take the single highest-scoring label per cell as the labels should be mutually exclusive.)
+In populations where a particular cell type is expected, lack of clear bimodality for the corresponding label may indicate that its gene set is not sufficiently informative.
 
-```{r aucell-boxplots, fig.asp=1, fig.cap="Distribution of differences between the maximum and median AUCs for each cell, stratified by the assigned label. The red cross indicates the threshold below which outliers are pruned."}
-library(scater)
-library(DelayedMatrixStats)
-deltas <- rowMaxs(results) - rowMedians(results)
-discard <- isOutlier(deltas, type="lower", batch=new.labels)
-table(new.labels[discard])
-
-par(mar=c(10,4,1,1))
-boxplot(split(deltas, new.labels), las=2)
-points(attr(discard, "thresholds")[1,], col="red", pch=4, cex=2)
+```{r auc-dist, results="hide", fig.width=8, fig.height=8, fig.cap="Distribution of AUCs in the Tasic brain dataset for each label in the Zeisel dataset. The blue curve represents the density estimate, the red curve represents a fitted two-component mixture of normals, the pink curve represents a fitted three-component mixture, and the grey curve represents a fitted normal distribution. Vertical lines represent threshold estimates corresponding to each estimate of the distribution."}
+par(mfrow=c(3,3))
+AUCell_exploreThresholds(cell.aucs, plotHist=TRUE, assign=TRUE) 
 ```
 
 Interpretation of the `r Biocpkg("AUCell")` results is most straightforward when the marker sets are mutually exclusive, as shown above for the cell type markers.
@@ -369,6 +363,7 @@ stopifnot(all(as.matrix(milk)>0))
 ```
 
 ```{r violin-milk, fig.asp=0.5, fig.wide=TRUE, fig.cap="Distribution of log-expression values for _Csn2_ and _Csn3_ in each cluster."}
+library(scater)
 plotExpression(sce.mam, features=c("Csn2", "Csn3"), 
     x="label", colour_by="label")
 ```
