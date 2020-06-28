@@ -247,7 +247,7 @@ sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
 sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected")
 ```
 
-Similarly, for functions that support blocking, we can use the cell cycle phase assignments as a blocking factor.
+Similarly, for functions that support blocking, we can use the phase assignments as a blocking factor.
 
 ```{r}
 # Similar use in related functions that support blocking:
@@ -256,45 +256,52 @@ dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC",
 marker.nocycle <- findMarkers(sce.416b, block=assignments$phases)
 ```
 
-That said, we do not consider adjusting for cell cycle to be necessary in routine scRNA-seq analyses.
-In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
-Any attempt at removal would also need to assume that the cell cycle effect is orthogonal to other biological processes.
-Otherwise, regression would remove interesting signal if cell cycle activity varied across clusters or conditions. 
+That said, we do not consider cell cycle adjustment to be necessary for routine scRNA-seq analyses.
+
+- In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
+It will often have no effect on many analyses that focus on broader aspects of heterogeneity.
+More subtle heterogeneity may be masked by cell cycle variation but this should be demonstrated rather than assumed by default.
+- Any attempt at removal assumes that the cell cycle effect is orthogonal to other biological processes.
+Regression will remove interesting signal if cell cycle activity varies across clusters or conditions. 
 This is not an uncommon occurence with, e.g., increased proliferation of T cells upon activation [@richard2018tcell] and changes in cell cycle phase progression across developmental stages [@roccio2013predicting].
+Violations of this assumption may also introduce spurious signal within clusters, interfering with any interpretation of subtle variation.
+- If adjustment is truly necessary, it should be applied separately to the subset of cells in each cluster.
+This avoids the worst violations of the orthogonality assumption due to differences in cell cycle behavior across clusters.
+Similarly, gene-based analyses should use the uncorrected data with blocking where possible (Section \@ref(using-corrected-values)), which provides a sanity check that protects against distortions introduced by the adjustment.
 
-We suggest only performing cell cycle adjustment on an as-needed basis in cases with clear (and unwanted!) cell cycle effects.
-Moreoever, regression should be applied separately to the subset of the dataset for each subpopulation or cluster,
-which reduces the risk of interference from differences in cell cycle behavior across clusters.
-Any characterization of gene expression should use the uncorrected data with blocking (Section \@ref(using-corrected-values)), 
-which is a sanity check that protects against distortions introduced by the adjustment.
+It can also be an informative exercise to repeat the analysis after removing all known cell cycle-related genes.
+This allows us to explore other factors of variation that are correlated with but distinct from the cell cycle, such as cell fate decisions [@soufi2016cycling] that would otherwise have been eliminated by regression.
+We demonstrate below with the @leng2015oscope dataset containing phase-sorted ESCs, where removal of a variety of cell cycle-related genes does not eliminate the separation between G1 and S populations (Figure \@ref(fig:leng-nocycle)).
+The persistence of this separation is driven by differential expression in genes without any direct role in cell cyle progression, possibly indicative of a correlated biological process (or a sorting artifact).
 
-Alternatively, users may consider just excluding cell cycle-related genes from the downstream analysis.
-This removes the immediate contributors to the cell cycle effect without requiring any assumptions about orthogonality.
-The downside of this approach is that it will not remove the cell cycle effect in genes with no annotated role in the cell cycle,
-as demonstrated in Figure \@ref(fig:leng-nocycle) with the @leng2015oscope dataset containing phase-sorted ESCs.
-However, in such cases, there is ambiguity over whether that effect is truly due to the cell cycle or from some other (interesting) biological process that happens to be correlated with the cell cycle - say, cell fate decisions [@soufi2016cycling].
-
-```{r leng-nocycle, fig.cap="PCA plot of the Leng ESC dataset, generated after removal of cell cycle and division related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
+```{r leng-nocycle, fig.cap="PCA plot of the Leng ESC dataset, generated after comprehensive removal of cell cycle-related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
 library(org.Hs.eg.db)
-division.genes <- select(org.Hs.eg.db, keys=c(
-        "GO:0008283", # cell proliferation 
-        "GO:0051301", # cell division
-        "GO:0007049", # cell cycle
-        "GO:0006278"  # DNA replication
-    ),
-    keytype="GOALL", column="SYMBOL")
-length(division.genes)
+go.genes <- select(org.Hs.eg.db, keys="GO:0007049", # cell cycle
+    keytype="GOALL", column="ENSEMBL")[,"ENSEMBL"]
+
+library(reactome.db)
+rct.genes <- select(reactome.db, keys="R-HSA-1640170", # cell cycle
+    keytype="PATHID", column="ENTREZID")[,"ENTREZID"]
+rct.genes <- select(org.Hs.eg.db, keys=as.character(rct.genes), 
+    keytype="ENTREZID", column="ENSEMBL")[,"ENSEMBL"]
+
+combined <- union(rct.genes, go.genes)
+length(combined)
 
 # Performing an analysis without the cell cycle-related genes.
 library(scRNAseq)
-sce.leng <- LengESCData()
-leftovers <- setdiff(rownames(sce.leng), division.genes[,"SYMBOL"])
+sce.leng <- LengESCData(ensembl=TRUE)
+leftovers <- setdiff(rownames(sce.leng), combined)
 sce.nocycle <- sce.leng[leftovers,]
 
 sce.nocycle <- logNormCounts(sce.nocycle, assay.type="normcounts")
 dec.nocycle <- modelGeneVar(sce.nocycle)
 sce.nocycle <- runPCA(sce.nocycle, subset_row=getTopHVGs(dec.nocycle, n=1000))
 plotPCA(sce.nocycle, colour_by="Phase")
+
+diff <- findMarkers(sce.nocycle, sce.nocycle$Phase, direction="up", 
+    row.data=rowData(sce.nocycle)[,"originalName",drop=FALSE]) 
+as.data.frame(diff$S[1:20,])
 ```
 
 ## Session Info {-}
