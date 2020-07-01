@@ -69,11 +69,12 @@ library(scran)
 stopifnot(all(getMarkerEffects(markers[[4]][c("Ccnb1"),]) > 0.5))
 ```
 
-This approach assumes that cyclin expression is not affected by biological processes other than the cell cycle.
+While straightforward to use and easy to interpret,  
+this approach assumes that cyclin expression is unaffected by biological processes other than the cell cycle.
 This is a strong assumption in highly heterogeneous populations where cyclins may perform cell-type-specific roles.
 For example, using the Grun HSC dataset [@grun2016denovo], we see an upregulation of cyclin D2 in sorted HSCs (Figure \@ref(fig:heat-cyclin-grun)) that is consistent with a particular reliance on D-type cyclins in these cells [@steinman2002cell;@kozar2004mouse].
 
-```{r, results="asis"}
+```{r, echo=FALSE, results="asis"}
 extractCached("grun-hsc.Rmd", "clustering", "sce.grun.hsc")
 ```
 
@@ -158,7 +159,7 @@ stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
 stopifnot(tab["G2M",4] > 0.5 * sum(tab[,4]))
 ```
 
-The key assumption here is that the cell cycle is orthogonal to cell type and other aspects of cell behavior.
+The key assumption here is that, again, the cell cycle is orthogonal to cell type and other aspects of cell behavior.
 This justifies the use of a reference involving cell types that are quite different from the cells in the test dataset, provided that the cell cycle transcriptional program is conserved across datasets [@bertoli2013control;@conboy2007cell].
 However, it is not difficult to find routine violations of this assumption - for example, _Lef1_ is detected as one of the top markers to distinguish between G1 from G2/M in the reference but has no detectable expression in the 416B dataset (Figure \@ref(fig:dist-lef1)).
 
