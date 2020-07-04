@@ -1,6 +1,4 @@
 bookdown::gitbook:
-  css: style.css
-  highlight: tango
   config:
     fontsettings:
       theme: white
@@ -10,14 +8,17 @@ bookdown::gitbook:
       after: |
         <li><a href="https://bioconductor.org" target="blank">Published by Bioconductor</a></li>
     download: null
-    bookdown::epub_book: default
-    # edit: https://github.com/Bioconductor/OrchestratingSingleCellAnalysis/edit/master/docs/%s
+    edit: https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-base/edit/master/%s
+    view: https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-base/blob/master/%s
+    history: https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-base/commits/master/%s
     sharing:
       github: no
       facebook: no
       twitter: no
       linkedin: no
-    cover: images/cover.png
+    description: "Strap yourselves in for a wild adventure through the Bioconductor package ecosystem for single-cell RNA-seq data analysis! Code, plots, snarky comments and more! Read now and get all datasets for FREEEEEEEEEEEE!"
+    cover-image: "https://www.bioconductor.org/images/logo_bioconductor.gif"
+    favicon: "https://bioc2019.bioconductor.org/images/favicon.ico"
 
 bookdown::pdf_book:
   includes:
