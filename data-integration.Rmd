@@ -361,17 +361,17 @@ though this must be balanced against the ability of each method to actually perf
 
 ```{r}
 ri3k <- clusterRand(clusters.mnn[rescaled$batch==1],
-    colLabels(pbmc3k), mode="index")
+    colLabels(pbmc3k), mode="index", adjusted=TRUE)
 ri3k
 ri4k <- clusterRand(clusters.mnn[rescaled$batch==2],
-    colLabels(pbmc4k), mode="index")
+    colLabels(pbmc4k), mode="index", adjusted=TRUE)
 ri4k
 ```
 
 ```{r, echo=FALSE}
 # Checking that it works.
-stopifnot(ri3k > 0.9)
-stopifnot(ri4k > 0.9)
+stopifnot(ri3k > 0.7)
+stopifnot(ri4k > 0.7)
 ```
 
 ### Encouraging consistency with marker genes {#integration-with-markers}
