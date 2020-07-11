@@ -147,7 +147,8 @@ hs.exons <- reduce(hs.exons)
 hs.len <- sum(width(hs.exons))
 
 library(scuttle)
-fpkm.seger <- calculateFPKM(sce.seger, hs.len)
+available <- intersect(rownames(sce.seger), names(hs.len))
+fpkm.seger <- calculateFPKM(sce.seger[available,], hs.len[available])
 
 pred.seger <- SingleR(test=fpkm.seger, ref=sce.muraro, 
     labels=sce.muraro$label, de.method="wilcox")
@@ -167,7 +168,7 @@ pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
 # Checking that I'm not just talking shit.
 library(scran)
 rand <- clusterRand(pred.seger$labels, sce.seger$CellType, mode="index")
-stopifnot(rand > 0.95)
+stopifnot(rand > 0.9)
 ```
 
 An interesting question is - given a single-cell reference dataset, is it better to use it directly or convert it to pseudo-bulk values?
@@ -238,7 +239,7 @@ stopifnot(tab["astrocytes_ependymal","Oligodendrocyte Precursor Cell"] > 0)
 
 # Checking that I'm not just talking shit.
 rand <- clusterRand(new.labels, sce.tasic$broad_type, mode="index")
-stopifnot(rand > 0.95)
+stopifnot(rand > 0.9)
 ```
 
 As a diagnostic measure, we examine the distribution of AUCs across cells for each label (Figure \@ref(fig:auc-dist)).
@@ -301,8 +302,8 @@ gridExtra::grid.arrange(fullheat[[4]], subheat[[4]])
 
 ```{r, echo=FALSE}
 # Checking that my trash talk above is correct.
-stopifnot(clusterRand(full.labels, sce.muraro$label, mode="index") < 0.5)
-stopifnot(clusterRand(sub.labels, sce.muraro$label, mode="index") > 0.9)
+stopifnot(clusterRand(full.labels, sce.muraro$label, mode="index") < 0.2)
+stopifnot(clusterRand(sub.labels, sce.muraro$label, mode="index") > 0.8)
 ```
 
 ## Assigning cluster labels from markers

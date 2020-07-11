@@ -247,7 +247,7 @@ table(proposed, clusters)
 
 ```{r, echo=FALSE}
 nonna <- !is.na(proposed)
-stopifnot(clusterRand(proposed[nonna], clusters[nonna], mode="index") > 0.95)
+stopifnot(clusterRand(proposed[nonna], clusters[nonna], mode="index") > 0.9)
 ```
 
 ## Session Info {-}
