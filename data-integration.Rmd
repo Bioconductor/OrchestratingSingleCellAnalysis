@@ -336,35 +336,15 @@ heat4k <- pheatmap(log10(tab+10), cluster_row=FALSE, cluster_col=FALSE,
 gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
 ```
 
-Another evaluation approach is to compute the coassignment probabilities (Section \@ref(cluster-bootstrapping)), i.e., the probability that cells from two within-batch clusters are clustered together in the across-batch clustering. 
-High probabilities off the diagonal in Figure \@ref(fig:coassign-after-mnn) indicate that within-batch clusters are merged in the across-batch analysis.
-We would generally expect low off-diagonal probabilities for most pairs of clusters, though this may not be reasonably possible if the within-batch clusters were poorly separated in the first place.
-
-```{r coassign-after-mnn, fig.asp=1.8, fig.cap="Coassignment probabilities for the within-batch clusters, based on coassignment of cells in the across-batch clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets, where each entry is colored according to the coassignment probability between each pair of within-batch clusters."}
-# For the first batch.
-tab <- coassignProb(colLabels(pbmc3k), clusters.mnn[rescaled$batch==1])
-heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
-    col=rev(viridis::magma(100)), main="PBMC 3K probabilities", silent=TRUE)
-
-# For the second batch.
-tab <- coassignProb(colLabels(pbmc4k), clusters.mnn[rescaled$batch==2])
-heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
-    col=rev(viridis::magma(100)), main="PBMC 4K probabilities", silent=TRUE)
-
-gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
-```
-
-Finally, we can compute the Rand index (Section \@ref(comparing-different-clusterings))
+We use the adjusted Rand index (Section \@ref(comparing-different-clusterings))
 to quantify the agreement between the clusterings before and after batch correction. 
-Larger indices are more desirable as this indicates that within-batch heterogeneity is preserved,
+Recall that larger indices are more desirable as this indicates that within-batch heterogeneity is preserved,
 though this must be balanced against the ability of each method to actually perform batch correction.
 
 ```{r}
-ri3k <- clusterRand(clusters.mnn[rescaled$batch==1],
-    colLabels(pbmc3k), mode="index", adjusted=TRUE)
+ri3k <- clusterRand(clusters.mnn[rescaled$batch==1], colLabels(pbmc3k), mode="index")
 ri3k
-ri4k <- clusterRand(clusters.mnn[rescaled$batch==2],
-    colLabels(pbmc4k), mode="index", adjusted=TRUE)
+ri4k <- clusterRand(clusters.mnn[rescaled$batch==2], colLabels(pbmc4k), mode="index")
 ri4k
 ```
 
@@ -372,6 +352,24 @@ ri4k
 # Checking that it works.
 stopifnot(ri3k > 0.7)
 stopifnot(ri4k > 0.7)
+```
+
+We can also break down the ARI into per-cluster ratios for more detailed diagnostics (Figure \@ref(fig:rand-after-mnn)).
+For example, we could see low ratios off the diagonal if distinct clusters in the within-batch clustering were incorrectly aggregated in the merged clustering.
+Conversely, we might see low ratios on the diagonal if the correction inflated or introduced spurious heterogeneity inside a within-batch cluster.
+
+```{r rand-after-mnn, fig.asp=1.8, fig.cap="ARI-derived ratios for the within-batch clusters after comparison to the merged clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets."}
+# For the first batch.
+tab <- clusterRand(colLabels(pbmc3k), clusters.mnn[rescaled$batch==1])
+heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
+    col=rev(viridis::magma(100)), main="PBMC 3K probabilities", silent=TRUE)
+
+# For the second batch.
+tab <- clusterRand(colLabels(pbmc4k), clusters.mnn[rescaled$batch==2])
+heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
+    col=rev(viridis::magma(100)), main="PBMC 4K probabilities", silent=TRUE)
+
+gridExtra::grid.arrange(heat3k[[4]], heat4k[[4]])
 ```
 
 ### Encouraging consistency with marker genes {#integration-with-markers}

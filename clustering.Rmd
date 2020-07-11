@@ -644,18 +644,19 @@ this accounts for differences in the size and number of clusters within and betw
 A larger ARI indicates that the clusters are preserved, up to a maximum value of 1 for identical clusterings.
 
 ```{r}
-clusterRand(clust, clust.5, mode="index", adjusted=TRUE)
+clusterRand(clust, clust.5, mode="index") 
 ```
 
 The same function can also provide a more granular perspective with `mode="ratio"`,
 where the ARI is broken down into its contributions from each pair of clusters in one of the clusterings.
 This mode is helpful if one of the clusterings - in this case, `clust` - is considered to be a "reference",
 and the aim is to quantify the extent to which the reference clusters retain their integrity in another clustering.
+In the `breakdown` matrix, each entry is a ratio of the adjusted number of concoordant pairs to the adjusted total number of pairs.
 Low values on the diagonal in Figure \@ref(fig:pbmc-rand-breakdown) indicate that cells from the corresponding reference cluster in `clust` are redistributed to multiple other clusters in `clust.5`. 
 Conversely, low off-diagonal values indicate that the corresponding pair of reference clusters are merged together in `clust.5`.
 
-```{r pbmc-rand-breakdown, fig.cap="Breakdown of the Rand index into its contributions from each pair of clusters in the reference Walktrap clustering compared to a higher-resolution alternative clustering for the PBMC dataset. Rows and columns of the heatmap represent clusters in the reference clustering. Each entry represents the proportion of pairs of cells involving the row/column clusters that retain the same status in the alternative clustering."}
-breakdown <- clusterRand(ref=clust, alt=clust.5, mode="ratio", adjusted=TRUE)
+```{r pbmc-rand-breakdown, fig.cap="ARI-based ratio for each pair of clusters in the reference Walktrap clustering compared to a higher-resolution alternative clustering for the PBMC dataset. Rows and columns of the heatmap represent clusters in the reference clustering. Each entry represents the proportion of pairs of cells involving the row/column clusters that retain the same status in the alternative clustering."}
+breakdown <- clusterRand(ref=clust, alt=clust.5, mode="ratio") 
 pheatmap(breakdown, color=viridis::magma(100), 
     cluster_rows=FALSE, cluster_cols=FALSE)
 ```
@@ -677,22 +678,22 @@ myClusterFUN <- function(x) {
 originals <- myClusterFUN(sce.pbmc)
 
 set.seed(0010010100)
-coassign <- bootstrapCluster(sce.pbmc, FUN=myClusterFUN, clusters=originals)
-dim(coassign)
+ratios <- bootstrapCluster(sce.pbmc, FUN=myClusterFUN, clusters=originals)
+dim(ratios)
 ```
 
-The function returns a matrix of coassignment probabilities between every pair of original clusters in `originals` (Figure \@ref(fig:bootstrap-matrix)).
-Ideally, we would hope for high coassignment probabilities on the diagonal (i.e., $X$ cells cluster with themselves) and low probabilities off the diagonal.
-This would indicate that the clustering in the bootstrap replicates are highly consistent with that of the original dataset.
+The function returns a matrix of ARI-derived ratios for every pair of original clusters in `originals` (Figure \@ref(fig:bootstrap-matrix)), averaged across bootstrap iterations.
+High ratios indicate that the clustering in the bootstrap replicates are highly consistent with that of the original dataset.
+More specifically, high ratios on the diagonal indicate that cells in the same original cluster are still together in the bootstrap replicates, while high ratios off the diagonal indicate that cells in the corresponding cluster pair are still separted.
 
-```{r bootstrap-matrix, fig.cap="Heatmap of coassignment probabilities from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the coassignment probability between that pair of clusters."}
-pheatmap(coassign, cluster_row=FALSE, cluster_col=FALSE,
+```{r bootstrap-matrix, fig.cap="Heatmap of ARI-derived ratios from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the ARI ratio between that pair of clusters."}
+pheatmap(ratios, cluster_row=FALSE, cluster_col=FALSE,
     color=rev(viridis::magma(100)))
 ```
 
 Bootstrapping is a general approach for evaluating cluster stability that is compatible with any clustering algorithm.
-The coassignment probability is also more informative than a single per-cluster stability measure as the former considers the relationships between clusters, e.g., unstable separation between $X$ and $Y$ does not penalize the stability of separation between $X$ and another cluster $Z$.
-Of course, one should take these probabilities with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation).
+The ARI-derived ratio between cluster pairs is also more informative than a single stability measure for all/each cluster as the former considers the relationships between clusters, e.g., unstable separation between $X$ and $Y$ does not penalize the stability of separation between $X$ and another cluster $Z$.
+Of course, one should take these metrics with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation).
 In addition, it is possible for a poor separation to be highly stable, so highly stable cluster may not necessarily represent some distinct subpopulation.
 
 ## Subclustering {#subclustering}
