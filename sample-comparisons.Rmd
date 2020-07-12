@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Multi-sample comparisons
@@ -138,18 +138,19 @@ y
 A typical step in bulk RNA-seq data analyses is to remove samples with very low library sizes due to failed library preparation or sequencing.
 The very low counts in these samples can be troublesome in downstream steps such as normalization (Chapter \@ref(normalization)) or for some statistical approximations used in the DE analysis.
 In our situation, this is equivalent to removing label-sample combinations that have very few or lowly-sequenced cells.
-The exact definition of "very low" will vary, but in this case, we remove combinations containing fewer than 20 cells [@crowell2019discovery].
+The exact definition of "very low" will vary, but in this case, we remove combinations containing fewer than 10 cells [@crowell2019discovery].
 Alternatively, we could apply the outlier-based strategy described in Chapter \@ref(quality-control), but this makes the strong assumption that all label-sample combinations have similar numbers of cells that are sequenced to similar depth.
+We defer to the usual diagnostics for bulk DE analyses to decide whether a particular pseudo-bulk profile should be removed.
 
 ```{r}
-discarded <- current$ncells < 20
+discarded <- current$ncells < 10
 y <- y[,!discarded]
 summary(discarded)
 ```
 
 Another typical step in bulk RNA-seq analyses is to remove genes that are lowly expressed.
 This reduces computational work, improves the accuracy of mean-variance trend modelling and decreases the severity of the multiple testing correction.
-Genes are discarded if they are not expressed above a log-CPM threshold in a minimum number of samples (determined from the size of the smallest treatment group in the experimental design). 
+Here, we use the `filterByExpr()` function from `r Biocpkg("edgeR")` to remove genes that are not expressed above a log-CPM threshold in a minimum number of samples (determined from the size of the smallest treatment group in the experimental design). 
 
 ```{r}
 keep <- filterByExpr(y, group=current$tomato)
@@ -159,11 +160,33 @@ summary(keep)
 
 Finally, we correct for composition biases by computing normalization factors with the trimmed mean of M-values method [@robinson2010scaling].
 We do not need the bespoke single-cell methods described in Chapter \@ref(normalization), as the counts for our pseudo-bulk samples are large enough to apply bulk normalization methods.
-(Readers should be aware that `r Biocpkg("edgeR")` normalization factors are closely related but _not the same_ as the size factors described elsewhere in this book.)
+(Note that `r Biocpkg("edgeR")` normalization factors are closely related but _not the same_ as the size factors described elsewhere in this book.
+Size factors are proportional to the _product_ of the normalization factors and the library sizes.)
 
 ```{r}
 y <- calcNormFactors(y)
 y$samples
+```
+
+As part of the usual diagnostics for a bulk RNA-seq DE analysis, we generate a mean-difference (MD) plot for each normalized pseudo-bulk profile (Figure \@ref(fig:md-embryo)).
+This should exhibit a trumpet shape centered at zero indicating that the normalization successfully removed systematic bias between profiles.
+Lack of zero-centering or dominant discrete patterns at low abundances may be symptomatic of deeper problems with normalization, possibly due to insufficient cells/reads/UMIs composing a particular pseudo-bulk profile.
+
+```{r md-embryo, fig.width=10, fig.height=6, fig.cap="Mean-difference plots of the normalized expression values for each pseudo-bulk sample against the average of all other samples."}
+par(mfrow=c(2,3))
+for (i in seq_len(ncol(y))) {
+    plotMD(y, column=i)
+}
+```
+
+We also generate a multi-dimensional scaling (MDS) plot for the pseudo-bulk profiles (Figure \@ref(fig:mds-embryo)).
+This is closely related to PCA and allows us to visualize the structure of the data in a manner similar to that described in Chapter \@ref(dimensionality-reduction) (though we rarely have enough pseudo-bulk profiles to make use of techniques like $t$-SNE).
+Here, the aim is to check whether samples separate by our known factors of interest - in this case, injection status. 
+Strong separation foreshadows a large number of DEGs in the subsequent analysis.
+
+```{r mds-embryo, fig.cap="MDS plot of the pseudo-bulk log-normalized CPMs, where each point represents a sample and is colored by the tomato status."}
+plotMDS(cpm(y, log=TRUE), 
+    col=ifelse(y$samples$tomato, "red", "blue"))
 ```
 
 #### Statistical modelling
@@ -220,47 +243,50 @@ stopifnot(mean(abs(decideTests(res))) < 0.005)
 
 ### Putting it all together
 
+#### Looping across labels
+
 Now that we have laid out the theory underlying the DE analysis,
 we repeat this process for each of the labels to identify injection-induced DE in each cell type.
 This is conveniently done using the `pseudoBulkDGE()` function from `r Biocpkg("scran")`,
 which will loop over all labels and apply the exact analysis described above to each label.
-To prepare for this, we filter out all sample-label combinations with insufficient cells.
-
-```{r}
-summed.filt <- summed[,summed$ncells >= 20]
-```
-
-We construct a common design matrix that will be used in the analysis for each label.
-Here, we will re-use our previous additive design involving the batch (`pool`) and injection effects (`tomato`).
-Recall that this matrix should have one row per unique sample (and named as such), 
-reflecting the fact that we are modelling counts on the sample level instead of the cell level.
-
-```{r}
-# Pulling out a sample-level 'targets' data.frame:
-targets <- colData(merged)[!duplicated(merged$sample),]
-
-# Constructing the design matrix:
-design <-  model.matrix(~factor(pool) + factor(tomato), data=targets)
-rownames(design) <- targets$sample
-```
-
-We then apply the `pseudoBulkDGE()` function to obtain a list of injection-induced DE genes for each label.
-This function puts some additional effort into automatically dealing with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
+It takes additional care to deal with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
 or are not represented in a sufficient number of replicate samples to enable modelling of biological variability.
 
 ```{r}
+# Removing all pseudo-bulk samples with 'insufficient' cells.
+summed.filt <- summed[,summed$ncells >= 10]
+
 library(scran)
 de.results <- pseudoBulkDGE(summed.filt, 
-    sample=summed.filt$sample,
     label=summed.filt$celltype.mapped,
-    design=design,
-    coef=ncol(design),
-
-    # 'condition' sets the group size for filterByExpr(),
-    # to perfectly mimic our previous manual analysis.
-    condition=targets$tomato 
+    design=~factor(pool) + tomato,
+    coef="tomatoTRUE",
+    condition=summed.filt$tomato 
 )
 ```
+
+The function returns a list of `DataFrame`s containing the DE results for each label.
+Each `DataFrame` also contains the intermediate `r Biocpkg("edgeR")` objects used in the DE analyses,
+which can be used to generate any of previously described diagnostic plots (Figure \@ref(fig:allantois-dispersion)).
+It is often wise to generate these plots to ensure that any interesting results are not compromised by technical issues.
+
+```{r allantois-dispersion, fig.cap="Biological coefficient of variation (BCV) for each gene as a function of the average abundance for the allantois pseudo-bulk analysis. Trended and common BCV estimates are shown in blue and red, respectively."}
+cur.results <- de.results[["Allantois"]]
+cur.results[order(cur.results$PValue),]
+
+y.allantois <- metadata(cur.results)$y
+plotBCV(y.allantois)
+```
+
+We list the labels that were skipped due to the absence of replicates or contrasts.
+If it is necessary to extract statistics in the absence of replicates, several strategies can be applied such as reducing the complexity of the model or using a predefined value for the NB dispersion.
+We refer readers to the `r Biocpkg("edgeR")` user's guide for more details.
+
+```{r}
+metadata(de.results)$failed
+```
+
+#### Cross-label meta-analyses
 
 We examine the numbers of DEGs at a FDR of 5% for each label using the `decideTestsPerLabel()` function.
 In general, there seems to be very little differential expression that is introduced by injection.
@@ -285,8 +311,9 @@ stopifnot(identical(as.integer(stuff["0"]), as.integer(ref["NotSig",])))
 For each gene, we compute the percentage of cell types in which that gene is upregulated or downregulated upon injection.
 (Here, we consider a gene to be non-DE if it is not retained after filtering.)
 We see that _Xist_ is consistently downregulated in the injected cells; 
-this is consistent with the fact that the injected cells are male while the background cells are derived from pools of male and female embryos (due to experimental difficulties with resolving sex at this stage).
+this is consistent with the fact that the injected cells are male while the background cells are derived from pools of male and female embryos, due to experimental difficulties with resolving sex at this stage.
 The consistent downregulation of _Phlda2_ and _Cdkn1c_ in the injected cells is also interesting given that both are imprinted genes. 
+However, some of these commonalities may be driven by shared contamination from ambient RNA - we discuss this further in Section \@ref(ambient-problems).
 
 ```{r}
 # Upregulated across most cell types.
@@ -335,14 +362,6 @@ plotExpression(logNormCounts(summed.filt),
     x="tomato", colour_by="tomato", 
     other_fields="celltype.mapped") + 
     facet_wrap(~celltype.mapped)
-```
-
-We also list the labels that were skipped due to the absence of replicates or contrasts.
-If it is necessary to extract statistics in the absence of replicates, several strategies can be applied such as reducing the complexity of the model or using a predefined value for the NB dispersion.
-We refer readers to the `r Biocpkg("edgeR")` user's guide for more details.
-
-```{r}
-metadata(de.results)$failed
 ```
 
 ## Differential abundance between conditions {#differential-abundance}
