@@ -34,9 +34,9 @@ We simplify the names of some of the relevant column metadata fields for ease of
 Some editing of the cell type labels is necessary for consistency with other data sets.
 
 ```{r sample-annotation}
-emtab.meta <- colData(sce.seger)[,c("cell type", 
+emtab.meta <- colData(sce.seger)[,c("cell type", "disease",
     "individual", "single cell well quality")]
-colnames(emtab.meta) <- c("CellType", "Donor", "Quality")
+colnames(emtab.meta) <- c("CellType", "Disease", "Donor", "Quality")
 colData(sce.seger) <- emtab.meta
 
 sce.seger$CellType <- gsub(" cell", "", sce.seger$CellType)
@@ -91,7 +91,7 @@ colSums(as.matrix(qc))
 
 ## Normalization
 
-We don't normalize the spike-ins as there are some cells with no spike-in counts.
+We don't normalize the spike-ins at this point as there are some cells with no spike-in counts.
 
 ```{r normalization}
 library(scran)
@@ -115,8 +115,7 @@ We do not use cells with no spike-ins for variance modelling.
 Donor AZ also has very low spike-in counts and is subsequently ignored.
 
 ```{r variance-modelling}
-for.hvg <- sce.seger[,librarySizeFactors(altExp(sce.seger)) > 0
-    & sce.seger$Donor!="AZ"]
+for.hvg <- sce.seger[,librarySizeFactors(altExp(sce.seger)) > 0 & sce.seger$Donor!="AZ"]
 dec.seger <- modelGeneVarWithSpikes(for.hvg, "ERCC", block=for.hvg$Donor)
 chosen.hvgs <- getTopHVGs(dec.seger, n=2000)
 ```
@@ -136,6 +135,8 @@ for (i in colnames(blocked.stats)) {
 
 ## Dimensionality reduction
 
+We pick the first 25 PCs for downstream analyses, as it's a nice square number. 
+
 ```{r dimensionality-reduction}
 library(BiocSingular)
 set.seed(101011001)
@@ -150,8 +151,11 @@ snn.gr <- buildSNNGraph(sce.seger, use.dimred="PCA")
 colLabels(sce.seger) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 ```
 
-We see a strong donor effect, which suggests that should have called `fastMNN()` at some point.
-(But hey, we already did that for the Muraro and Grun analyses, so where's the fun in doing that again?)
+We see a strong donor effect in Figures \@ref(fig:unref-seger-heat-1) and \@ref(fig:unref-grun-tsne).
+This might be due to differences in cell type composition between donors,
+but the more likely explanation is that of a technical difference in plate processing or uninteresting genotypic differences.
+
+suggests that should have called `fastMNN()` at some point.
 
 ```{r unref-seger-heat-1, fig.cap="Heatmap of the frequency of cells from each donor in each cluster."}
 tab <- table(Cluster=colLabels(sce.seger), Donor=sce.seger$Donor)
@@ -159,17 +163,108 @@ library(pheatmap)
 pheatmap(log10(tab+10), color=viridis::viridis(100))
 ```
 
-```{r unref-seger-heat-2, fig.cap="Heatmap of the frequency of cells from each cell type label in each cluster."}
-tab <- table(Cluster=colLabels(sce.seger), Donor=sce.seger$CellType)
-pheatmap(log10(tab+10), color=viridis::viridis(100))
-```
-
-```{r unref-grun-tsne, fig.cap="Obligatory $t$-SNE plots of the Segerstolpe pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
+```{r unref-seger-tsne, fig.cap="Obligatory $t$-SNE plots of the Segerstolpe pancreas dataset. Each point represents a cell that is colored by cluster (left) or batch (right)."}
 gridExtra::grid.arrange(
     plotTSNE(sce.seger, colour_by="label"),
     plotTSNE(sce.seger, colour_by="Donor"),
     ncol=2
 )
+```
+
+```{r, echo=FALSE}
+# Sanity checking the donor effect.
+stopifnot(mean(tab==0) > 0.4)
+```
+
+## Data integration
+
+We repeat the clustering after running `fastMNN()` on the donors.
+This yields a more coherent set of clusters in Figure \@ref(fig:unref-seger-tsne-correct)
+where each cluster contains contributions from all donors.
+
+```{r data-integration}
+library(batchelor)
+
+set.seed(10001010)
+corrected <- fastMNN(sce.seger, batch=sce.seger$Donor, subset.row=chosen.hvgs)
+
+set.seed(10000001)
+corrected <- runTSNE(corrected, dimred="corrected")
+
+colLabels(corrected) <- clusterSNNGraph(corrected, use.dimred="corrected")
+
+tab <- table(Cluster=colLabels(corrected), Donor=corrected$batch)
+tab
+```
+
+```{r unref-seger-tsne-correct, fig.cap="Yet another $t$-SNE plot of the Segerstolpe dataset, this time after batch correction across donors. Each point represents a cell and is colored by the assigned cluster identity."}
+gridExtra::grid.arrange(
+    plotTSNE(corrected, colour_by="label"),
+    plotTSNE(corrected, colour_by="batch"),
+    ncol=2
+)
+```
+
+```{r, echo=FALSE}
+# Sanity checking.
+stopifnot(mean(tab==0) <= 0.1)
+```
+
+## Comparing disease to normal
+
+This particular dataset contains both healthy donors and those with type II diabetes.
+It is thus of some interest to identify genes that are differentially expressed upon disease in each cell type.
+To keep things simple, we will use the author-provided annotation rather than figuring out the cell type for each of our clusters above.
+
+```{r cell-type-aggregation}
+summed <- aggregateAcrossCells(sce.seger, 
+    ids=colData(sce.seger)[,c("Donor", "CellType")])
+summed
+```
+
+Here, we will use the `voom()` pipeline from the `r Biocpkg("limma")` package instead of the QL approach with `r Biocpkg("edgeR")`.
+This is because `voom()` can use sample weights to better account for the variation in the number of cells 
+and hence precision of each pseudo-bulk profile.
+We see that insulin (ENSG00000254647) is downregulated in beta cells in the disease state, which is sensible enough.
+
+```{r multi-sample-comparison}
+summed.beta <- summed[,summed$CellType=="Beta"]
+
+library(edgeR)
+y.beta <- DGEList(counts(summed.beta), samples=colData(summed.beta))
+y.beta <- y.beta[filterByExpr(y.beta, group=y.beta$samples$Disease),]
+y.beta <- calcNormFactors(y.beta)
+
+design <- model.matrix(~Disease, y.beta$samples)
+v.beta <- voomWithQualityWeights(y.beta, design)
+fit.beta <- lmFit(v.beta)
+fit.beta <- eBayes(fit.beta, robust=TRUE)
+
+res.beta <- topTable(fit.beta, sort.by="p", n=Inf,
+    coef="Diseasetype II diabetes mellitus")
+head(res.beta)
+```
+
+```{r, echo=FALSE}
+# Sanity checking.
+stopifnot("ENSG00000254647" %in% rownames(res.beta)[1])
+```
+
+We also create some diagnostic plots.
+The MA plots exhibit the expected shape (Figure \@ref(fig:unref-ma-plots))
+while the differences in the sample weights in Figure \@ref(fig:unref-voom-plots) justify the use of `voom()` in this context.
+
+```{r unref-ma-plots, fig.height=12, fig.width=6, fig.cap="MA plots for the beta cell pseudo-bulk profiles. Each MA plot is generated by comparing the corresponding pseudo-bulk profile against the average of all other profiles"}
+par(mfrow=c(5, 2))
+for (i in colnames(y.beta)) {
+    plotMD(y.beta, column=i)
+}
+```
+
+```{r unref-voom-plots, results='hide', fig.width=10, fig.height=5, fig.cap="Diagnostic plots for `voom` after estimating observation and quality weights from the beta cell pseudo-bulk profiles. The left plot shows the mean-variance trend used to estimate the observation weights, while the right plot shows the per-sample quality weights."}
+# Easiest just to re-run it with plot=TRUE than
+# to make the plot from 'v.beta'.
+voomWithQualityWeights(y.beta, design, plot=TRUE)
 ```
 
 ## Session Info {-}
