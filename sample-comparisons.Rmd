@@ -249,8 +249,8 @@ Now that we have laid out the theory underlying the DE analysis,
 we repeat this process for each of the labels to identify injection-induced DE in each cell type.
 This is conveniently done using the `pseudoBulkDGE()` function from `r Biocpkg("scran")`,
 which will loop over all labels and apply the exact analysis described above to each label.
-It takes additional care to deal with labels that are not represented in both injected and background cells, for which a DE analysis between conditions is meaningless;
-or are not represented in a sufficient number of replicate samples to enable modelling of biological variability.
+(Users can also set `method="voom"` to perform an equivalent analysis using the `voom()` pipeline from `r Biocpkg("limma")` -
+see Chapter \@ref(segerstolpe-comparison) for the full set of function calls.)
 
 ```{r}
 # Removing all pseudo-bulk samples with 'insufficient' cells.

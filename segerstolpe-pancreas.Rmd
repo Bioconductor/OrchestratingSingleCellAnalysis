@@ -154,8 +154,7 @@ colLabels(sce.seger) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
 We see a strong donor effect in Figures \@ref(fig:unref-seger-heat-1) and \@ref(fig:unref-grun-tsne).
 This might be due to differences in cell type composition between donors,
 but the more likely explanation is that of a technical difference in plate processing or uninteresting genotypic differences.
-
-suggests that should have called `fastMNN()` at some point.
+The implication is that we should have called `fastMNN()` at some point.
 
 ```{r unref-seger-heat-1, fig.cap="Heatmap of the frequency of cells from each donor in each cluster."}
 tab <- table(Cluster=colLabels(sce.seger), Donor=sce.seger$Donor)
@@ -210,11 +209,11 @@ gridExtra::grid.arrange(
 stopifnot(mean(tab==0) <= 0.1)
 ```
 
-## Comparing disease to normal
+## Multi-sample comparisons {#segerstolpe-comparison}
 
 This particular dataset contains both healthy donors and those with type II diabetes.
 It is thus of some interest to identify genes that are differentially expressed upon disease in each cell type.
-To keep things simple, we will use the author-provided annotation rather than figuring out the cell type for each of our clusters above.
+To keep things simple, we use the author-provided annotation rather than determining the cell type for each of our clusters.
 
 ```{r cell-type-aggregation}
 summed <- aggregateAcrossCells(sce.seger, 
@@ -222,16 +221,16 @@ summed <- aggregateAcrossCells(sce.seger,
 summed
 ```
 
-Here, we will use the `voom()` pipeline from the `r Biocpkg("limma")` package instead of the QL approach with `r Biocpkg("edgeR")`.
-This is because `voom()` can use sample weights to better account for the variation in the number of cells 
-and hence precision of each pseudo-bulk profile.
-We see that insulin (ENSG00000254647) is downregulated in beta cells in the disease state, which is sensible enough.
+Here, we will use the `voom` pipeline from the `r Biocpkg("limma")` package instead of the QL approach with `r Biocpkg("edgeR")`.
+This allows us to use sample weights to better account for the variation in the precision of each pseudo-bulk profile.
+We see that insulin is downregulated in beta cells in the disease state, which is sensible enough.
 
 ```{r multi-sample-comparison}
 summed.beta <- summed[,summed$CellType=="Beta"]
 
 library(edgeR)
-y.beta <- DGEList(counts(summed.beta), samples=colData(summed.beta))
+y.beta <- DGEList(counts(summed.beta), samples=colData(summed.beta),
+    genes=rowData(summed.beta)[,"symbol",drop=FALSE])
 y.beta <- y.beta[filterByExpr(y.beta, group=y.beta$samples$Disease),]
 y.beta <- calcNormFactors(y.beta)
 
@@ -250,7 +249,7 @@ head(res.beta)
 stopifnot("ENSG00000254647" %in% rownames(res.beta)[1])
 ```
 
-We also create some diagnostic plots.
+We also create some diagnostic plots to check for potential problems in the analysis.
 The MA plots exhibit the expected shape (Figure \@ref(fig:unref-ma-plots))
 while the differences in the sample weights in Figure \@ref(fig:unref-voom-plots) justify the use of `voom()` in this context.
 
@@ -262,9 +261,19 @@ for (i in colnames(y.beta)) {
 ```
 
 ```{r unref-voom-plots, results='hide', fig.width=10, fig.height=5, fig.cap="Diagnostic plots for `voom` after estimating observation and quality weights from the beta cell pseudo-bulk profiles. The left plot shows the mean-variance trend used to estimate the observation weights, while the right plot shows the per-sample quality weights."}
-# Easiest just to re-run it with plot=TRUE than
-# to make the plot from 'v.beta'.
+# Easier to just re-run it with plot=TRUE than
+# to try to make the plot from 'v.beta'.
 voomWithQualityWeights(y.beta, design, plot=TRUE)
+```
+
+```{r, echo=FALSE}
+# Sanity check that we're doing the same thing as pseudoBulkDGE.
+ref <- pseudoBulkDGE(summed.beta, label=summed.beta$CellType, method="voom", 
+    design=~Disease, coef="Diseasetype II diabetes mellitus")
+stopifnot(identical(
+    ref[["Beta"]]["ENSG00000254647",]$P.Value,
+    res.beta["ENSG00000254647",]$P.Value
+))
 ```
 
 ## Session Info {-}
