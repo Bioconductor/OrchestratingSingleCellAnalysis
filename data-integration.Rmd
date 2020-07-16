@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Integrating Datasets
@@ -277,6 +277,48 @@ tab.mnn
 
 ```{r, echo=FALSE}
 stopifnot(all(tab.mnn>0)) # Check the text above was correct.
+```
+
+It is possible to quantify the degree of mixing across batches by testing each cluster for imbalances in the contribution from each batch [@buttner2019test].
+This is done by applying Pearson's chi-squared test to each row of `tab.mnn` where the expected proportions under the null hypothesis proportional to the total number of cells per batch.
+Low $p$-values indicate that there are significant imbalances
+In practice, this strategy is most suited to technical replicates with identical population composition; it is usually too stringent for batches with more biological variation, where proportions can genuinely vary even in the absence of any batch effect. 
+
+```{r}
+chi.prop <- colSums(tab.mnn)/sum(tab.mnn)
+chi.results <- apply(tab.mnn, 1, FUN=chisq.test, p=chi.prop)
+p.values <- vapply(chi.results, "[[", i="p.value", 0)
+p.values
+```
+
+```{r, echo=FALSE}
+stopifnot(median(p.values) <= 0.01)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+# Proving that this is also the case with the 
+# original kBET implementation, as of 4c9dafa.
+library(kBET)
+a <- matrix(rnorm(10000), ncol=10)
+b <- matrix(rnorm(10000, 10), ncol=10)
+ID <- rep(c(1,2,1,2), c(900, 100, 100, 900))
+stats <- kBET(rbind(a, b), ID)
+stats$summary[,3] # all-zero p-values.
+```
+
+We favor a more qualitative approach whereby we compute the variation in the log-abundances to rank the clusters with the greatest variability in their proportional abundances across clusters.
+We can then focus on batch-specific clusters that may be indicative of incomplete batch correction.
+Obviously, though, such clusters are only potentially problematic as the same outcome can be caused by batch-specific populations;
+some prior knowledge about the biological context is necessary to distinguish between these two possibilities.
+
+```{r}
+# Using a large pseudo.count to avoid unnecessarily
+# large variances when the counts are low.
+norm <- normalizeCounts(tab.mnn, pseudo.count=10)
+
+# Ranking clusters by the largest variances.
+rv <- rowVars(norm)
+DataFrame(Batch=unclass(tab.mnn), var=rv)[order(rv, decreasing=TRUE),]
 ```
 
 We can also visualize the corrected coordinates using a $t$-SNE plot (Figure \@ref(fig:tsne-pbmc-corrected)).
