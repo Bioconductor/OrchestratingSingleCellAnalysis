@@ -502,7 +502,7 @@ stopifnot(all(!grepl("^Hb[ab]-", rownames(tab))))
 A softer approach is to simply report the average contaminating percentage for each gene in the table of DE statistics.
 This allows readers to make up their own minds as to whether a particular DEG's effect is driven by ambient contamination, in much the same way as described for low-quality cells in Section \@ref(marking-qc).
 Indeed, it is worth remembering that `maximumAmbience()` will report the maximum possible contamination rather than attempting to estimate the actual level of contamination, and filtering on the former may be overly conservative.
-This is especially true for cell populations that are contributing to the differences in the ambient pool; in this most extreme case, if the ambient profile is identitical to a cell type's expression profile, the maximum contamination would be 100%.
+This is especially true for cell populations that are contributing to the differences in the ambient pool; in the most extreme case, the reported maximum contamination would be 100% for cell types with an expression profile that is identical to the ambient pool.
 
 ```{r}
 tab.neural3 <- tab.neural
@@ -514,31 +514,30 @@ head(tab.neural3)
 
 Another strategy to estimating the ambient proportions involves the use of prior knowledge of mutually exclusive gene expression profiles [@young2018soupx].
 In this case, we assume (reasonably) that hemoglobins should not be expressed in neural crest cells and use this to estimate the contamination in each sample.
-Specifically, we scale `ambient.hb` so that the hemoglobin coverage is the same as the corresponding sample of `neural.hb`; 
-this represents an direct estimate of the contaminating counts in each pseudo-bulk sample, unlike the upper bound provided by `maximumAmbience()`.
-It is then straightforward to use this to filter out genes in the same manner as described above.
+This is achieved with the `controlAmbience()` function, which scales the ambient profile so that the hemoglobin coverage is the same as the corresponding sample of `summed.neural`.
+From these profiles, we compute proportions of ambient contamination that are used to mark or filter out affected genes in the same manner as described above.
 
 ```{r}
-is.hbb <- grep("^Hb[ab]-", rownames(summed.neural))
-neural.hb <- colSums(counts(summed.neural)[is.hbb,])
-ambient.hb <- colSums(ambient[is.hbb,])
-scaled.ambient <- t(t(ambient) * neural.hb/ambient.hb)
-head(scaled.ambient)
-
-alt.prop <- scaled.ambient/counts(summed.neural)
-alt.prop[!is.finite(alt.prop)] <- NA
+alt.prop <- controlAmbience(counts(summed.neural), ambient,
+    features=grep("^Hb[ab]-", rownames(summed.neural)))
+head(alt.prop)
 alt.non.ambient <- rowMeans(alt.prop, na.rm=TRUE) <= 0.1
 summary(alt.non.ambient)
 ```
 
-Any highly expressed cell type-specific gene is a good candidate for this procedure,
+Any highly expressed cell type-specific gene is a candidate for this procedure,
 most typically in cell types that are highly specialized towards manufacturing a protein product.
-Aside from hemoglobin, we have immunoglobulins in populations containing B cells,
+Aside from hemoglobin, we could use immunoglobulins in populations containing B cells,
 or insulin and glucagon in pancreas datasets (Figure \@ref(fig:viol-gcg-lawlor)).
 The experimental setting may also provide some genes that must only be present in the ambient solution;
 for example, the mitochondrial transcripts can be used to estimate ambient contamination in single-nucleus RNA-seq,
 while _Xist_ can be used for datasets involving mixtures of male and female cells
-(assuming that the rate of contamination does not differ by sex).
+(where the contaminating percentages are estimated from the profiles of male cells only).
+
+If appropriate control features are available, this approach allows us to obtain a more accurate estimate of the contamination in each pseudo-bulk sample compared to the upper bound provided by `maximumAmbience()`.
+This avoids the removal of genuine DEGs due to overestimation fo the ambient contamination from the latter. 
+However, the performance of this approach is fully dependent on the suitability of the control features - if a "control" feature is actually genuinely expressed in a cell type, the ambient contribution will be overestimated.
+A simple mitigating strategy is to simply take the lower of the proportions from `controlAmbience()` and `maximumAmbience()`, with the idea being that the latter will avoid egregious overestimation when the control set is misspecified.
 
 ### Subtracting ambient counts
 
