@@ -334,6 +334,39 @@ stopifnot("Phlda2" %in% names(down.degs))
 stopifnot("Cdkn1c" %in% names(down.degs))
 ```
 
+<!--
+Here we have a look at the effects of contamination, for curiosity's sake.
+
+```{r, echo=FALSE, eval=FALSE}
+library(DropletUtils)
+summed.allantois <- summed[,summed$celltype.mapped=="Allantois"]
+ambient <- vector("list", ncol(summed.allantois))
+
+# Looping over all raw (unfiltered) count matrices and
+# computing the ambient profile based on its low-count barcodes.
+# Turning off rounding, as we know this is count data.
+for (s in summed.allantois$sample) {
+    raw.tal1 <- WTChimeraData(type="raw", samples=s)[[1]]
+    ambient[[s]] <- estimateAmbience(counts(raw.tal1),
+        good.turing=FALSE, round=FALSE)
+}
+
+# Cleaning up the output for pretty printing.
+ambient <- do.call(cbind, ambient)
+colnames(ambient) <- seq_len(ncol(ambient))
+rownames(ambient) <- uniquifyFeatureNames(
+    rowData(raw.tal1)$ENSEMBL,
+    rowData(raw.tal1)$SYMBOL
+)
+
+max.ambient <- maximumAmbience(counts(summed.allantois),
+    ambient[rownames(summed.allantois),], mode="proportion")
+
+cur.results$Contamination <- rowMeans(max.ambient, na.rm=TRUE)[rownames(cur.results)]
+cur.results[order(cur.results$PValue),]
+```
+-->
+
 We further identify label-specific DE genes that are significant in our label of interest yet not DE in any other label.
 As hypothesis tests are not typically geared towards identifying genes that are not DE,
 we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
