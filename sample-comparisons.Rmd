@@ -400,8 +400,10 @@ summed.tal1 <- aggregateAcrossCells(sce.tal1,
     ids=DataFrame(sample=sce.tal1$sample,
         label=sce.tal1$celltype.mapped)
 )
+summed.tal1$block <- summed.tal1$sample %% 2 == 0 # Add blocking factor.
+
+# Subset to our neural crest cells.
 summed.neural <- summed.tal1[,summed.tal1$label=="Neural crest"]
-summed.neural$block <- summed.neural$sample %% 2 == 0 # add blocking factor.
 summed.neural
 
 # Standard edgeR analysis, as described above.
@@ -518,11 +520,21 @@ This is achieved with the `controlAmbience()` function, which scales the ambient
 From these profiles, we compute proportions of ambient contamination that are used to mark or filter out affected genes in the same manner as described above.
 
 ```{r}
+is.hbb <- grep("^Hb[ab]-", rownames(summed.neural))
 alt.prop <- controlAmbience(counts(summed.neural), ambient,
-    features=grep("^Hb[ab]-", rownames(summed.neural)))
+    features=is.hbb,  mode="proportion")
 head(alt.prop)
 alt.non.ambient <- rowMeans(alt.prop, na.rm=TRUE) <= 0.1
 summary(alt.non.ambient)
+okay.genes <- names(alt.non.ambient)[which(alt.non.ambient)]
+tab.neural4 <- tab.neural[rownames(tab.neural) %in% okay.genes,]
+head(tab.neural4)
+```
+
+```{r, echo=FALSE}
+# Checking that the hemoglobins are no longer there.
+tab <- head(tab.neural4, 10)
+stopifnot(all(!grepl("^Hb[ab]-", rownames(tab))))
 ```
 
 Any highly expressed cell type-specific gene is a candidate for this procedure,
@@ -606,10 +618,19 @@ Minor relative fluctuations at very large counts become large fold-changes after
 For example, several hemoglobin genes retain strong DE even after subtraction of the scaled ambient profile.
 
 ```{r}
+scaled.ambient <- controlAmbience(counts(summed.neural), ambient,
+    features=is.hbb,  mode="profile")
 subtracted <- counts(summed.neural) - scaled.ambient
 subtracted <- round(subtracted)
 subtracted[subtracted < 0] <- 0
 subtracted[is.hbb,]
+```
+
+```{r, echo=FALSE}
+# Checking that the ratios are still crazy.
+leftovers <- subtracted[is.hbb,]
+leftovers <- t(t(leftovers)/colSums(subtracted))
+stopifnot(sum(leftovers[,3:4])/sum(leftovers[,1:2]) >= 100)
 ```
 
 Another tempting approach is to use interaction models to implicitly subtract the ambient effect during GLM fitting.
@@ -638,9 +659,9 @@ stopifnot(any(grepl("^Hb[ab]-", rownames(tab))))
 stopifnot(abs(tab["Hbb-y","logFC"]) < abs(tab.neural["Hbb-y", "logFC"]))
 ```
 
-One possible explanation is that erythrocyte fragments are present in the cell-containing libraries but are not used to estimate the ambient profile, presumably because the UMI counts are too high for fragment-containing libraries to be treated as empty.
+(One possible explanation is that erythrocyte fragments are present in the cell-containing libraries but are not used to estimate the ambient profile, presumably because the UMI counts are too high for fragment-containing libraries to be treated as empty.
 Technically speaking, this is not incorrect as, after all, those libraries are not actually empty (Section \@ref(qc-droplets)).
-In effect, every cell in the WT sample is a fractional multiplet with partial erythrocyte identity from the included fragments, which results in stronger log-fold changes between genotypes for hemoglobin compared to those for the ambient solution.
+In effect, every cell in the WT sample is a fractional multiplet with partial erythrocyte identity from the included fragments, which results in stronger log-fold changes between genotypes for hemoglobin compared to those for the ambient solution.)
 
 That aside, there are other issues with implicit subtraction in the fitted GLM that warrant caution with its use.
 This strategy precludes detection of DEGs that are common to all cell types as there is no longer a dilution effect being applied to the log-fold change in the ambient solution.
