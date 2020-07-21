@@ -1,7 +1,11 @@
 FROM bioconductor/bioconductor_docker:devel
+
 COPY . /
-RUN sudo apt-get update
-RUN sudo apt-get install -y libglpk-dev
-RUN R --quiet -e "BiocManager::install(strsplit(read.dcf('DESCRIPTION')[,'Imports'], '\n')[[1]])"
-RUN R --quiet -e "BiocManager::install('bookdown')"
-RUN R --quiet -e "BiocManager::install('LTLA/rebook')"
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y libglpk-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN R --quiet -e "BiocManager::install(strsplit(read.dcf('DESCRIPTION')[,'Imports'], '\n')[[1]])" \
+  && R --quiet -e "BiocManager::install('bookdown')" \
+  && R --quiet -e "BiocManager::install('LTLA/rebook')"
