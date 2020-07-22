@@ -1,5 +1,10 @@
 # (PART) Appendix {-}
 
+```{r setup, echo=FALSE, results="asis"}
+library(rebook)
+chapterPreamble()
+```
+
 # Contributors
 
 ### *Aaron Lun, PhD* {-}
