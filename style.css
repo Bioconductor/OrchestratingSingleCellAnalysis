@@ -24,18 +24,17 @@ pre code {
 }
 
 .book .book-summary {
-  background-color: #0092ac;
+  background-color: #87ceeb;
 }
 
 .book .book-summary ul.summary li a,
 .book .book-summary ul.summary li span {
-  color: white;
-  font-weight: bold;
+  color: black;
 }
 
 .book .book-summary ul.summary li a:hover,
 .book .book-summary ul.summary li.active>a {
-  color: #c4d931;
+  color: grey;
 }
 
 /*.book .book-summary ul.summary li.part>span*/
@@ -45,7 +44,7 @@ pre code {
 }
 
 .book .book-body .page-wrapper .page-inner section.normal h1 {
-  color: #87b13f;
+  color: black;
 }
 
 .book .book-body .page-wrapper .page-inner section.normal h2 {

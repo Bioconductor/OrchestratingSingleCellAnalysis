@@ -7,7 +7,8 @@ bibliography: [ref.bib, packages.bib]
 biblio-style: apalike
 link-citations: yes
 favicon: "favicon.ico"
-description: "Online companion to 'Orchestrating Single-Cell Analysis with Bioconductor' manuscript by the Bioconductor team."
+description: "Or: how I learned to stop worrying and love the t-SNEs."
+cover-image: "https://www.bioconductor.org/images/logo_bioconductor.gif"
 ---
 
 # Welcome {-}
