@@ -24,23 +24,12 @@ pre code {
 }
 
 .book .book-summary {
-  background-color: #e0e0e0;
-}
-
-.book .book-summary ul.summary li a,
-.book .book-summary ul.summary li span {
-  color: black;
-}
-
-.book .book-summary ul.summary li a:hover,
-.book .book-summary ul.summary li.active>a {
-  color: grey;
+  background-color: #f0f0f0;
 }
 
 /*.book .book-summary ul.summary li.part>span*/
 .book .book-summary ul.summary li span {
   color: black;
-  opacity: .5;
 }
 
 .book .book-body .page-wrapper .page-inner section.normal h1 {
