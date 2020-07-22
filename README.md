@@ -34,12 +34,32 @@ Install the **rebook** package from https://github.com/LTLA/rebook.
 Then, run the usual **bookdown** invocation, for example:
 
 ```r
-bookdown::render_book("index.Rmd", "bookdown::gitbook",
-    quiet = FALSE, output_dir = "docs", new_session = TRUE)
+bookdown::render_book("index.Rmd", "bookdown::gitbook")
 ```
+
+Advanced users can call `make` to perform a "pre-compilation" prior to the above command.
+This generates cached content to be used by the serial **bookdown** invocation,
+and is most useful when the `make` itself is parallelized.
+
+## Developer instructions
 
 To contribute reports, follow standard procedure: fork and PR.
 
-- All `analysis` chapters must start from a `SingleCellExperiment` object and should be independent of other `analysis` chapters.
+- All `topic` chapters must start from a `SingleCellExperiment` object and should be independent of other `topic` chapters.
 - All `workflow` chapters should use a `SingleCellExperiment` object throughout the various chunks.
 This allows chapters to pick up the SCE at any point.
+
+Any changes should be accompanied by house-keeping updates:
+
+- Updating the listed dependencies in the `DESCRIPTION`.
+Some `extra` help is required for those dependencies that are implicitly required via `Suggests`.
+
+  ```r
+  rebook::updateDependencies(extra=c("Rtsne", "RMTstat", "statmod", "GO.db"))
+  ```
+
+- Updating the `Makefile` for parallel builds.
+
+  ```r
+  createMakefile()
+  ```
