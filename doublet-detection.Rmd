@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Doublet detection 
@@ -216,14 +216,15 @@ hto.counts[,1:3]
 
 Before we proceed to doublet detection, we simplify the problem by first identifying the barcodes that contain cells.
 This is most conventionally done using the gene expression matrix for the same set of barcodes, as shown in Section \@ref(qc-droplets).
-While we could extract the gene expression matrix from `hash.tar`, we will instead demonstrate an alternative approach that uses the HTO count matrix directly in the `emptyDrops()` function.
-This requires some adjustment of the `lower=` argument to obtain an appropriate value depending on the sequencing depth of the HTOs; otherwise, the barcode-rank plots are quite similar to what one might expect from gene expression data (Figure \@ref(fig:hash-barcode-rank)).
+Here, though, we will keep things simple and apply `emptyDrops()` directly on the HTO count matrix.
+The considerations are largely the same as that for gene expression matrices; the main difference is that the default `lower=` is often too low for deeply sequenced HTOs, so we instead estimate the ambient profile by excluding the top `by.rank=` barcodes with the largest totals (under the assumption that no more than `by.rank=` cells were loaded).
+The barcode-rank plots are quite similar to what one might expect from gene expression data (Figure \@ref(fig:hash-barcode-rank)).
 
 ```{r hash-barcode-rank, fig.wide=TRUE, fig.cap="Cell-calling statistics from running `emptyDrops()` on the HTO counts in the cell hashing study. Left: Barcode rank plot of the HTO counts in the cell hashing study. Right: distribution of log-total counts for libraries identified as cells."}
 library(DropletUtils)
 
 set.seed(101)
-hash.calls <- emptyDrops(hto.counts, lower=200)
+hash.calls <- emptyDrops(hto.counts, by.rank=40000)
 is.cell <- which(hash.calls$FDR <= 0.001)
 length(is.cell)
 
