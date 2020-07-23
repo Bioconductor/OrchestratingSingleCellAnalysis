@@ -41,6 +41,14 @@ Advanced users can call `make` to perform a "pre-compilation" prior to the above
 This generates cached content to be used by the serial **bookdown** invocation,
 and is most useful when the `make` itself is parallelized.
 
+```sh
+make
+rm -rf _bookdown_files
+R -e 'bookdown::render_book("index.Rmd", "bookdown::gitbook")'
+```
+
+The docker image contains the book in `/home/book` where these commands can be executed.
+
 ## Developer instructions
 
 To contribute reports, follow standard procedure: fork and PR.
