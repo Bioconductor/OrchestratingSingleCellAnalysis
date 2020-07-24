@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Dimensionality reduction
@@ -556,17 +556,23 @@ However, UMAP is unarguably much faster, and for that reason alone, it is increa
 
 Dimensionality reduction for visualization necessarily involves discarding information and distorting the distances between cells in order to fit high-dimensional data into a 2-dimensional space.
 One might wonder whether the results of such extreme data compression can be trusted.
-Some of our more quantitative colleagues consider such visualizations to be more artistic than scientific, fit for little but impressing collaborators and reviewers.
-Perhaps this perspective is not entirely invalid, but we suggest that there is some value to be extracted from them provided that they are accompanied by an analysis of a higher-rank representation. 
+Indeed, some of our more quantitative colleagues consider such visualizations to be more artistic than scientific, fit for little but impressing collaborators and reviewers!
+Perhaps this perspective is not entirely invalid, but we suggest that there is some value to be extracted from them provided that they are accompanied by an analysis of a higher-rank representation.
 
+As a general rule, focusing on local neighborhoods provides the safest interpretation of $t$-SNE and UMAP plots.
+These methods spend considerable effort to ensure that each cell's nearest neighbors in high-dimensional space are still its neighbors in the two-dimensional embedding.
+Thus, if we see multiple cell types or clusters in a single unbroken "island" in the embedding, we could infer that those populations were also close neighbors in higher-dimensional space.
+However, less can be said about the distances between non-neighboring cells; there is no guarantee that large distances are faithfully recapitulated in the embedding, given the distortions necessary for this type of dimensionality reduction.
+It would be courageous to use the distances between islands (measured, on occasion, with a ruler!) to make statements about the relative similarity of distinct cell types.
+
+On a related note, we prefer to restrict the $t$-SNE/UMAP coordinates for visualization and use the higher-rank representation for any quantitative analyses.
 To illustrate, consider the interaction between clustering and $t$-SNE.
-As a general rule, we would not perform clustering on the $t$-SNE coordinates.
-Rather, we would cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on the $t$-SNE plot.
+We do not perform clustering on the $t$-SNE coordinates, but rather, we cluster on the first 10-50 PCs (Chapter \ref(clustering)) and then visualize the cluster identities on $t$-SNE plots like that in Figure \@ref(fig:tsne-brain). 
 This ensures that clustering makes use of the information that was lost during compression into two dimensions for visualization.
-The plot can then be used for a diagnostic inspection of the clustering output, e.g., to check which clusters are close neighbors or whether a cluster can be split into further subclusters; such interpretations of $t$-SNE coordinates are generally safe.
+The plot can then be used for a diagnostic inspection of the clustering output, e.g., to check which clusters are close neighbors or whether a cluster can be split into further subclusters; this follows the aforementioned theme of focusing on local structure.
 
 From a naive perspective, using the $t$-SNE coordinates directly for clustering is tempting as it ensures that any results are immediately consistent with the visualization.
-Given that clustering is rather arbitrary anyway, there is nothing inherently wrong with this strategy - it can be treated as a rather circuitous implementation of graph-based clustering (Section \@ref(clustering-graph)).
+Given that clustering is rather arbitrary anyway, there is nothing inherently wrong with this strategy - in fact, it can be treated as a rather circuitous implementation of graph-based clustering (Section \@ref(clustering-graph)).
 However, the enforced consistency can actually be considered a disservice as it masks the ambiguity of the conclusions, either due to the loss of information from dimensionality reduction or the uncertainty of the clustering.
 Rather than being errors, major discrepancies can instead be useful for motivating further investigation into the less obvious aspects of the dataset; conversely, the lack of discrepancies increases trust in the conclusions.
 
