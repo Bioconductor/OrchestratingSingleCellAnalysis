@@ -584,12 +584,32 @@ This avoids the removal of genuine DEGs due to overestimation fo the ambient con
 However, the performance of this approach is fully dependent on the suitability of the control features - if a "control" feature is actually genuinely expressed in a cell type, the ambient contribution will be overestimated.
 A simple mitigating strategy is to simply take the lower of the proportions from `controlAmbience()` and `maximumAmbience()`, with the idea being that the latter will avoid egregious overestimation when the control set is misspecified.
 
-#### Based on shared DE
+#### Without an ambient profile
 
-A final mitigating strategy is to report the percentage of labels in which a gene is DE.
-Contamination-driven DEGs should be systematically present in all comparisons, so we can simply exclude all genes that are significant in a majority of these comparisons using the same metrics discussed in Section \@ref(cross-label-meta-analyses).
-This does not require any estimate of the ambient profile - which is just as well, as that information is often unavailable for public datasets where only the per-cell count matrices are provided.
-The obvious drawback of this approach is that it discounts genuine DEGs that are consistently present across most labels (though one could perhaps argue that such consistent DEGs are not of interest when searching for cell type-specific effects).
+An estimate of the ambient profile is rarely available for public datasets where only the per-cell count matrices are provided.
+In such cases, we must instead use the rest of the dataset to infer something about the effects of ambient contamination.
+The most obvious approach is construct a proxy ambient profile by summing the counts for all cells from each sample, which can be used in place of the actual profile in the previous calculations.
+This assumes equal contributions from all labels to the ambient pool, which is not entirely unrealistic (Figure \@ref(proxy-ambience)) though some discrepancies can be expected due to the presence of particularly fragile cell types or extracellular RNA.
+
+```{r proxy-ambience, fig.asp=1, fig.cap="MA plots of the log-fold change of the proxy ambient profile over the real profile for each sample in the _Tal1_ chimera dataset."}
+proxy.ambient <- aggregateAcrossCells(summed.tal1,
+    ids=summed.tal1$sample)
+
+par(mfrow=c(2,2))
+for (i in seq_len(ncol(proxy.ambient))) {
+    true <- ambient[,i]
+    proxy <- assay(proxy.ambient)[,i]
+    logged <- edgeR::cpm(cbind(proxy, true), log=TRUE, prior.count=2)
+    logFC <- logged[,1] - logged[,2]
+    abundance <- rowMeans(logged)
+    plot(abundance, logFC, main=paste("Sample", i))
+}
+```
+
+We can also mitigate the effect of ambient contamination by focusing on label-specific DEGs.
+Contamination-driven DEGs should be systematically present in comparisons for all labels, and thus can be eliminated by simply ignoring all genes that are significant in a majority of these comparisons (Section \@ref(cross-label-meta-analyses)).
+The obvious drawback of this approach is that it discounts genuine DEGs that have a consistent effect in most/all labels, though one could perhaps argue that such "global" DEGs are not the main features of interest in label-specific analyses. 
+It is also complicated by fluctuations in detection power across comparisons involving different numbers of cells - or replicates, after filtering pseudo-bulk profiles by the number of cells.
 
 ```{r}
 res.tal1 <- pseudoBulkDGE(summed.tal1, 
@@ -615,11 +635,9 @@ tab.neural.again <- tab.neural.again[!ignore,]
 head(tab.neural.again[order(tab.neural.again$PValue),], 10)
 ```
 
-Alternatively, we can report the average log-fold change across labels.
-Contamination-driven DEGs should exhibit similar log-fold changes in all labels, which can be used to filter out potentially problematic genes in each label's DE results. 
+A more sophisticated variants of this cross-label meta-analysis would include the average log-fold change across labels.
+Contamination-driven DEGs should exhibit similar log-fold changes in all labels, so any similarity with the average log-fold change could be used to filter out potentially problematic genes in each label's DE results. 
 (Some readers may recognize this as a poor man's interaction model, which we discuss in more detail in the next section.)
-This avoids complications due to fluctuations in detection power across comparisons involving different numbers of cells - or replicates, after filtering pseudo-bulk profiles by the number of cells.
-It also allows us to recover some genuine DEGs that are consistently present in most labels, as long as they have effect sizes greater than the average.
 However, differences in total RNA content between labels can lead to differences in the contamination-induced log-fold change, due to differences in the relative contribution of the ambient contamination compared to any existing baseline expression; this can cause spurious DEGs to be incorrectly recovered in labels with lower RNA content.
 
 ```{r}
