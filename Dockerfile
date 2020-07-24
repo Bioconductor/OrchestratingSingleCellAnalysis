@@ -13,5 +13,6 @@ RUN R --quiet -e "options(warn=2); BiocManager::install(setdiff(strsplit(read.dc
 
 RUN mkdir /home/cache
 ENV EXPERIMENT_HUB_CACHE /home/cache/ExperimentHub
+ENV EXPERIMENT_HUB_ASK FALSE
 ENV ANNOTATION_HUB_CACHE /home/cache/AnnotationHub
 ENV XDG_CACHE_HOME /home/cache
