@@ -675,27 +675,6 @@ tab.neural.again <- tab.neural.again[!ignore,]
 head(tab.neural.again[order(tab.neural.again$PValue),], 10)
 ```
 
-A more sophisticated variants of this cross-label meta-analysis would include the average log-fold change across labels.
-Contamination-driven DEGs should exhibit similar log-fold changes in all labels, so any similarity with the average log-fold change could be used to filter out potentially problematic genes in each label's DE results. 
-(Some readers may recognize this as a poor man's interaction model, which we discuss in more detail in the next section.)
-However, differences in total RNA content between labels can lead to differences in the contamination-induced log-fold change, due to differences in the relative contribution of the ambient contamination compared to any existing baseline expression; this can cause spurious DEGs to be incorrectly recovered in labels with lower RNA content.
-
-```{r}
-collected <- lapply(res.tal1, "[[", i="logFC")
-ave.lfc <- rowMeans(do.call(cbind, collected), na.rm=TRUE)
-
-tab.neural.extra <- res.tal1[["Neural crest"]]
-tab.neural.extra$AveLogFC <- ave.lfc
-head(tab.neural.extra[order(tab.neural.extra$PValue),], 10)
-
-# TODO: add an offset mode to pseudoBulkDGE to test against an offset?
-# Require a +0.5 increase in magnitude over the average log-fold change.
-neural.lfc <- tab.neural.extra$logFC
-not.enough <- sign(neural.lfc)==sign(ave.lfc) & abs(neural.lfc) < abs(ave.lfc) + 0.5
-tab.neural.extra <- tab.neural.extra[!not.enough & !is.na(not.enough),]
-head(tab.neural.extra[order(tab.neural.extra$PValue),], 10)
-```
-
 The common theme here is that, in the absence of an ambient profile, we are using all labels as a proxy for the ambient effect.
 This can have unpredictable consequences as the results for each label are now dependent on the behavior of the entire dataset.
 For example, the metrics are susceptible to the idiosyncrasies of clustering where one cell type may be represented in multple related clusters that distort the percentages in `up.de` and `down.de` or the average log-fold change.
