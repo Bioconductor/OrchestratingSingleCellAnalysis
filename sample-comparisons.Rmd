@@ -367,34 +367,74 @@ cur.results[order(cur.results$PValue),]
 ```
 -->
 
-We further identify label-specific DE genes that are significant in our label of interest yet not DE in any other label.
-As hypothesis tests are not typically geared towards identifying genes that are not DE,
-we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label 
-if it fails to be detected even at a generous FDR threshold of 50%.
-We demonstrate this approach below by identifying injection-induced DE genes that are unique to the allantois,
-though differences in power between labels suggest that this should be interpreted with some caution;
-for example, Figure \@ref(fig:exprs-unique-de-allantois) shows that the top-ranked allantois-specific gene exhibits some evidence of DE in other labels but was not detected for various reasons like low abundance or insufficient replicates.
+To identify label-specific DE, we use the `pseudoBulkSpecific()` function to test for significant differences from the average log-fold change over all other labels.
+More specifically, the null hypothesis for each label and gene is that the log-fold change lies between zero and the average log-fold change of the other labels.
+If a gene rejects this null for our label of interest, we can conclude that it exhibits DE that is more extreme or of the opposite sign compared to that in the majority of other labels (Figure \@ref(fig:exprs-unique-de-allantois)).
+This approach is effectively a poor man's interaction model that sacrifices the uncertainty of the average for an easier compute.
+We note that, while the difference from the average is a good heuristic, there is no guarantee that the top genes are truly label-specific; comparable DE in a subset of the other labels may be offset by weaker effects when computing the average.
 
-```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
-remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
-not.de <- remotely.de==0 | is.na(remotely.de)
+```{r exprs-unique-de-allantois, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for _Rbp4_ in each label of the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
+de.specific <- pseudoBulkSpecific(summed.filt,
+    label=summed.filt$celltype.mapped,
+    design=~factor(pool) + tomato,
+    coef="tomatoTRUE",
+    condition=summed.filt$tomato
+)
 
-other.labels <- setdiff(colnames(not.de), "Allantois")
-unique.degs <- is.de[,"Allantois"]!=0 & rowMeans(not.de[,other.labels])==1
-unique.degs <- names(which(unique.degs))
-unique.degs
-
-# Choosing the top-ranked gene for inspection:
-de.allantois <- de.results$Allantois
-de.allantois <- de.allantois[order(de.allantois$PValue),]
-de.allantois <- de.allantois[rownames(de.allantois) %in% unique.degs,]
+cur.specific <- de.specific[["Allantois"]]
+cur.specific <- cur.specific[order(cur.specific$PValue),]
+cur.specific
 
 sizeFactors(summed.filt) <- NULL
+plotExpression(logNormCounts(summed.filt),
+    features="Rbp4",
+    x="tomato", colour_by="tomato",
+    other_fields="celltype.mapped") +
+    facet_wrap(~celltype.mapped)
+```
+
+```{r, echo=FALSE}
+# Sanity check.
+stopifnot("Rbp4" %in% rownames(cur.specific)[1:6])
+```
+
+For greater control over the identification of label-specific DE, we can use the output of `decideTestsPerLabel()` to identify genes that are significant in our label of interest yet not DE in any other label.
+As hypothesis tests are not typically geared towards identifying genes that are not DE, we use an _ad hoc_ approach where we consider a gene to be consistent with the null hypothesis for a label if it fails to be detected at a generous FDR threshold of 50%.
+We demonstrate this approach below by identifying injection-induced DE genes that are unique to the allantois.
+It is straightforward to tune the selection, e.g., to genes that are DE in no more than 90% of other labels by simply relaxing the threshold used to construct `not.de.other`, or to genes that are DE across multiple labels of interest but not in the rest, and so on.
+
+```{r}
+# Finding all genes that are not remotely DE in all other labels.
+remotely.de <- decideTestsPerLabel(de.results, threshold=0.5)
+not.de <- remotely.de==0 | is.na(remotely.de)
+not.de.other <- rowMeans(not.de[,colnames(not.de)!="Allantois"])==1
+
+# Intersecting with genes that are DE inthe allantois.
+unique.degs <- is.de[,"Allantois"]!=0 & not.de.other
+unique.degs <- names(which(unique.degs))
+
+# Inspecting the results.
+de.allantois <- de.results$Allantois
+de.allantois <- de.allantois[unique.degs,]
+de.allantois <- de.allantois[order(de.allantois$PValue),]
+de.allantois
+```
+
+The main caveat is that differences in power between labels require some caution when interpreting label specificity.
+For example, Figure \@ref(fig:exprs-unique-de-allantois-more) shows that the top-ranked allantois-specific gene exhibits some evidence of DE in other labels but was not detected for various reasons like low abundance or insufficient replicates.
+A more correct but complex approach would be to fit a interaction model to the pseudo-bulk profiles for each pair of labels, where the interaction is between the coefficient of interest and the label identity; this is left as an exercise for the reader. 
+
+```{r exprs-unique-de-allantois-more, fig.asp=1, fig.width=10, fig.cap="Distribution of summed log-expression values for each label in the chimeric embryo dataset. Each facet represents a label with distributions stratified by injection status."}
 plotExpression(logNormCounts(summed.filt), 
-    features=rownames(de.allantois)[1],
+    features="Slc22a18",
     x="tomato", colour_by="tomato", 
     other_fields="celltype.mapped") + 
     facet_wrap(~celltype.mapped)
+```
+
+```{r, echo=FALSE}
+stopifnot("Slc22a18" %in% rownames(cur.specific)[1])
+stopifnot("Slc22a18" %in% rownames(de.allantois)[1])
 ```
 
 ## Avoiding problems with ambient RNA {#ambient-problems}
