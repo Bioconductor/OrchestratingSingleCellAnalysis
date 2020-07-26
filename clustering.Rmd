@@ -292,6 +292,7 @@ This is the log-ratio of the expected to observed within-cluster sum of squares,
 A larger gap statistic represents a lower observed sum of squares - and thus better clustering - compared to a population with no structure.
 Ideally, we would choose the $k$ that maximizes the gap statistic, but this is often unhelpful as the tendency of $k$-means to favor spherical clusters drives a large $k$ to capture different cluster shapes.
 Instead, we choose the most parsimonious $k$ beyond which the increases in the gap statistic are considered insignificant (Figure \@ref(fig:kmeans-gap)).
+It must be said, though, that this process is time-consuming and the resulting choice of $k$ is not always stable.
 
 ```{r kmeans-gap, fig.cap="Gap statistic with respect to increasing number of $k$-means clusters in the 10X PBMC dataset. The red line represents the chosen $k$."}
 library(cluster)
