@@ -546,11 +546,13 @@ We previously introduced the silhouette width in the context of hierarchical clu
 While this can be applied with other clustering algorithms, 
 it requires calculation of all pairwise distances between cells and is not scalable for larger cdatasets.
 In such cases, we instead use an approximate approach that replaces the average of the distances with the distance to the average (i.e., centroid) of each cluster, with some tweaks to account for the distance due to the within-cluster variance.
-This is implemented in the `clusterSilhouette()` function from `r Biocpkg("scran")`,
+This is implemented in the `approxSilhouette()` function from `r Biocpkg("bluster")`,
 allowing us to quickly identify poorly separate clusters with mostly negative widths (Figure \@ref(fig:pbmc-silhouette)).
 
 ```{r pbmc-silhouette, fig.wide=TRUE, fig.cap="Distribution of the approximate silhouette width across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of its own cluster if its silhouette width is positive and that of the closest other cluster if the width is negative."}
-sil.approx <- clusterSilhouette(sce.pbmc, clusters=clust, use.dimred="PCA") 
+# Performing the calculations on the PC coordinates, like before.
+library(bluster)
+sil.approx <- approxSilhouette(reducedDim(sce.pbmc, "PCA"), clusters=clust)
 
 sil.data <- as.data.frame(sil.approx)
 sil.data$closest <- factor(ifelse(sil.data$width > 0, clust, sil.data$other))
@@ -568,7 +570,7 @@ Median purity values are consistently greater than 0.9,
 indicating that most cells in each cluster are primarily surrounded by other cells from the same cluster.
 
 ```{r pbmc-box-purities, fig.wide=TRUE, fig.cap="Distribution of cluster purities across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of the cluster contributing the largest proportion of its neighbors."}
-pure.pbmc <- clusterPurity(sce.pbmc, clusters=clust, use.dimred="PCA") 
+pure.pbmc <- neighborPurity(reducedDim(sce.pbmc, "PCA"), clusters=clust)
 
 pure.data <- as.data.frame(pure.pbmc)
 pure.data$maximum <- factor(pure.data$maximum)
