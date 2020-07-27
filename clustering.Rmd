@@ -694,7 +694,7 @@ More specifically, high ratios on the diagonal indicate that cells in the same o
 
 ```{r bootstrap-matrix, fig.cap="Heatmap of ARI-derived ratios from bootstrapping of graph-based clustering in the PBMC dataset. Each row and column represents an original cluster and each entry is colored according to the value of the ARI ratio between that pair of clusters."}
 pheatmap(ratios, cluster_row=FALSE, cluster_col=FALSE,
-    color=rev(viridis::magma(100)))
+    color=viridis::magma(100), breaks=seq(-1, 1, length.out=101))
 ```
 
 Bootstrapping is a general approach for evaluating cluster stability that is compatible with any clustering algorithm.
