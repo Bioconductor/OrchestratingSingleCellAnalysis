@@ -51,7 +51,8 @@ table(Exact=colLabels(sce.pbmc), Approx=clusters$membership)
 
 ```{r, echo=FALSE}
 # Checking that I'm not just talking shit.
-rand <- clusterRand(colLabels(sce.pbmc), clusters$membership, mode="index")
+library(bluster)
+rand <- pairwiseRand(colLabels(sce.pbmc), clusters$membership, mode="index")
 stopifnot(rand > 0.95)
 ```
 

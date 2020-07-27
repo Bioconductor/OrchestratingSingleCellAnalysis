@@ -636,7 +636,7 @@ combined <- cbind(k.50=clust.50, k.10=clust, k.5=clust.5)
 clustree(combined, prefix="k.", edge_arrow=FALSE)
 ```
 
-We can quantify the agreement between two clusterings by computing the Rand index with `r Biocpkg("scran")`'s `clusterRand()`.
+We can quantify the agreement between two clusterings by computing the Rand index with `r Biocpkg("bluster")`'s `pairwiseRand()`.
 This is defined as the proportion of pairs of cells that retain the same status
 (i.e., both cells in the same cluster, or each cell in different clusters) in both clusterings.
 In practice, we usually compute the adjusted Rand index (ARI)
@@ -645,7 +645,8 @@ this accounts for differences in the size and number of clusters within and betw
 A larger ARI indicates that the clusters are preserved, up to a maximum value of 1 for identical clusterings.
 
 ```{r}
-clusterRand(clust, clust.5, mode="index") 
+library(bluster)
+pairwiseRand(clust, clust.5, mode="index") 
 ```
 
 The same function can also provide a more granular perspective with `mode="ratio"`,
@@ -657,7 +658,7 @@ Low values on the diagonal in Figure \@ref(fig:pbmc-rand-breakdown) indicate tha
 Conversely, low off-diagonal values indicate that the corresponding pair of reference clusters are merged together in `clust.5`.
 
 ```{r pbmc-rand-breakdown, fig.cap="ARI-based ratio for each pair of clusters in the reference Walktrap clustering compared to a higher-resolution alternative clustering for the PBMC dataset. Rows and columns of the heatmap represent clusters in the reference clustering. Each entry represents the proportion of pairs of cells involving the row/column clusters that retain the same status in the alternative clustering."}
-breakdown <- clusterRand(ref=clust, alt=clust.5, mode="ratio") 
+breakdown <- pairwiseRand(ref=clust, alt=clust.5, mode="ratio") 
 pheatmap(breakdown, color=viridis::magma(100), 
     cluster_rows=FALSE, cluster_cols=FALSE)
 ```
@@ -668,18 +669,20 @@ A desirable property of a given clustering is that it is stable to perturbations
 Stable clusters are logistically convenient as small changes to upstream processing will not change the conclusions;
 greater stability also increases the likelihood that those conclusions can be reproduced in an independent replicate study.
 `r Biocpkg("scran")` uses bootstrapping to evaluate the stability of a clustering algorithm on a given dataset - that is, cells are sampled with replacement to create a "bootstrap replicate" dataset, and clustering is repeated on this replicate to see if the same clusters can be reproduced.
-We demonstrate below for graph-based clustering on the PBMC dataset.
+We demonstrate below for graph-based clustering on the PCs of the PBMC dataset.
 
 ```{r}
 myClusterFUN <- function(x) {
-    g <- buildSNNGraph(x, use.dimred="PCA", type="jaccard")
+    g <- bluster::makeSNNGraph(x, type="jaccard")
     igraph::cluster_louvain(g)$membership
 }
 
-originals <- myClusterFUN(sce.pbmc)
+pcs <- reducedDim(sce.pbmc, "PCA")
+originals <- myClusterFUN(pcs)
+table(originals) # inspecting the cluster sizes.
 
 set.seed(0010010100)
-ratios <- bootstrapCluster(sce.pbmc, FUN=myClusterFUN, clusters=originals)
+ratios <- bootstrapStability(pcs, FUN=myClusterFUN, clusters=originals)
 dim(ratios)
 ```
 

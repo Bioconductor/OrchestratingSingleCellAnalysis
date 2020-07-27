@@ -225,8 +225,8 @@ stopifnot(tab["G1",1] > 0.5 * sum(tab[,1]))
 stopifnot(tab["G2M",2] > 0.5 * sum(tab[,2]))
 stopifnot(tab["G1",3] > 0.5 * sum(tab[,3]))
 
-library(scran)
-rand <- clusterRand(singler.assignments$labels, assignments$phases, mode="index")
+library(bluster)
+rand <- pairwiseRand(singler.assignments$labels, assignments$phases, mode="index")
 stopifnot(rand > 0.7)
 ```
 

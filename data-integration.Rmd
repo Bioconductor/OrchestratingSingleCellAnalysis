@@ -384,9 +384,10 @@ Recall that larger indices are more desirable as this indicates that within-batc
 though this must be balanced against the ability of each method to actually perform batch correction.
 
 ```{r}
-ri3k <- clusterRand(clusters.mnn[rescaled$batch==1], colLabels(pbmc3k), mode="index")
+library(bluster)
+ri3k <- pairwiseRand(clusters.mnn[rescaled$batch==1], colLabels(pbmc3k), mode="index")
 ri3k
-ri4k <- clusterRand(clusters.mnn[rescaled$batch==2], colLabels(pbmc4k), mode="index")
+ri4k <- pairwiseRand(clusters.mnn[rescaled$batch==2], colLabels(pbmc4k), mode="index")
 ri4k
 ```
 
@@ -402,12 +403,12 @@ Conversely, we might see low ratios on the diagonal if the correction inflated o
 
 ```{r rand-after-mnn, fig.asp=1.8, fig.cap="ARI-derived ratios for the within-batch clusters after comparison to the merged clusters obtained after MNN correction. One heatmap is generated for each of the PBMC 3K and 4K datasets."}
 # For the first batch.
-tab <- clusterRand(colLabels(pbmc3k), clusters.mnn[rescaled$batch==1])
+tab <- pairwiseRand(colLabels(pbmc3k), clusters.mnn[rescaled$batch==1])
 heat3k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
     col=rev(viridis::magma(100)), main="PBMC 3K probabilities", silent=TRUE)
 
 # For the second batch.
-tab <- clusterRand(colLabels(pbmc4k), clusters.mnn[rescaled$batch==2])
+tab <- pairwiseRand(colLabels(pbmc4k), clusters.mnn[rescaled$batch==2])
 heat4k <- pheatmap(tab, cluster_row=FALSE, cluster_col=FALSE,
     col=rev(viridis::magma(100)), main="PBMC 4K probabilities", silent=TRUE)
 
