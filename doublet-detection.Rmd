@@ -196,20 +196,11 @@ Cell libraries containing two labels are thus likely to be doublets of cells fro
 To demonstrate, we will use some data from the original cell hashing study [@stoekius2018hashing].
 Each sample's cells were stained with an antibody against a ubiquitous surface protein, where the antibody was conjugated to a sample-specific HTO.
 Sequencing of the HTO-derived cDNA library ultimately yields a count matrix where each row corresponds to a HTO and each column corresponds to a cell barcode.
-(We use `r Biocpkg("BiocFileCache")` to avoid repeated downloads of the same file.)
 
 ```{r}
-library(BiocFileCache)
-bfc <- BiocFileCache(ask=FALSE)
-hash.tar <- bfcrpath(bfc, "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE108313&format=file")
-
-fname <- "GSM2895283_Hashtag-HTO-count.csv.gz"
-untar(hash.tar, files=fname, exdir=tempdir())
-hto.counts <- read.csv(file.path(tempdir(), fname), row.names=1)
-hto.counts <- as.matrix(hto.counts[1:8,])
-
-dim(hto.counts)
-hto.counts[,1:3]
+library(scRNAseq)
+hto.sce <- StoeckiusHashingData(mode="hto")
+dim(hto.sce)
 ```
 
 ### Identifying inter-sample doublets
@@ -224,7 +215,7 @@ The barcode-rank plots are quite similar to what one might expect from gene expr
 library(DropletUtils)
 
 set.seed(101)
-hash.calls <- emptyDrops(hto.counts, by.rank=40000)
+hash.calls <- emptyDrops(counts(hto.sce), by.rank=40000)
 is.cell <- which(hash.calls$FDR <= 0.001)
 length(is.cell)
 
@@ -242,7 +233,7 @@ For quality control, it returns the log-fold change between the first and second
 Confidently assigned singlets are marked using the `Confident` field in the output.
 
 ```{r hto-1to2-hist, fig.cap="Distribution of log-fold changes from the first to second-most abundant HTO in each cell."}
-hash.stats <- hashedDrops(hto.counts[,is.cell],
+hash.stats <- hashedDrops(counts(hto.sce)[,is.cell],
     ambient=metadata(hash.calls)$ambient)
 
 hist(hash.stats$LogFC, xlab="Log fold-change from best to second HTO", main="")
@@ -284,16 +275,10 @@ To avoid this, we recover the remaining intra-sample doublets based on their sim
 We illustrate by loading the gene expression data for this study:
 
 ```{r, cache=TRUE}
-gname <- "GSM2895282_Hashtag-RNA.umi.txt.gz"
-untar(hash.tar, files=gname, exdir=tempdir())
-
-# Reading it in as a sparse matrix in a SingleCellExperiment.
-library(scater)
-gene.counts <- readSparseCounts(file.path(tempdir(), gname))
-sce.hash <- SingleCellExperiment(list(counts=gene.counts))
+sce.hash <- StoeckiusHashingData(mode="human")
 
 # Subsetting to all barcodes detected as cells. Requires an intersection,
-# because `hto.counts` and `gene.counts` are not the same dimensions! 
+# because `hto.sce` and `sce.hash` are not the same dimensions! 
 common <- intersect(colnames(sce.hash), rownames(hash.stats))
 sce.hash <- sce.hash[,common]
 colData(sce.hash) <- hash.stats[common,]
