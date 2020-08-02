@@ -14,7 +14,7 @@ chapterPreamble()
 
 On occasion, it can be desirable to determine cell cycle activity from scRNA-seq data.
 In and of itself, the distribution of cells across phases of the cell cycle is not usually informative, but we can use this to determine if there are differences in proliferation between subpopulations or across treatment conditions.
-Many of the key events in the cell cycle (e.g., passage through checkpoints) are post-translational and thus not directly visible in transcriptomic data; nonetheless, there are enough changes in expression that can be exploited to determine cell cycle phase.
+Many of the key events in the cell cycle (e.g., passage through checkpoints) are driven by post-translational mechanisms and thus not directly visible in transcriptomic data; nonetheless, there are enough changes in expression that can be exploited to determine cell cycle phase.
 We demonstrate using the 416B dataset, which is known to contain actively cycling cells after oncogene induction.
 
 ```{r, echo=FALSE, results="asis"}
@@ -28,9 +28,9 @@ sce.416b
 ## Using the cyclins
 
 The cyclins control progression through the cell cycle and have well-characterized patterns of expression across cell cycle phases.
-Cyclin D is expressed throughout but peaks at G1; cyclin E is expressed highest in the G1/S transition; cyclin A is expressed across S and G2; and cyclin B is expressed highest in late G2 and mitosis.
-Inspection of the relative expression of cyclins across the population can often be sufficient to determine the relative cell cycle activity in each cluster (Figure \@ref(fig:heat-cyclin)).
-For example, cluster 1 is likely to be in G1 while the other clusters are scattered across the later phases.
+Cyclin D is expressed throughout but peaks at G1; cyclin E is expressed highest in the G1/S transition; cyclin A is expressed across S and G2; and cyclin B is expressed highest in late G2 and mitosis [@morgan2007cell].
+The expression of cyclins can help to determine the relative cell cycle activity in each cluster (Figure \@ref(fig:heat-cyclin)).
+For example, most cells in cluster 1 are likely to be in G1 while the other clusters are scattered across the later phases.
 
 ```{r heat-cyclin, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the 416B dataset. Each column represents a cell that is sorted by the cluster of origin."}
 cyclin.genes <- grep("^Ccn[abde][0-9]$", rowData(sce.416b)$SYMBOL)
@@ -50,26 +50,23 @@ stopifnot(all(lfc[c("Ccnd1", "Ccnd2"),] > 0))
 stopifnot(all(lfc[c("Ccna2", "Ccnb1", "Ccne1"),] < 0))
 ```
 
-We can use this approach to make statements about the relative cell cycle activity across clusters.
-In this case, we apply standard DE methods (Chapter \@ref(marker-detection)) to look for upregulation of each cyclin between clusters, which would imply that a subpopulation contains more cells in the corresponding cell cycle phase.
+We quantify these observations with standard DE methods (Chapter \@ref(marker-detection)) to test for upregulation of each cyclin between clusters, which would imply that a subpopulation contains more cells in the corresponding cell cycle phase.
 The same logic applies to comparisons between treatment conditions as described in Chapter \@ref(multi-sample-comparisons).
+For example, we can infer that cluster 4 has the highest proportion of cells in the S and G2 phases based on higher expression of cyclins A2 and B1, respectively.
 
 ```{r}
 library(scran)
 markers <- findMarkers(sce.416b, subset.row=cyclin.genes, 
     test.type="wilcox", direction="up")
-
-# We can infer that cluster 4 has more cells in G2/M than the other clusters,
-# based on higher expression of the cyclin B's.
 markers[[4]]
 ```
 
 ```{r, echo=FALSE, results="hide"}
-library(scran)
 stopifnot(all(getMarkerEffects(markers[[4]][c("Ccnb1"),]) > 0.5))
+stopifnot(all(getMarkerEffects(markers[[4]][c("Ccna2"),]) > 0.5))
 ```
 
-While straightforward to use and easy to interpret,  
+While straightforward to implement and interpret,
 this approach assumes that cyclin expression is unaffected by biological processes other than the cell cycle.
 This is a strong assumption in highly heterogeneous populations where cyclins may perform cell-type-specific roles.
 For example, using the Grun HSC dataset [@grun2016denovo], we see an upregulation of cyclin D2 in sorted HSCs (Figure \@ref(fig:heat-cyclin-grun)) that is consistent with a particular reliance on D-type cyclins in these cells [@steinman2002cell;@kozar2004mouse].
