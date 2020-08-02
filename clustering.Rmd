@@ -98,6 +98,19 @@ clust <- igraph::cluster_walktrap(g)$membership
 table(clust)
 ```
 
+Alternatively, users may prefer to use the `clusterRows()` function from the `r Biocpkg("bluster")` package.
+This calls the exact same series of functions when run in graph-based mode with the `NNGraphParam()` argument;
+however, it is often more convenient if we want try out different clustering procedures, as we can simply change the second argument to use a different set of parameters or a different algorithm altogether.
+
+```{r}
+clust2 <- clusterRows(reducedDim(sce.pbmc, "PCA"), NNGraphParam())
+table(clust2) # same as above.
+```
+
+```{r, echo=FALSE}
+stopifnot(identical(factor(clust), clust2))
+```
+
 We assign the cluster assignments back into our `SingleCellExperiment` object as a factor in the column metadata.
 This allows us to conveniently visualize the distribution of clusters in a $t$-SNE plot (Figure \@ref(fig:tsne-clust-graph)).
 
@@ -325,6 +338,15 @@ colLabels(sce.pbmc) <- factor(clust.kmeans2$cluster)
 plotTSNE(sce.pbmc, colour_by="label", text_by="label")
 ```
 
+As an aside: if we were already using `clusterRows()` from `r Biocpkg("bluster")`, we can easily switch to $k$-means clustering by supplying a `KmeansParam()` as the second argument.
+This requires the number of clusters as a fixed integer or as a function of the number of cells - the example below sets the number of clusters to the square root of the number of cells, which is an effective rule-of-thumb for vector quantization. 
+
+```{r}
+set.seed(10000)
+sq.clusts <- clusterRows(reducedDim(sce.pbmc, "PCA"), KmeansParam(centers=sqrt))
+nlevels(sq.clusts)
+```
+
 ### Assessing cluster separation
 
 The within-cluster sum of squares (WCSS) for each cluster is the most relevant diagnostic for $k$-means, given that the algorithm aims to find a clustering that minimizes the WCSS.
@@ -353,7 +375,7 @@ plot(cent.tree)
 
 As previously mentioned, $k$-means is most effective in its role of vector quantization, i.e., compressing adjacent cells into a single representative point.
 This allows $k$-means to be used as a prelude to more sophisticated and interpretable - but expensive - clustering algorithms.
-The `clusterRows()` function from `r Biocpkg("bluster")` implements a "two-step" mode where $k$-means is initially used to obtain representative centroids that are subjected to graph-based clustering.
+The `clusterRows()` function supports a "two-step" mode where $k$-means is initially used to obtain representative centroids that are subjected to graph-based clustering.
 Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
 
 ```{r tsne-kmeans-graph-pbmc, fig.cap="$t$-SNE plot of the PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from combined $k$-means/graph-based clustering."}
@@ -508,6 +530,22 @@ visual <- kmeans(reducedDim(sce.416b, "TSNE"), 4)
 xtab <- table(colLabels(sce.416b), visual$cluster)
 stopifnot(sum(xtab[fault,] > 0) == 2)
 stopifnot(sum(xtab[fault,]==0) == 2)
+```
+
+Note that the series of calls required to obtain the clusters is also wrapped by `clusterRows()` for more convenient execution.
+In this case, we can reproduce `clust.416b` with the following:
+
+```{r}
+clust.416b.again <- clusterRows(reducedDim(sce.416b, "PCA"), 
+    HclustParam(method="ward.D2", cut.dynamic=TRUE, minClusterSize=10, deepSplit=1))
+table(clust.416b.again)
+```
+
+```{r, echo=FALSE}
+stopifnot(identical(
+    factor(unname(clust.416b)),
+    factor(clust.416b.again)
+))
 ```
 
 ### Assessing cluster separation {#silhouette-width}
