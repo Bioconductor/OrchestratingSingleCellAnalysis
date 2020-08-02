@@ -145,11 +145,15 @@ sce.bone <- runUMAP(sce.bone, dimred="MNN",
 
 Graph-based clustering generates an excessively large intermediate graph so we will instead use a two-step approach with $k$-means.
 We generate 1000 small clusters that are subsequently aggregated into more interpretable groups with a graph-based method.
+If more resolution is required, we can increase `centers` in addition to using a lower `k` during graph construction.
 
 ```{r clustering}
+library(bluster)
+
 set.seed(1000)
 colLabels(sce.bone) <- clusterRows(reducedDim(sce.bone, "MNN"),
-    TwoStepParam(KmeansParam(centers=100), NNGraphParam(k=5)))
+    TwoStepParam(KmeansParam(centers=1000), NNGraphParam(k=5)))
+
 table(colLabels(sce.bone))
 ```
 
