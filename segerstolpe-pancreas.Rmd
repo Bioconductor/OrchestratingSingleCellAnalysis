@@ -147,8 +147,10 @@ sce.seger <- runTSNE(sce.seger, dimred="PCA")
 ## Clustering
 
 ```{r clustering}
-snn.gr <- buildSNNGraph(sce.seger, use.dimred="PCA")
-colLabels(sce.seger) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+library(bluster)
+clust.out <- clusterRows(reducedDim(sce.seger, "PCA"), NNGraphParam(), full=TRUE)
+snn.gr <- clust.out$objects$graph
+colLabels(sce.seger) <- snn.gr$clusters
 ```
 
 We see a strong donor effect in Figures \@ref(fig:unref-seger-heat-1) and \@ref(fig:unref-grun-tsne).
@@ -178,8 +180,7 @@ stopifnot(mean(tab==0) > 0.4)
 ## Data integration
 
 We repeat the clustering after running `fastMNN()` on the donors.
-This yields a more coherent set of clusters in Figure \@ref(fig:unref-seger-tsne-correct)
-where each cluster contains contributions from all donors.
+This yields a more coherent set of clusters in Figure \@ref(fig:unref-seger-tsne-correct) where each cluster contains contributions from all donors.
 
 ```{r data-integration}
 library(batchelor)
@@ -190,7 +191,7 @@ corrected <- fastMNN(sce.seger, batch=sce.seger$Donor, subset.row=chosen.hvgs)
 set.seed(10000001)
 corrected <- runTSNE(corrected, dimred="corrected")
 
-colLabels(corrected) <- clusterSNNGraph(corrected, use.dimred="corrected")
+colLabels(corrected) <- clusterRows(reducedDim(corrected, "corrected"), NNGraphParam())
 
 tab <- table(Cluster=colLabels(corrected), Donor=corrected$batch)
 tab

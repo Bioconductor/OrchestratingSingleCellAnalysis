@@ -351,17 +351,22 @@ plot(cent.tree)
 
 ### In two-step procedures
 
-As previously mentioned, $k$-means is most effective in its role of vector quantization, 
-i.e., compressing adjacent cells into a single representative point.
-This allows $k$-means to be used as a prelude to more sophisticated and interpretable (but expensive) clustering algorithms.
-For example, the `clusterSNNGraph()` function from `r Biocpkg("scran")` can use $k$-means as an initial step to obtain representative centroids that are then subjected to graph-based clustering (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
-Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to.
+As previously mentioned, $k$-means is most effective in its role of vector quantization, i.e., compressing adjacent cells into a single representative point.
+This allows $k$-means to be used as a prelude to more sophisticated and interpretable - but expensive - clustering algorithms.
+The `clusterRows()` function from `r Biocpkg("bluster")` implements a "two-step" mode where $k$-means is initially used to obtain representative centroids that are subjected to graph-based clustering.
+Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
 
 ```{r tsne-kmeans-graph-pbmc, fig.cap="$t$-SNE plot of the PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from combined $k$-means/graph-based clustering."}
+library(bluster)
+
 # Setting the seed due to the randomness of k-means.
 set.seed(0101010)
-kgraph.clusters <- clusterSNNGraph(sce.pbmc, use.dimred="PCA", 
-    use.kmeans=TRUE, kmeans.centers=1000, k=5)
+kgraph.clusters <- clusterRows(reducedDim(sce.pbmc, "PCA"),
+    TwoStepParam(
+        first=KmeansParam(centers=1000),
+        second=NNGraphParam(k=5)
+    )
+)
 table(kgraph.clusters)
 
 plotTSNE(sce.pbmc, colour_by=I(kgraph.clusters))
