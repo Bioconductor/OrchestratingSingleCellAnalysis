@@ -18,7 +18,7 @@ Many of the key events in the cell cycle (e.g., passage through checkpoints) are
 We demonstrate using the 416B dataset, which is known to contain actively cycling cells after oncogene induction.
 
 ```{r, echo=FALSE, results="asis"}
-extractCached("lun-416b.Rmd", "clustering", "sce.416b")
+extractCached("lun-416b.Rmd", "clustering", c("sce.416b", "dec.416b"))
 ```
 
 ```{r}
@@ -70,6 +70,7 @@ While straightforward to implement and interpret,
 this approach assumes that cyclin expression is unaffected by biological processes other than the cell cycle.
 This is a strong assumption in highly heterogeneous populations where cyclins may perform cell-type-specific roles.
 For example, using the Grun HSC dataset [@grun2016denovo], we see an upregulation of cyclin D2 in sorted HSCs (Figure \@ref(fig:heat-cyclin-grun)) that is consistent with a particular reliance on D-type cyclins in these cells [@steinman2002cell;@kozar2004mouse].
+Similar arguments apply to other genes with annotated functions in cell cycle, e.g., from relevant Gene Ontology terms.
 
 ```{r, echo=FALSE, results="asis"}
 extractCached("grun-hsc.Rmd", "clustering", "sce.grun.hsc")
@@ -235,26 +236,62 @@ From a practical perspective, `cyclone()` takes much longer but does not require
 For some time, it was popular to regress out the cell cycle phase prior to downstream analyses.
 The aim was to remove uninteresting variation due to cell cycle, thus improving resolution of other biological processes of interest.
 We could implement this by performing cell cycle phase assignment as described above, treating each phase as a separate batch and applying any of the batch correction strategies described in Chapter \@ref(data-integration).
-The most common approach is to use a linear model to simply regress out the phase effect, e.g., via `regressBatches()`.
+The most common approach is to use a linear model to simply regress out the phase effect, as shown below in Figure \@ref(fig:cell-cycle-regression) via `regressBatches()`.
+Similarly, any functions that support blocking can use the phase assignments as a blocking factor.
 
-```{r}
+```{r cell-cycle-regression, fig.wide=TRUE, fig.cap="PCA plots before and after regression of the cell cycle effect in the 416B dataset. Each point is a cell and is colored by its inferred phase."}
 library(batchelor)
 sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
+dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=assignments$phases)
+sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected",
+    subset_row=getTopHVGs(dec.nocycle, prop=0.1))
 
-# The corrected matrix can then be used for downstream analyses:
-sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected")
+gridExtra::grid.arrange(
+    plotPCA(sce.416b, colour_by=I(assignments$phases)) + ggtitle("Before"),
+    plotPCA(sce.nocycle, colour_by=I(assignments$phases)) + ggtitle("After"),
+    ncol=2
+)
 ```
 
-Similarly, for functions that support blocking, we can use the phase assignments as a blocking factor.
+Alternatively, we can eliminate the cell cycle effect in a more sophisticated manner with contrastive PCA.
+This aims to identify patterns that are enriched in our test dataset - in this case, the 416B data - compared to a control dataset in which cell cycle is the dominant factor of variation.
+The strength of this approach lies in its ability to exactly remove the cell cycle effect, which avoids loss of heterogeneity associated with other processes that happen to be correlated with the cell cycle.
+The downside is that the variation in the control dataset must now be a quantitatively accurate reflection of the variation in the test dataset, requiring more care in choosing the former.
+We demonstrate below using an implementation from the `r Biocpkg("scPCA")` package, which does _not_ remove the separation between the inferred phases (Figure \@ref(fig:cell-cycle-contrastive)); this is not surprising given that the separation also includes an oncogene induction effect and there is no evidence for such distinct separation between phases in the control dataset.
 
-```{r}
-# Similar use in related functions that support blocking:
-dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", 
-    block=assignments$phases)
-marker.nocycle <- findMarkers(sce.416b, block=assignments$phases)
+```{r cell-cycle-contrastive, fig.wide=TRUE, fig.cap="$t$-SNE plots for the Buettner control dataset and the 416B datasets before and after contrastive PCA. Each point is a cell and is colored according to its known (Buettner) or inferred phase (416B)."}
+# From scRNAseq::BuettnerESCData(), see above.
+sce.ref
+
+# A little song and dance required to rematch symbols to Ensembl IDs.
+top.hvgs <- getTopHVGs(dec.416b, p=0.1)
+top.hvgs <- rowData(sce.416b)$ENSEMBL[match(top.hvgs, rownames(sce.416b))]
+top.hvgs <- intersect(rownames(sce.ref), top.hvgs)
+
+# NOTE: my god, this takes a long time. Need to fix.  
+library(scPCA)
+con.out <- scPCA(
+    target=t(logcounts(sce.416b)[match(top.hvgs, rowData(sce.416b)$ENSEMBL),]),
+    background=t(logcounts(control)[top.hvgs,]),
+    penalties=0, n_centers=1, n_eigen=20) 
+
+# Visualizing the results in a t-SNE.
+sce.con <- sce.416b
+reducedDim(sce.con, "cPCA") <- con.out$x[[4]] # TODO: get the scPCA developers to fix this.
+sce.con <- runTSNE(sce.con, dimred="cPCA")
+
+sce.ref <- runPCA(sce.ref, subset_row=top.hvgs)
+sce.ref <- runTSNE(sce.ref, dimred="PCA")
+
+gridExtra::grid.arrange(
+    plotTSNE(sce.ref, colour_by="phase") + ggtitle("Control (Buettner)"),
+    plotTSNE(sce.416b, colour_by=I(assignments$phases)) + ggtitle("Before (416b)"),
+    plotTSNE(sce.con, colour_by=I(assignments$phases)) + ggtitle("After (416b)"),
+    ncol=3
+)
 ```
 
-That said, we do not consider cell cycle adjustment to be necessary for routine scRNA-seq analyses.
+All that said, we do not consider cell cycle adjustment to be necessary for routine scRNA-seq analyses.
 
 - In most applications, the cell cycle is a minor factor of variation, secondary to differences between cell types.
 It will often have no effect on many analyses that focus on broader aspects of heterogeneity.
