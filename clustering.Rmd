@@ -103,6 +103,7 @@ This calls the exact same series of functions when run in graph-based mode with 
 however, it is often more convenient if we want try out different clustering procedures, as we can simply change the second argument to use a different set of parameters or a different algorithm altogether.
 
 ```{r}
+library(bluster)
 clust2 <- clusterRows(reducedDim(sce.pbmc, "PCA"), NNGraphParam())
 table(clust2) # same as above.
 ```
@@ -379,8 +380,6 @@ The `clusterRows()` function supports a "two-step" mode where $k$-means is initi
 Each cell is then placed in the same graph-based cluster that its $k$-means centroid was assigned to (Figure \@ref(fig:tsne-kmeans-graph-pbmc)).
 
 ```{r tsne-kmeans-graph-pbmc, fig.cap="$t$-SNE plot of the PBMC dataset, where each point represents a cell and is coloured according to the identity of the assigned cluster from combined $k$-means/graph-based clustering."}
-library(bluster)
-
 # Setting the seed due to the randomness of k-means.
 set.seed(0101010)
 kgraph.clusters <- clusterRows(reducedDim(sce.pbmc, "PCA"),
@@ -594,7 +593,6 @@ allowing us to quickly identify poorly separate clusters with mostly negative wi
 
 ```{r pbmc-silhouette, fig.wide=TRUE, fig.cap="Distribution of the approximate silhouette width across cells in each cluster of the PBMC dataset. Each point represents a cell and colored with the identity of its own cluster if its silhouette width is positive and that of the closest other cluster if the width is negative."}
 # Performing the calculations on the PC coordinates, like before.
-library(bluster)
 sil.approx <- approxSilhouette(reducedDim(sce.pbmc, "PCA"), clusters=clust)
 
 sil.data <- as.data.frame(sil.approx)
@@ -690,7 +688,6 @@ this accounts for differences in the size and number of clusters within and betw
 A larger ARI indicates that the clusters are preserved, up to a maximum value of 1 for identical clusterings.
 
 ```{r}
-library(bluster)
 pairwiseRand(clust, clust.5, mode="index") 
 ```
 
