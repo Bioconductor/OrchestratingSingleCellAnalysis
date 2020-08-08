@@ -240,7 +240,7 @@ The aim was to remove uninteresting variation due to cell cycle, thus improving 
 With the benefit of hindsight, we do not consider cell cycle adjustment to be necessary for routine applications.
 In most scenarios, the cell cycle is a minor factor of variation, secondary to stronger factors like cell type identity.
 Moreover, most strategies for removal assume that the cell cycle effect is orthogonal to other biological processes, and violations of this assumption will remove interesting signal if cell cycle activity varies across clusters or conditions.
-This is not uncommon with, e.g., increased proliferation of T cells upon activation [@richard2018tcell] and changes in cell cycle phase progression across developmental stages [@roccio2013predicting].
+This is not uncommon with, e.g., increased proliferation of T cells upon activation [@richard2018tcell], changes in cell cycle phase progression across developmental stages [@roccio2013predicting] and correlations between cell cycle and cell fate decisions [@soufi2016cycling].
 Nonetheless, we will discuss some approaches for mitigating the cell cycle effect in this section.
 
 ### With linear regression and friends
@@ -248,7 +248,7 @@ Nonetheless, we will discuss some approaches for mitigating the cell cycle effec
 Here, we treat each phase as a separate batch and apply any of the batch correction strategies described in Chapter \@ref(data-integration).
 The most common approach is to use a linear model to simply regress out any effect associated with the assigned phases, as shown below in Figure \@ref(fig:cell-cycle-regression) via `regressBatches()`.
 Similarly, any functions that support blocking can use the phase assignments as a blocking factor, e.g., `block=` in `modelGeneVarWithSpikes()`.
-The obvious downside is that any correlated processes will also be removed; regression is also capable of introducing spurious signal that interferes with any interpretation of subtle variation.
+The obvious downside is that any correlated processes will also be removed; in the absence of orthogonality, regression is also capable of introducing spurious signal that interferes with any interpretation of subtle variation.
 
 ```{r cell-cycle-regression, fig.width=10, fig.height=6, fig.cap="PCA plots before and after regression of the cell cycle effect in the 416B dataset. Each point is a cell and is colored by its inferred phase."}
 library(batchelor)
@@ -257,9 +257,15 @@ sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
 sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected",
     subset_row=getTopHVGs(dec.nocycle, prop=0.1))
 
+# Shape points by induction status.
+relabel <- c("onco", "WT")[factor(sce.416b$phenotype)]
+scaled <- scale_shape_manual(values=c(onco=4, WT=16))
+
 gridExtra::grid.arrange(
-    plotPCA(sce.416b, colour_by=I(assignments$phases)) + ggtitle("Before"),
-    plotPCA(sce.nocycle, colour_by=I(assignments$phases)) + ggtitle("After"),
+    plotPCA(sce.416b, colour_by=I(assignments$phases), shape_by=I(relabel)) + 
+        ggtitle("Before") + scaled,
+    plotPCA(sce.nocycle, colour_by=I(assignments$phases), shape_by=I(relabel)) + 
+        ggtitle("After") + scaled,
     ncol=2
 )
 ```
@@ -268,6 +274,42 @@ If this type of adjustment is truly necessary, it would be safest to apply it se
 This avoids the worst violations of the orthogonality assumption caused by cluster-specific differences in the magnitude of cell cycle effects and the distribution of cells in each phase. 
 Similarly, gene-based analyses should use the uncorrected data with blocking where possible (Section \@ref(using-corrected-values)), which provides a sanity check that protects against distortions introduced by the adjustment.
 
+### Removing cell cycle-related genes
+
+A gentler alternative to regression is to remove the genes that are associated with cell cycle.
+This can be done using either the known cell cycle phase in controlled experiments, inferred phase assignments from methods like `cyclone()`, or even cluster identities based on the presence of known cell cycle genes in the marker lists.
+Here, we identify the marker genes that separate the groups of cells corresponding to different phases of the cell cycle, and we remove those genes from dataset prior to further downstream analyses.
+We demonstrate below with the @leng2015oscope dataset containing phase-sorted ESCs, where removal of marker genes detected between phases eliminates the separation between G1 and S populations (Figure \@ref(fig:leng-nocycle)).
+
+```{r leng-nocycle, fig.width=10, fig.height=6, fig.cap="PCA plots of the Leng ESC dataset, generated before and after removal of cell cycle-related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
+library(scRNAseq)
+sce.leng <- LengESCData(ensembl=TRUE)
+sce.leng <- logNormCounts(sce.leng, assay.type="normcounts")
+dec.leng <- modelGeneVar(sce.leng)
+top.hvgs <- getTopHVGs(dec.leng, n=1000)
+sce.leng <- runPCA(sce.leng, subset_row=top.hvgs)
+
+# Identifying the cell cycle genes between phases.
+diff <- findMarkers(sce.leng, sce.leng$Phase, direction="up",
+    row.data=rowData(sce.leng)[,"originalName",drop=FALSE])
+# TODO: make this easier in getTopMarkers().
+top.cycle.markers <- unlist(lapply(diff, function(x) rownames(x)[x$FDR <= 0.05]))
+
+top.hvgs2 <- getTopHVGs(dec.leng[!rownames(dec.leng) %in% top.cycle.markers,], n=1000)
+sce.nocycle <- runPCA(sce.leng, subset_row=top.hvgs2)
+
+fill <- geom_point(pch=21, colour="grey") # Color the NA points.
+gridExtra::grid.arrange(
+    plotPCA(sce.leng, colour_by="Phase") + ggtitle("Before") + fill,
+    plotPCA(sce.nocycle, colour_by="Phase") + ggtitle("After") + fill,
+    ncol=2
+)
+```
+
+The assumptions of this approach are largely the same as those of regression so any violations will continue to cause problems.
+However, it is more amenable to fine-tuning: any lost heterogeneity can be easily identified by examining the discarded genes, and users can choose to recover interesting genes even if they are correlated with known/inferred cell cycle phase.
+Direct removal of genes is also less likely to introduce spurious signal than regression when orthogonality does not hold.
+
 ### Using contrastive PCA
 
 Alternatively, we might consider a more sophisticated approach called contrastive PCA [@abid2018exploring].
@@ -275,7 +317,7 @@ This aims to identify patterns that are enriched in our test dataset - in this c
 We demonstrate below using the `r Biocpkg("scPCA")` package [@boileau2020exploring] where we use the subset of wild-type 416B cells as our control based on the expectation that an untreated cell line in culture has little else to do but divide.
 This yields low-dimensional coordinates in which the cell cycle effect within the oncogene-induced and wild-type groups is reduced without removing the difference between groups (Figure \@ref(fig:cell-cycle-contrastive)).
 
-```{r cell-cycle-contrastive, fig.width=10, fig.height=10, fig.cap="$t$-SNE plots for the 416B dataset before and after contrastive PCA. Each point is a cell and is colored according to its inferred cell cycle phase."}
+```{r cell-cycle-contrastive, fig.width=10, fig.height=10, fig.cap="$t$-SNE plots for the 416B dataset before and after contrastive PCA. Each point is a cell and is colored according to its inferred cell cycle phase (left) or oncogene induction status (right)."}
 top.hvgs <- getTopHVGs(dec.416b, p=0.1)
 wild <- sce.416b$phenotype=="wild type phenotype"
 
@@ -292,11 +334,15 @@ sce.con <- sce.416b
 reducedDim(sce.con, "cPCA") <- con.out$x
 sce.con <- runTSNE(sce.con, dimred="cPCA")
 
+# Making the labels easier to read.
+relabel <- c("onco", "WT")[factor(sce.416b$phenotype)]
+scaled <- scale_color_manual(values=c(onco="red", WT="black"))
+
 gridExtra::grid.arrange(
     plotTSNE(sce.416b, colour_by=I(assignments$phases)) + ggtitle("Before (416b)"),
-    plotTSNE(sce.416b, colour_by="phenotype"),
+    plotTSNE(sce.416b, colour_by=I(relabel)) + scaled,
     plotTSNE(sce.con, colour_by=I(assignments$phases)) + ggtitle("After (416b)"),
-    plotTSNE(sce.con, colour_by="phenotype"), 
+    plotTSNE(sce.con, colour_by=I(relabel)) + scaled, 
     ncol=2
 )
 ```
@@ -325,47 +371,6 @@ The downside is that the magnitude of variation in the control dataset must accu
 As a result, the procedure is more sensitive to quantitative differences between datasets compared to `SingleR()` or `cyclone()` during cell cycle phase assignment.
 This makes it difficult to use control datasets from different scRNA-seq technologies or biological systems, as a mismatch in the covariance structure may lead to insufficient or excessive correction.
 At worst, any interesting variation that is inadvertently contained in the control will also be removed.
-
-### Removing annotated cell cycle genes
-
-It can also be an informative exercise to repeat the analysis after removing all known cell cycle-related genes.
-This allows us to explore other factors of variation that are correlated with but distinct from the cell cycle, such as cell fate decisions [@soufi2016cycling] that would otherwise have been eliminated by regression.
-We demonstrate below with the @leng2015oscope dataset containing phase-sorted ESCs, where removal of a variety of cell cycle-related genes does not eliminate the separation between G1 and S populations (Figure \@ref(fig:leng-nocycle)).
-
-```{r leng-nocycle, fig.cap="PCA plot of the Leng ESC dataset, generated after comprehensive removal of cell cycle-related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
-library(org.Hs.eg.db)
-go.genes <- select(org.Hs.eg.db, keys="GO:0007049", # cell cycle (GO)
-    keytype="GOALL", column="ENSEMBL")[,"ENSEMBL"]
-
-library(reactome.db)
-rct.genes <- select(reactome.db, keys="R-HSA-1640170", # cell cycle (REACTOME)
-    keytype="PATHID", column="ENTREZID")[,"ENTREZID"]
-rct.genes <- select(org.Hs.eg.db, keys=as.character(rct.genes), 
-    keytype="ENTREZID", column="ENSEMBL")[,"ENSEMBL"]
-
-combined <- union(rct.genes, go.genes)
-length(combined)
-
-# Performing an analysis without the cell cycle-related genes.
-library(scRNAseq)
-sce.leng <- LengESCData(ensembl=TRUE)
-leftovers <- setdiff(rownames(sce.leng), combined)
-sce.nocycle <- sce.leng#[leftovers,]
-
-sce.nocycle <- logNormCounts(sce.nocycle, assay.type="normcounts")
-dec.nocycle <- modelGeneVar(sce.nocycle)
-sce.nocycle <- runPCA(sce.nocycle, subset_row=getTopHVGs(dec.nocycle, n=1000))
-plotPCA(sce.nocycle, colour_by="Phase") + 
-    geom_point(aes(colour="Phase"), pch=21, colour="grey")
-```
-
-The persistence of this separation is driven by differential expression in genes without any direct role in cell cyle progression, possibly indicative of a correlated biological process - or, of course, a sorting artifact.
-
-```{r}
-diff <- findMarkers(sce.nocycle, sce.nocycle$Phase, direction="up", 
-    row.data=rowData(sce.nocycle)[,"originalName",drop=FALSE]) 
-as.data.frame(diff$S[1:20,])
-```
 
 ## Session Info {-}
 
