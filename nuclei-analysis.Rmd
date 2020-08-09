@@ -1,0 +1,119 @@
+---
+bibliography: ref.bib
+---
+
+# Single-nuclei RNA-seq processing
+
+## Introduction
+
+Single-nuclei RNA-seq (snRNA-seq) provides another strategy for performing single-cell transcriptomics where individual nuclei instead of cells are captured and sequenced.
+The major advantage of snRNA-seq over scRNA-seq is that the former does not require the preservation of cellular integrity during sample preparation, especially dissociation.
+We only need to extract nuclei in an intact state, meaning that snRNA-seq can be applied to cell types, tissues and samples that are not amenable to dissociation and later processing.
+The cost of this flexibility is the loss of transcripts that are primarily located in the cytoplasm, potentially limiting the availability of biological signal for genes with little nuclear localization.
+
+The computational analysis of snRNA-seq data is very much like that of scRNA-seq data.
+We have a matrix of (UMI) counts for genes by cells that requires quality control, normalization and so on.
+(Technically, the columsn correspond to nuclei but we will use these two terms interchangeably in this chapter.)
+In fact, the biggest difference in processing occurs in the construction of the count matrix itself, where intronic regions must be included in the annotation for each gene to account for the increased abundance of unspliced transcripts.
+The rest of the analysis only requires a few minor adjustments to account for the loss of cytoplasmic transcripts.
+We demonstrate using a dataset from @wu2019advantages involving snRNA-seq on healthy and fibrotic mouse kidneys.
+
+```{r}
+library(scRNAseq)
+sce <- WuKidneyData()
+sce <- sce[,sce$Technology=="sNuc-10x"]
+sce
+```
+
+## Quality control
+
+The loss of the cytoplasm means that the stripped nuclei should not contain any mitochondrial transcripts.
+This means that the mitochondrial proportion becomes an excellent QC metric for the efficacy of the stripping process.
+Unlike scRNA-seq, there is no need to worry about variations in mitochondrial content due to genuine biology.
+High-quality nuclei should not contain any mitochondrial transcripts; the presence of any mitochondrial counts in a library indicates that the removal of the cytoplasm was not complete, possibly leading to irrelevant heterogeneity in downstream analyses.
+
+```{r}
+library(scuttle)
+sce <- addPerCellQC(sce, subsets=list(Mt=grep("^mt-", rownames(sce))))
+summary(sce$subsets_Mt_percent == 0)
+```
+
+We apply a simple filter to remove libraries corresponding to incompletely stripped nuclei.
+The outlier-based approach described in Section \@ref(quality-control) can be used here, but some caution is required in well-executed experiments where a majority of cells have mitochondrial proportions of zero.
+In such cases, the MAD may also be zero such that libraries with very low but non-zero mitochondrial counts are removed.
+This is typically too conservative as such transcripts may be present due to sporadic ambient contamination rather than incomplete stripping.
+
+```{r}
+stats <- quickPerCellQC(colData(sce), sub.fields="subsets_Mt_percent")
+colSums(as.matrix(stats))
+```
+
+Instead, we enforce a minimum difference between the threshold and the median in `isOutlier()` (Figure \@ref(fig:nuclei-qc)).
+We arbitrarily choose +0.5% here, which takes precedence over the outlier-based threshold if the latter is too low.
+In this manner, we avoid discarding libraries with a very modest amount of contamination; the same code will automatically fall back to the outlier-based threshold in datasets where the stripping was systematically less effective.
+
+```{r nuclei-qc, fig.cap="Distribution of the mitochondrial proportions in the Wu kidney dataset. Each point represents a cell and is colored according to whether it was considered to be of low quality and discarded."}
+stats$high_subsets_Mt_percent <- isOutlier(sce$subsets_Mt_percent, 
+    type="higher", min.diff=0.5)
+stats$discard <- Reduce("|", stats[,colnames(stats)!="discard"])
+colSums(as.matrix(stats))
+
+library(scater)
+plotColData(sce, x="Status", y="subsets_Mt_percent",
+    colour_by=I(stats$high_subsets_Mt_percent))
+```
+
+## Downstream interpretation
+
+The rest of the analysis can then be performed using the same strategies discussed for scRNA-seq (Figure \@ref(fig:nuclei-tsne)).
+Despite the loss of cytoplasmic transcripts, there is usually still enough biological signal to characterize population heterogeneity [@bakken2018single;@wu2019advantages].
+In fact, one could even say that snRNA-seq has a higher signal-to-noise ratio as sequencing coverage is not spent on highly abundant but typically uninteresting transcripts for mitochondrial and ribosomal protein genes.
+
+```{r nuclei-tsne, fig.cap="$t$-SNE plots of the Wu kidney dataset. Each point is a cell and is colored by its cluster assignment (left) or its disease status (right)."}
+library(scran)
+set.seed(111)
+
+sce <- logNormCounts(sce[,!stats$discard])
+dec <- modelGeneVarByPoisson(sce)
+sce <- runPCA(sce, subset_row=getTopHVGs(dec, n=4000))
+sce <- runTSNE(sce, dimred="PCA")
+
+library(bluster)
+colLabels(sce) <- clusterRows(reducedDim(sce, "PCA"), NNGraphParam())
+gridExtra::grid.arrange(
+    plotTSNE(sce, colour_by="label", text_by="label"),
+    plotTSNE(sce, colour_by="Status"),
+    ncol=2
+)    
+```
+
+It is similarly straightforward to apply more complex procedures such as batch correction (Figure \@ref(fig:nuclei-tsne-merged)).
+In this case, we are merging the diseased and normal cells for common clustering to identify shared cell types, but it is also possible to apply correction across scRNA-seq and snRNA-seq datasets.
+This can occasionally be interesting to see how the two technologies compare - for example, scRNA-seq has the not inconsiderable advantage of being able to recover subpopulations that are not amenable to dissociation and would be lost by scRNA-seq protocols.
+
+```{r nuclei-tsne-merged, fig.cap="More $t$-SNE plots of the Wu kidney dataset after applying MNN correction across diseases."}
+library(batchelor)
+merged <- multiBatchNorm(sce, batch=sce$Status)
+merged <- fastMNN(merged, batch=merged$Status)
+merged <- runTSNE(merged, dimred="corrected")
+colLabels(merged) <- clusterRows(reducedDim(merged, "corrected"), NNGraphParam())
+
+gridExtra::grid.arrange(
+    plotTSNE(merged, colour_by="label", text_by="label"),
+    plotTSNE(merged, colour_by="batch"),
+    ncol=2
+)    
+```
+
+Other analyses described for scRNA-seq require more care when they are applied to snRNA-seq data.
+Most obviously, cell type annotation based on reference profiles (Section \@ref(cell-type-annotation) should be treated with some caution as the majority of existing references are constructed from bulk or single-cell datasets with cytoplasmic transcripts.
+RNA velocity calculations are complicated by the need to consider the rate of nuclear export of spliced transcripts.
+The set of detected markers may also differ from prior expectations, which is not too surprising given that transcripts for such genes are more likely to localize to the cytoplasm for translation (and subsequently lost upon stripping). 
+
+## Tricks with ambient contamination 
+
+## Session Info {-}
+
+```{r sessionInfo, echo=FALSE, results='asis'}
+prettySessionInfo()
+```
