@@ -113,7 +113,8 @@ gridExtra::grid.arrange(
 ```
 
 Similarly, we can perform marker detection on the snRNA-seq expression values as discussed in Section \@ref(marker-detection).
-Note that the set of detected markers may also differ from prior expectations, which is not too surprising given that transcripts for strongly expressed genes are more likely to localize to the cytoplasm for translation (and subsequently lost upon stripping). 
+Note that the set of detected markers may differ from what might be observed from scRNA-seq data.
+This may not be too surprising given that transcripts for strongly expressed genes are more likely to localize to the cytoplasm for efficient translation and subsequently lost upon stripping; conversely, genes with the same overall expression but differences in the rate of nuclear export may appear to be differentially expressed between clusters. 
 
 ```{r}
 markers <- findMarkers(merged, block=merged$Status, direction="up")
