@@ -93,7 +93,7 @@ gridExtra::grid.arrange(
 )    
 ```
 
-We can also apply more complex procedures such as batch correction (Section \@ref(integrating-datasetse)).
+We can also apply more complex procedures such as batch correction (Section \@ref(integrating-datasets)).
 Here, we eliminate the disease effect to identify shared clusters (Figure \@ref(fig:nuclei-tsne-merged)).
 
 ```{r nuclei-tsne-merged, fig.width=10, fig.height=6, fig.cap="More $t$-SNE plots of the Wu kidney dataset after applying MNN correction across diseases."}
