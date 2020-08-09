@@ -629,7 +629,7 @@ A simple mitigating strategy is to simply take the lower of the proportions from
 An estimate of the ambient profile is rarely available for public datasets where only the per-cell count matrices are provided.
 In such cases, we must instead use the rest of the dataset to infer something about the effects of ambient contamination.
 The most obvious approach is construct a proxy ambient profile by summing the counts for all cells from each sample, which can be used in place of the actual profile in the previous calculations.
-This assumes equal contributions from all labels to the ambient pool, which is not entirely unrealistic (Figure \@ref(proxy-ambience)) though some discrepancies can be expected due to the presence of particularly fragile cell types or extracellular RNA.
+This assumes equal contributions from all labels to the ambient pool, which is not entirely unrealistic (Figure \@ref(fig:proxy-ambience)) though some discrepancies can be expected due to the presence of particularly fragile cell types or extracellular RNA.
 
 ```{r proxy-ambience, fig.asp=1, fig.cap="MA plots of the log-fold change of the proxy ambient profile over the real profile for each sample in the _Tal1_ chimera dataset."}
 proxy.ambient <- aggregateAcrossCells(summed.tal1,
