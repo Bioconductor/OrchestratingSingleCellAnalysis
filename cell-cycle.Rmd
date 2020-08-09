@@ -33,11 +33,11 @@ The expression of cyclins can help to determine the relative cell cycle activity
 For example, most cells in cluster 1 are likely to be in G1 while the other clusters are scattered across the later phases.
 
 ```{r heat-cyclin, fig.cap="Heatmap of the log-normalized expression values of the cyclin genes in the 416B dataset. Each column represents a cell that is sorted by the cluster of origin."}
+library(scater)
 cyclin.genes <- grep("^Ccn[abde][0-9]$", rowData(sce.416b)$SYMBOL)
 cyclin.genes <- rownames(sce.416b)[cyclin.genes]
 cyclin.genes
 
-library(scater)
 plotHeatmap(sce.416b, order_columns_by="label", 
     cluster_rows=FALSE, features=sort(cyclin.genes))
 ```
@@ -125,11 +125,7 @@ This aims to avoid detecting markers for other biological processes that happen 
 library(org.Mm.eg.db)
 cycle.anno <- select(org.Mm.eg.db, keytype="GOALL", keys="GO:0007049", 
     columns="ENSEMBL")[,"ENSEMBL"]
-
-# Find the genes that are present in both datasets as well.
-candidates <- intersect(cycle.anno, rownames(sce.ref))
-candidates <- intersect(candidates, rowData(sce.416b)$ENSEMBL)
-str(candidates)
+str(cycle.anno)
 ```
 
 We use the `SingleR()` function to assign labels to the 416B data based on the cell cycle phases in the ESC reference.
@@ -142,8 +138,8 @@ test.data <- logcounts(sce.416b)
 rownames(test.data) <- rowData(sce.416b)$ENSEMBL
 
 library(SingleR)
-assignments <- SingleR(test.data[candidates,], ref=sce.ref[candidates,],
-    de.method="wilcox", label=sce.ref$phase)
+assignments <- SingleR(test.data, ref=sce.ref, label=sce.ref$phase, 
+    de.method="wilcox", restrict=cycle.anno)
 
 tab <- table(assignments$labels, colLabels(sce.416b))
 tab
