@@ -44,8 +44,8 @@ summary(sce$subsets_Mt_percent == 0)
 ```
 
 We apply a simple filter to remove libraries corresponding to incompletely stripped nuclei.
-The outlier-based approach described in Section \@ref(quality-control) can be used here, but some caution is required in well-executed experiments where a majority of cells have mitochondrial proportions of zero.
-In such cases, the MAD may also be zero such that libraries with very low but non-zero mitochondrial counts are removed.
+The outlier-based approach described in Section \@ref(quality-control) can be used here, but some caution is required in low-coverage experiments where a majority of cells have zero mitochondrial counts.
+In such cases, the MAD may also be zero such that other libraries with very low but non-zero mitochondrial counts are removed.
 This is typically too conservative as such transcripts may be present due to sporadic ambient contamination rather than incomplete stripping.
 
 ```{r}
@@ -113,8 +113,10 @@ gridExtra::grid.arrange(
 ```
 
 Similarly, we can perform marker detection on the snRNA-seq expression values as discussed in Section \@ref(marker-detection).
-Note that the set of detected markers may differ from what might be observed from scRNA-seq data.
-This may not be too surprising given that transcripts for strongly expressed genes are more likely to localize to the cytoplasm for efficient translation and subsequently lost upon stripping; conversely, genes with the same overall expression but differences in the rate of nuclear export may appear to be differentially expressed between clusters. 
+For the most part, interpretation of these DE results makes the simplifying assumption that nuclear abundances are a good proxy for the overall expression profile.
+This is generally reasonable but may not always be true, resulting in some discrepancies in the marker sets between snRNA-seq and scRNA-seq datasets.
+For example, transcripts for strongly expressed genes are more likely to localize to the cytoplasm for efficient translation and subsequently lost upon stripping, while genes with the same overall expression but differences in the rate of nuclear export may appear to be differentially expressed between clusters.
+In the most pathological case, higher snRNA-seq abundances may indicate nuclear sequestration of transcripts for protein-coding genes and reduced activity of the relevant biological process, contrary to the usual interpretation of the effect of upregulation.
 
 ```{r}
 markers <- findMarkers(merged, block=merged$Status, direction="up")
