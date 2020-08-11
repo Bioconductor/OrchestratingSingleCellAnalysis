@@ -1,6 +1,7 @@
 Package: OrchestratingSingleCellAnalysis
 Title: Orchestrating Single Cell Analysis with Bioconductor
-Version: 1.0.0
+Version: 1.1.0
+Date: 2020-08-10
 Authors@R: c(
         person('Robert', 'Amezquita', role = c('aut')), 
         person('Aaron', 'Lun', role = c('aut', 'cre'), email="infinite.monkeys.with.keyboards@gmail.com"), 
@@ -54,8 +55,8 @@ Imports: AnnotationHub,
   robustbase,
   Rtsne,
   scater,
-  scran,
   scPCA,
+  scran,
   scRNAseq,
   scuttle,
   SingleCellExperiment,
