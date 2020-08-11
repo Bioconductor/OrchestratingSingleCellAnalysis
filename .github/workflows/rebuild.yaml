@@ -12,7 +12,7 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v2
       - name: Update DESCRIPTION and Makefile
-        runs: |
+        run: |
           BiocManager::install("LTLA/rebook")
           rebook::updateDependencies(".", extra=c("Rtsne", "RMTstat", "statmod", "GO.db"))
           rebook::createMakefile()
