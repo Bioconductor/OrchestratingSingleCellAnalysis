@@ -7,13 +7,12 @@ jobs:
   rebuild:
     name: "Rebuilding sundries"
     runs-on: ubuntu-latest
-    container: bioconductor/bioconductor_docker:devel
+    container: bioconductor/orchestratingsinglecellanalysis:latest
     steps:
       - name: Check out repo
         uses: actions/checkout@v2
       - name: Update DESCRIPTION and Makefile
         run: |
-          BiocManager::install("LTLA/rebook")
           rebook::updateDependencies(".", extra=c("Rtsne", "RMTstat", "statmod", "GO.db"))
           rebook::createMakefile()
         shell: Rscript {0}
