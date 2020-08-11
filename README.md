@@ -57,7 +57,7 @@ To contribute reports, follow standard procedure: fork and PR.
 - All `workflow` chapters should use a `SingleCellExperiment` object throughout the various chunks.
 This allows chapters to pick up the SCE at any point.
 
-Any changes should be accompanied by house-keeping updates:
+Any changes should be accompanied by house-keeping updates, performed automatically by the GitHub Action in this repository.
 
 - Updating the listed dependencies in the `DESCRIPTION`.
 Some `extra` help is required for those dependencies that are implicitly required via `Suggests`.
@@ -71,3 +71,15 @@ Some `extra` help is required for those dependencies that are implicitly require
   ```r
   createMakefile()
   ```
+
+## Deployment instructions
+
+The deployment cycle for this book is amusingly circuitous:
+
+1. Commit changes to this repository, usually on the `master` branch.
+2. The [**simpleSingleCell**](https://github.com/MarioniLab/simpleSingleCell) package is a "trojan" that we will use to sneak the book onto Bioconductor's build system (BBS) owing to the latter's package-centric nature.
+It contains a GitHub Action to poll for and incorporate any changes in this repository, after which it will bump the version number and push the changes to the Bioconductor Git servers.
+3. The BBS does its stuff and compiles the book.
+4. The [Pages repository](https://github.com/Bioconductor/OrchestratingSingleCellAnalysis-devel) has its own GitHub Action that pulls the built tarballs from the Bioconductor website and uploads the compiled book onto GitHub Pages.
+
+Despite its complexity, it is fully automatic beyond the first push to this repository.
