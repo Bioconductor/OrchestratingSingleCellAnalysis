@@ -323,7 +323,7 @@ library(scPCA)
 con.out <- scPCA(
     target=t(logcounts(sce.416b)[top.hvgs,]),
     background=t(logcounts(sce.416b)[top.hvgs,wild]),
-    alg="rand_var_proj", penalties=0, n_centers=5, n_eigen=10) 
+    alg="rand_var_proj", penalties=1e-8, n_centers=5, n_eigen=10)
 
 # Visualizing the results in a t-SNE.
 sce.con <- sce.416b
