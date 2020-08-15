@@ -392,7 +392,7 @@ qcdata <- bfcrpath(bfc, "https://github.com/LuyiTian/CellBench_data/blob/master/
 env <- new.env()
 load(qcdata, envir=env)
 sce.8qc <- env$sce8_qc
-sce.8qc <- factor(sce.8qc$mix)
+sce.8qc$mix <- factor(sce.8qc$mix)
 
 # Library size normalization and log-transformation.
 sce.8qc <- logNormCounts(sce.8qc)
