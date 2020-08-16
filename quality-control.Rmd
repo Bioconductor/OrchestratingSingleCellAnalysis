@@ -1,7 +1,7 @@
 ---
 output:
   html_document
-bibliography: ../ref.bib
+bibliography: ref.bib
 ---
 
 # Quality Control
@@ -390,129 +390,6 @@ The weakness of the correlations motivates the use of several metrics to capture
 Of course, the flipside is that these metrics may also represent different aspects of biology,
 increasing the risk of discarding entire cell types as discussed in Section \@ref(outlier-assumptions).
 
-## Cell calling for droplet data {#qc-droplets}
-
-### Background
-
-An unique aspect of droplet-based data is that we have no prior knowledge about whether a particular library (i.e., cell barcode) corresponds to cell-containing or empty droplets.
-Thus, we need to call cells from empty droplets based on the observed expression profiles.
-This is not entirely straightforward as empty droplets can contain ambient (i.e., extracellular) RNA that can be captured and sequenced, resulting in non-zero counts for libraries that do not contain any cell.
-To demonstrate, we obtain the **unfiltered** count matrix for the PBMC dataset from 10X Genomics.
-
-```{r}
-library(BiocFileCache)
-bfc <- BiocFileCache("raw_data", ask = FALSE)
-raw.path <- bfcrpath(bfc, file.path("http://cf.10xgenomics.com/samples",
-    "cell-exp/2.1.0/pbmc4k/pbmc4k_raw_gene_bc_matrices.tar.gz"))
-untar(raw.path, exdir=file.path(tempdir(), "pbmc4k"))
-
-library(DropletUtils)
-library(Matrix)
-fname <- file.path(tempdir(), "pbmc4k/raw_gene_bc_matrices/GRCh38")
-sce.pbmc <- read10xCounts(fname, col.names=TRUE)
-sce.pbmc
-```
-
-The distribution of total counts exhibits a sharp transition between barcodes with large and small total counts (Figure \@ref(fig:rankplot)), probably corresponding to cell-containing and empty droplets respectively.
-A simple approach would be to apply a threshold on the total count to only retain those barcodes with large totals.
-However, this unnecessarily discards libraries derived from cell types with low RNA content.
-
-```{r rankplot, fig.cap="Total UMI count for each barcode in the PBMC dataset, plotted against its rank (in decreasing order of total counts). The inferred locations of the inflection and knee points are also shown."}
-bcrank <- barcodeRanks(counts(sce.pbmc))
-
-# Only showing unique points for plotting speed.
-uniq <- !duplicated(bcrank$rank)
-plot(bcrank$rank[uniq], bcrank$total[uniq], log="xy",
-    xlab="Rank", ylab="Total UMI count", cex.lab=1.2)
-
-abline(h=metadata(bcrank)$inflection, col="darkgreen", lty=2)
-abline(h=metadata(bcrank)$knee, col="dodgerblue", lty=2)
-
-legend("bottomleft", legend=c("Inflection", "Knee"), 
-        col=c("darkgreen", "dodgerblue"), lty=2, cex=1.2)
-```
-
-### Testing for empty droplets
-
-We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool [@lun2018distinguishing].
-Any significant deviation indicates that the barcode corresponds to a cell-containing droplet.
-This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure \@ref(fig:rankplot).
-We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.
-
-```{r}
-# emptyDrops performs Monte Carlo simulations to compute p-values,
-# so we need to set the seed to obtain reproducible results.
-set.seed(100)
-e.out <- emptyDrops(counts(sce.pbmc))
-
-# See ?emptyDrops for an explanation of why there are NA values.
-summary(e.out$FDR <= 0.001)
-```
-
-`emptyDrops()` uses Monte Carlo simulations to compute $p$-values for the multinomial sampling transcripts from the ambient pool.
-The number of Monte Carlo iterations determines the lower bound for the $p$-values [@phipson2010permutation].
-The `Limited` field in the output indicates whether or not the computed $p$-value for a particular barcode is bounded by the number of iterations.
-If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations.
-A larger number of iterations will result in a lower $p$-value for these barcodes, which may allow them to be detected after correcting for multiple testing.
-
-```{r}
-table(Sig=e.out$FDR <= 0.001, Limited=e.out$Limited)
-```
-
-As mentioned above, `emptyDrops()` assumes that barcodes with low total UMI counts are empty droplets.
-Thus, the null hypothesis should be true for all of these barcodes. 
-We can check whether the hypothesis testing procedure holds its size by examining the distribution of $p$-values for low-total barcodes with `test.ambient=TRUE`.
-Ideally, the distribution should be close to uniform (Figure \@ref(fig:ambientpvalhist)).
-Large peaks near zero indicate that barcodes with total counts below `lower` are not all ambient in origin.
-This can be resolved by decreasing `lower` further to ensure that barcodes corresponding to droplets with very small cells are not used to estimate the ambient profile.
-
-```{r ambientpvalhist, fig.cap="Distribution of $p$-values for the assumed empty droplets."}
-set.seed(100)
-limit <- 100   
-all.out <- emptyDrops(counts(sce.pbmc), lower=limit, test.ambient=TRUE)
-hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0],
-    xlab="P-value", main="", col="grey80") 
-```
-
-Once we are satisfied with the performance of `emptyDrops()`, we subset our `SingleCellExperiment` object to retain only the detected cells.
-Discerning readers will notice the use of `which()`, which conveniently removes the `NA`s prior to the subsetting.
- 
-```{r}
-sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
-```
-
-It is worth pointing out that, at this point, we do not attempt to remove the ambient contamination from each library.
-Accurate quantification of the contamination rate in each cell is difficult as it generally requires some prior biological knowledge about genes that are expected to have mutually exclusive expression profiles _and_ are highly abundant in the ambient solution [@young2018soupx].
-Fortunately, ambient contamination usually has little effect on the downstream conclusions for routine analyses; cell type identities are usually easy enough to determine from the affected genes, notwithstanding a (mostly harmless) low background level of expression for marker genes that should be unique to a cell type.
-However, more susceptible analyses may require specific remedies like those discussed in Section \@ref(ambient-problems).
-
-### Relationship with other QC metrics
-
-While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells.
-It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
-This is achieved using the same outlier-based strategy described in Section \@ref(quality-control-outlier).
-Filtering on the mitochondrial proportion provides the most additional benefit in this situation, provided that we check that we are not removing a subpopulation of metabolically active cells (Figure \@ref(fig:qc-mito-pbmc)). 
-
-```{r qc-mito-pbmc, fig.cap="Percentage of reads assigned to mitochondrial transcripts, plotted against the library size. The red line represents the upper threshold used for QC filtering."}
-is.mito <- grep("^MT-", rowData(sce.pbmc)$Symbol)
-pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets=list(MT=is.mito))
-discard.mito <- isOutlier(pbmc.qc$subsets_MT_percent, type="higher")
-summary(discard.mito)
-plot(pbmc.qc$sum, pbmc.qc$subsets_MT_percent, log="x",
-    xlab="Total count", ylab='Mitochondrial %')
-abline(h=attr(discard.mito, "thresholds")["higher"], col="red")
-```
-
-`emptyDrops()` already removes cells with very low library sizes or (by association) low numbers of expressed genes.
-Thus, further filtering on these metrics is not strictly necessary.
-It may still be desirable to filter on both of these metrics to remove non-empty droplets containing cell fragments or stripped nuclei that were not caught by the mitochondrial filter.
-However, this should be weighed against the risk of losing genuine cell types as discussed in Section \@ref(outlier-assumptions).
-
-Note that _CellRanger_ version 3 automatically performs cell calling using an algorithm similar to `emptyDrops()`.
-If we had started our analysis with the **filtered** count matrix, we could go straight to computing other QC metrics.
-We would not need to run `emptyDrops()` manually as shown here, and indeed, attempting to do so would lead to nonsensical results if not outright software errors.
-Nonetheless, it may still be desirable to load the **unfiltered** matrix and apply `emptyDrops()` ourselves, on occasions where more detailed inspection or control of the cell-calling statistics is desired.
-
 ## Removing low-quality cells {#quality-control-discarded}
 
 Once low-quality cells have been identified, we can choose to either remove them or mark them.
@@ -530,7 +407,7 @@ We can diagnose cell type loss by looking for systematic differences in gene exp
 To demonstrate, we compute the average count across the discarded and retained pools in the 416B data set, and we compute the log-fold change between the pool averages.
 
 ```{r}
-# Using the 'discard' vector for demonstration, 
+# Using the 'discard' vector for demonstration purposes, 
 # as it has more cells for stable calculation of 'lost'.
 lost <- calculateAverage(counts(sce.416b)[,!discard])
 kept <- calculateAverage(counts(sce.416b)[,discard])
@@ -549,13 +426,18 @@ plot(abundance, logFC, xlab="Average count", ylab="Log-FC (lost/kept)", pch=16)
 points(abundance[is.mito], logFC[is.mito], col="dodgerblue", pch=16)
 ```
 
-For comparison, let's pretend that we applied a fixed threshold on the library size to filter cells in the PBMC data set.
+For comparison, let us consider the QC step for the PBMC dataset from 10X Genomics [@zheng2017massively].
+We'll apply an arbitrary fixed threshold on the library size to filter cells rather than using any outlier-based method. 
 Specifically, we remove all libraries with a library size below 500.
 
+```{r, results='asis', echo=FALSE}
+extractCached("tenx-unfiltered-pbmc4k.Rmd", "cell-detection", "sce.pbmc")
+```
+
 ```{r}
-alt.discard <- colSums(counts(sce.pbmc)) < 500
-lost <- calculateAverage(counts(sce.pbmc)[,alt.discard])
-kept <- calculateAverage(counts(sce.pbmc)[,!alt.discard])
+discard <- colSums(counts(sce.pbmc)) < 500
+lost <- calculateAverage(counts(sce.pbmc)[,discard])
+kept <- calculateAverage(counts(sce.pbmc)[,!discard])
 
 logged <- edgeR::cpm(cbind(lost, kept), log=TRUE, prior.count=2)
 logFC <- logged[,1] - logged[,2]
@@ -563,15 +445,12 @@ abundance <- rowMeans(logged)
 ```
 
 The presence of a distinct population in the discarded pool manifests in Figure \@ref(fig:discardplotpbmc) as a set of genes that are strongly upregulated in `lost`.
-This includes _PF4_, _PPBP_ and _CAVIN2_, which (spoiler alert!) indicates that there is a platelet population that has been discarded by `alt.discard`.
+This includes _PF4_, _PPBP_ and _SDPR_, which (spoiler alert!) indicates that there is a platelet population that has been discarded by `alt.discard`.
 
 ```{r discardplotpbmc, fig.cap="Average counts across all discarded and retained cells in the PBMC dataset, after using a more stringent filter on the total UMI count. Each point represents a gene, with platelet-related genes highlighted in orange."}
 plot(abundance, logFC, xlab="Average count", ylab="Log-FC (lost/kept)", pch=16)
-platelet <- c("PF4", "PPBP", "CAVIN2")
-
-library(org.Hs.eg.db)
-ids <- mapIds(org.Hs.eg.db, keys=platelet, column="ENSEMBL", keytype="SYMBOL")
-points(abundance[ids], logFC[ids], col="orange", pch=16)
+platelet <- c("PF4", "PPBP", "SDPR")
+points(abundance[platelet], logFC[platelet], col="orange", pch=16)
 ```
 
 If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters for metrics that are associated with genuine biological differences.
