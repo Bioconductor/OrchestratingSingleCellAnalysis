@@ -1,7 +1,6 @@
 ---
-output:
-  html_document
-bibliography: ../ref.bib
+output: html_document
+bibliography: ref.bib
 ---
 
 # Interactive data exploration {#interactive-sharing}

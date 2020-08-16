@@ -59,7 +59,7 @@ markers.pbmc
 ```
 
 ```{r, echo=FALSE}
-chosen <- 9
+chosen <- 7
 ```
 
 The default philosophy of `findMarkers()` is to identify a combination of marker genes that - together - uniquely define one cluster against the rest.
@@ -67,7 +67,7 @@ To this end, we collect the top DE genes from each pairwise comparison involving
 We will demonstrate on cluster `r chosen`; the relevant `DataFrame` contains log~2~-fold changes of expression in cluster `r chosen` over each other cluster, along with several statistics obtained by combining $p$-values [@simes1986improved] across the pairwise comparisons involving `r chosen`.
 
 ```{r}
-chosen <- "9"
+chosen <- "7"
 interesting <- markers.pbmc[[chosen]]
 colnames(interesting)
 ```
@@ -188,7 +188,7 @@ pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
 
 Of course, this increased stringency is not without cost.
 If only upregulated genes are requested from `findMarkers()`, any cluster defined by downregulation of a marker gene will not contain that gene among the top set of features in its `DataFrame`.
-This is occasionally relevant for subtypes or other states that are distinguished by high versus low expression of particular genes^[Standard operating procedure is to (i) experience a brief but crushing bout of disappointment due to the poor quality of upregulated candidate markers, (ii) rage-quit, and (iii) remember to check the genes that are changing in the other direction.].
+This is occasionally relevant for subtypes or other states that are defined by low expression of particular genes^[Standard operating procedure is to (i) experience a brief but crushing bout of disappointment due to the poor quality of upregulated candidate markers, (ii) rage-quit, and (iii) remember to check the genes that are changing in the other direction.].
 Similarly, setting an excessively high log-fold change threshold may discard otherwise useful genes.
 For example, a gene upregulated in a small proportion of cells of a cluster will have a small log-fold change but can still be an effective marker if the focus is on specificity rather than sensitivity.
 

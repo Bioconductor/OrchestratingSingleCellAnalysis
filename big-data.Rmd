@@ -53,7 +53,7 @@ table(Exact=colLabels(sce.pbmc), Approx=clusters$membership)
 # Checking that I'm not just talking shit.
 library(bluster)
 rand <- pairwiseRand(colLabels(sce.pbmc), clusters$membership, mode="index")
-stopifnot(rand > 0.95)
+stopifnot(rand > 0.9)
 ```
 
 Note that Annoy writes the NN index to disk prior to performing the search.
