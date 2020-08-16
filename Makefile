@@ -1,4 +1,4 @@
-all: tenx-unfiltered-pbmc4k.md muraro-pancreas.md segerstolpe-pancreas.md zeisel-brain.md bach-mammary.md lun-416b.md grun-hsc.md tenx-filtered-pbmc3k-4k-8k.md lawlor-pancreas.md grun-pancreas.md tenx-repertoire-pbmc8k.md pijuan-embryo.md nestorowa-hsc.md about-the-contributors.md beyond-r-basics.md bibliography.md data-infrastructure.md hca-bone-marrow.md index.md interoperability.md introduction.md learning-r-and-bioconductor.md nuclei-analysis.md overview.md paul-hsc.md protein-abundance.md big-data.md interactive.md normalization.md reduced-dimensions.md cell-annotation.md doublet-detection.md clustering.md feature-selection.md quality-control.md cell-cycle.md data-integration.md marker-detection.md merged-pancreas.md repertoire-seq.md sample-comparisons.md trajectory.md
+all: tenx-unfiltered-pbmc4k.md muraro-pancreas.md segerstolpe-pancreas.md zeisel-brain.md bach-mammary.md lun-416b.md grun-hsc.md tenx-filtered-pbmc3k-4k-8k.md lawlor-pancreas.md grun-pancreas.md tenx-repertoire-pbmc8k.md pijuan-embryo.md nestorowa-hsc.md about-the-contributors.md beyond-r-basics.md bibliography.md data-infrastructure.md hca-bone-marrow.md index.md interoperability.md introduction.md learning-r-and-bioconductor.md nuclei-analysis.md overview.md paul-hsc.md protein-abundance.md big-data.md droplet-processing.md interactive.md normalization.md reduced-dimensions.md cell-annotation.md doublet-detection.md clustering.md feature-selection.md quality-control.md cell-cycle.md data-integration.md marker-detection.md merged-pancreas.md repertoire-seq.md sample-comparisons.md trajectory.md
 
 tenx-unfiltered-pbmc4k.md: tenx-unfiltered-pbmc4k.Rmd
 	R -e "knitr::knit('tenx-unfiltered-pbmc4k.Rmd')"
@@ -81,6 +81,9 @@ protein-abundance.md: protein-abundance.Rmd
 big-data.md: big-data.Rmd tenx-unfiltered-pbmc4k.md
 	R -e "knitr::knit('big-data.Rmd')"
 
+droplet-processing.md: droplet-processing.Rmd tenx-unfiltered-pbmc4k.md
+	R -e "knitr::knit('droplet-processing.Rmd')"
+
 interactive.md: interactive.Rmd tenx-unfiltered-pbmc4k.md
 	R -e "knitr::knit('interactive.Rmd')"
 
@@ -102,7 +105,7 @@ clustering.md: clustering.Rmd tenx-unfiltered-pbmc4k.md lun-416b.md
 feature-selection.md: feature-selection.Rmd tenx-unfiltered-pbmc4k.md lun-416b.md
 	R -e "knitr::knit('feature-selection.Rmd')"
 
-quality-control.md: quality-control.Rmd zeisel-brain.md lun-416b.md
+quality-control.md: quality-control.Rmd tenx-unfiltered-pbmc4k.md zeisel-brain.md lun-416b.md
 	R -e "knitr::knit('quality-control.Rmd')"
 
 cell-cycle.md: cell-cycle.Rmd lun-416b.md grun-hsc.md
