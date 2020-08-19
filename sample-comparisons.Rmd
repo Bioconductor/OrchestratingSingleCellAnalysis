@@ -846,7 +846,7 @@ Here, the log-fold change in our model refers to the change in cell abundance af
 design <- model.matrix(~factor(pool) + factor(tomato), y.ab$samples)
 ```
 
-We use the `estimateDisp()` function to estimate the NB dipersion for each cluster (Figure \@ref(fig:abplotbcv)).
+We use the `estimateDisp()` function to estimate the NB dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
 We turn off the trend as we do not have enough points for its stable estimation. 
 
 ```{r abplotbcv, fig.cap="Biological coefficient of variation (BCV) for each label with respect to its average abundance. BCVs are defined as the square root of the NB dispersion. Common dispersion estimates are shown in red."}
