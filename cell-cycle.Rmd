@@ -246,11 +246,13 @@ The most common approach is to use a linear model to simply regress out any effe
 Similarly, any functions that support blocking can use the phase assignments as a blocking factor, e.g., `block=` in `modelGeneVarWithSpikes()`.
 The obvious downside is that any correlated processes will also be removed; in the absence of orthogonality, regression is also capable of introducing spurious signal that interferes with any interpretation of subtle variation.
 
-```{r cell-cycle-regression, fig.width=10, fig.height=6, fig.cap="PCA plots before and after regression of the cell cycle effect in the 416B dataset. Each point is a cell and is colored by its inferred phase."}
+```{r cell-cycle-regression, fig.width=10, fig.height=6, fig.cap="PCA plots before and after regressing out the cell cycle effect in the 416B dataset, based on the phase assignments from `cyclone()`. Each point is a cell and is colored by its inferred phase."}
 library(batchelor)
 dec.nocycle <- modelGeneVarWithSpikes(sce.416b, "ERCC", block=assignments$phases)
-sce.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
-sce.nocycle <- runPCA(sce.nocycle, exprs_values="corrected",
+reg.nocycle <- regressBatches(sce.416b, batch=assignments$phases)
+
+set.seed(100011)
+reg.nocycle <- runPCA(reg.nocycle, exprs_values="corrected",
     subset_row=getTopHVGs(dec.nocycle, prop=0.1))
 
 # Shape points by induction status.
@@ -260,10 +262,26 @@ scaled <- scale_shape_manual(values=c(onco=4, WT=16))
 gridExtra::grid.arrange(
     plotPCA(sce.416b, colour_by=I(assignments$phases), shape_by=I(relabel)) + 
         ggtitle("Before") + scaled,
-    plotPCA(sce.nocycle, colour_by=I(assignments$phases), shape_by=I(relabel)) + 
+    plotPCA(reg.nocycle, colour_by=I(assignments$phases), shape_by=I(relabel)) + 
         ggtitle("After") + scaled,
     ncol=2
 )
+```
+
+Alternatively, one could regress on the classification scores to account for any ambiguity in assignment.
+An example using `cyclone()` scores is shown below in Figure \@ref(fig:cell-cycle-regression2) but the same procedure can be used with any classification step that yields some confidence per label - for example, the correlation-based scores from `SingleR()`.
+One suspects, though, that the magnitude of the scores will be even more sensitive to any non-orthogonalities between the cell cycle and other biological processes.
+
+```{r cell-cycle-regression2, fig.width=10, fig.height=6, fig.cap="PCA plot on the residuals after regression on the cell cycle phase scores from `cyclone()` in the 416B dataset. Each point is a cell and is colored by its inferred phase."}
+design <- model.matrix(~as.matrix(assignments$scores))
+dec.nocycle2 <- modelGeneVarWithSpikes(sce.416b, "ERCC", design=design)
+reg.nocycle2 <- regressBatches(sce.416b, design=design)
+
+set.seed(100011)
+reg.nocycle2 <- runPCA(reg.nocycle2, exprs_values="corrected",
+    subset_row=getTopHVGs(dec.nocycle2, prop=0.1))
+
+plotPCA(reg.nocycle2, colour_by=I(assignments$phases), shape_by=I(relabel)) + scaled
 ```
 
 If this type of adjustment is truly necessary, it would be safest to apply it separately to the subset of cells in each cluster.
@@ -273,8 +291,8 @@ Similarly, gene-based analyses should use the uncorrected data with blocking whe
 ### Removing cell cycle-related genes
 
 A gentler alternative to regression is to remove the genes that are associated with cell cycle.
-This can be done using either the known cell cycle phase in controlled experiments, inferred phase assignments from methods like `cyclone()`, or even cluster identities based on the presence of known cell cycle genes in the marker lists.
 Here, we identify the marker genes that separate the groups of cells corresponding to different phases of the cell cycle, and we remove those genes from dataset prior to further downstream analyses.
+(In this case, the cell cycle phase for each cell is known but the same procedure can be applied to the inferred phases from, e.g., `cyclone()`.)
 We demonstrate below with the @leng2015oscope dataset containing phase-sorted ESCs, where removal of marker genes detected between phases eliminates the separation between G1 and S populations (Figure \@ref(fig:leng-nocycle)).
 
 ```{r leng-nocycle, fig.width=10, fig.height=6, fig.cap="PCA plots of the Leng ESC dataset, generated before and after removal of cell cycle-related genes. Each point corresponds to a cell that is colored by the sorted cell cycle phase."}
@@ -285,13 +303,13 @@ dec.leng <- modelGeneVar(sce.leng)
 top.hvgs <- getTopHVGs(dec.leng, n=1000)
 sce.leng <- runPCA(sce.leng, subset_row=top.hvgs)
 
-# Identifying the cell cycle genes between phases.
-diff <- findMarkers(sce.leng, sce.leng$Phase, direction="up",
-    row.data=rowData(sce.leng)[,"originalName",drop=FALSE])
-# TODO: make this easier in getTopMarkers().
+# Identifying the cell cycle genes between phases...
+diff <- findMarkers(sce.leng, sce.leng$Phase, direction="up")
 top.cycle.markers <- unlist(lapply(diff, function(x) rownames(x)[x$FDR <= 0.05]))
+not.cycle.markers <- !rownames(dec.leng) %in% top.cycle.markers 
 
-top.hvgs2 <- getTopHVGs(dec.leng[!rownames(dec.leng) %in% top.cycle.markers,], n=1000)
+# And repeating the PCA without them.
+top.hvgs2 <- getTopHVGs(dec.leng[not.cycle.markers,], n=1000)
 sce.nocycle <- runPCA(sce.leng, subset_row=top.hvgs2)
 
 fill <- geom_point(pch=21, colour="grey") # Color the NA points.
