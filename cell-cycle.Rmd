@@ -321,7 +321,8 @@ dec.leng <- modelGeneVar(sce.leng)
 top.hvgs <- getTopHVGs(dec.leng, n=1000)
 sce.leng <- runPCA(sce.leng, subset_row=top.hvgs)
 
-# Identifying the likely cell cycle genes between phases...
+# Identifying the likely cell cycle genes between phases,
+# using an arbitrary threshold of 5%.
 library(scater)
 diff <- getVarianceExplained(sce.leng, "Phase")
 discard <- diff > 5
@@ -339,8 +340,17 @@ gridExtra::grid.arrange(
 )
 ```
 
+```{r, echo=FALSE}
+# Checking that the separation is weakened.
+p <- sce.leng$Phase
+keep <- !is.na(p)
+before <- approxSilhouette(reducedDim(sce.leng)[keep,], p[keep])
+after <- approxSilhouette(reducedDim(sce.nocycle)[keep,], p[keep])
+stopifnot(median(after$width) < median(before$width))
+```
+
 The same procedure can also be applied to the inferred phases or classification scores from, e.g., `cyclone()`.
-This is demonstrated in Figure \@ref(fig:discard-416b) with our trusty 416B dataset, where the cell cycle variation is also removed without sacrificing the differences due to oncogene induction.
+This is demonstrated in Figure \@ref(fig:discard-416b) with our trusty 416B dataset, where the cell cycle variation is removed without sacrificing the differences due to oncogene induction.
 
 ```{r discard-416b, fig.cap="PCA plots of the 416B dataset, generated before and after removal of cell cycle-related genes. Each point corresponds to a cell that is colored by the inferred phase and shaped by oncogene induction status."}
 # Need to wrap the phase vector in a DataFrame:
@@ -350,10 +360,21 @@ summary(discard)
 
 set.seed(100011)
 top.discard <- getTopHVGs(dec.416b[which(!discard),], n=1000)
-sce.416b.discard <- runPCA(sce.416b, exprs_values="corrected", subset_row=top.discard)
+sce.416b.discard <- runPCA(sce.416b, subset_row=top.discard)
 
 plotPCA(sce.416b.discard, colour_by=I(assignments$phases), 
     shape_by=I(relabel), point_size=3) + scaled
+```
+
+```{r, echo=FALSE}
+# Checking that the separation due to phase is weakened.
+before <- approxSilhouette(reducedDim(sce.416b), assignments$phases)
+after <- approxSilhouette(reducedDim(sce.416b.discard), assignments$phases)
+stopifnot(median(after$width) < median(before$width))
+
+# Checking that we still have some separation due to phenotype.
+after <- approxSilhouette(reducedDim(sce.416b.discard)[,1:2], sce.416b.discard$phenotype)
+stopifnot(median(after$width) > 0.2)
 ```
 
 This approach discards any gene with significant cell cycle variation, regardless of how much interesting variation it might also contain from other processes.
