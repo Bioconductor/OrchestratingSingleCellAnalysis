@@ -373,8 +373,8 @@ To demonstrate, we use the `r Biocpkg("corral")` package to compute CA factors f
 
 ```{r}
 library(corral)
-sce.corral <- corral_sce(sce.zeisel, subset_row=top.hvgs)
-#   col.w=sizeFactors(sce.zeisel))
+sce.corral <- corral_sce(sce.zeisel, subset_row=top.hvgs,
+   col.w=sizeFactors(sce.zeisel))
 dim(reducedDim(sce.corral, "corral"))
 ```
 
@@ -394,13 +394,15 @@ load(qcdata, envir=env)
 sce.8qc <- env$sce8_qc
 sce.8qc$mix <- factor(sce.8qc$mix)
 
-# Library size normalization and log-transformation.
+# Choosing some HVGs for PCA:
 sce.8qc <- logNormCounts(sce.8qc)
 dec.8qc <- modelGeneVar(sce.8qc)
 hvgs.8qc <- getTopHVGs(dec.8qc, n=1000)
-
-sce.8qc <- corral_sce(sce.8qc, subset_row=hvgs.8qc)
 sce.8qc <- runPCA(sce.8qc, subset_row=hvgs.8qc)
+
+# By comparison, corral operates on the raw counts:
+sce.8qc <- corral_sce(sce.8qc, subset_row=hvgs.8qc, col.w=sizeFactors(sce.8qc))
+
 gridExtra::grid.arrange(
     plotPCA(sce.8qc, colour_by="mix") + ggtitle("PCA"),
     plotReducedDim(sce.8qc, "corral", colour_by="mix") + ggtitle("corral"),
