@@ -363,7 +363,7 @@ However, there remains some room for difference between "optimal" and "useful";
 for example, noisy datasets may find themselves with very low $d$ as including more PCs will only ever increase reconstruction error, regardless of whether they contain relevant biological variation.
 This approach is also dependent on some strong i.i.d. assumptions about the noise matrix.
 
-# Count-based dimensionality reduction
+## Count-based dimensionality reduction
 
 For count matrices, correspondence analysis (CA) is a natural approach to dimensionality reduction.
 In this procedure, we compute an expected value for each entry in the matrix based on the per-gene abundance and size factors. 
