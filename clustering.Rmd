@@ -322,7 +322,7 @@ abline(v=best.k, col="red")
 ```{r, echo=FALSE}
 # Check that the results are reasonable, as sometimes
 # the gap statistic gets funny stochastic results.
-stopifnot(identical(best.k, 9L))
+stopifnot(identical(best.k, 8L))
 ```
 
 A more practical use of $k$-means is to deliberately set $k$ to a large value to achieve overclustering.
@@ -756,11 +756,11 @@ plotExpression(sce.pbmc, features=c("CD3E", "CCR7", "CD69", "CD44"),
     x=I(factor(clust.full)), colour_by=I(factor(clust.full)))
 
 # Repeating modelling and PCA on the subset.
-memory <- 6L
+memory <- 10L
 sce.memory <- sce.pbmc[,clust.full==memory]
 dec.memory <- modelGeneVar(sce.memory)
 sce.memory <- denoisePCA(sce.memory, technical=dec.memory,
-    subset.row=getTopHVGs(dec.memory, prop=0.1))
+    subset.row=getTopHVGs(dec.memory, n=5000))
 ```
 
 ```{r, echo=FALSE}
@@ -782,11 +782,12 @@ plotExpression(sce.memory, features=c("CD8A", "CD4"),
 ```{r, echo=FALSE}
 by.clust <- split(logcounts(sce.memory)["CD8A",], clust.memory)
 by.clust.cd8 <- vapply(by.clust, mean, 0)
-stopifnot(length(by.clust.cd8)==2L, diff(by.clust.cd8) > 1)
+top.cd8 <- which.max(by.clust.cd8)
+stopifnot(length(by.clust.cd8) == 2L, all(by.clust.cd8[top.cd8] > by.clust.cd8[-top.cd8] + 1))
 
 by.clust <- split(logcounts(sce.memory)["CD4",], clust.memory)
 by.clust.cd4 <- vapply(by.clust, mean, 0)
-stopifnot(length(by.clust.cd4)==2L, diff(by.clust.cd4) < 0) # weaker.
+stopifnot(length(by.clust.cd4) == 2L, identical(which.min(by.clust.cd4), top.cd8))
 ```
 
 For subclustering analyses, it is helpful to define a customized function that calls our desired algorithms to obtain a clustering from a given `SingleCellExperiment`.
