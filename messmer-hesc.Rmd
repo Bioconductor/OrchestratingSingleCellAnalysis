@@ -1,0 +1,357 @@
+# Messmer human ESC (Smart-seq2) {#messmer-hsc}
+
+## Introduction
+
+This performs an analysis of the human embryonic stem cell (hESC) dataset generated with Smart-seq2 [@messmer2019transcriptional], which contains several plates of naive and primed hESCs.
+The chapter's code is based on the steps in the paper's [GitHub repository](https://github.com/MarioniLab/NaiveHESC2016/blob/master/analysis/preprocess.Rmd), with some additional steps for cell cycle effect removal contributed by Philippe Boileau.
+
+## Data loading
+
+Converting the batch to a factor, to make life easier later on.
+
+```{r load-data, echo=FALSE}
+library(scRNAseq)
+sce.mess <- MessmerESCData()
+sce.mess$`experiment batch` <- factor(sce.mess$`experiment batch`)
+```
+
+```{r gene-annotations}
+library(AnnotationHub)
+ens.hs.v97 <- AnnotationHub()[["AH73881"]]
+anno <- select(ens.hs.v97, keys=rownames(sce.mess), 
+    keytype="GENEID", columns=c("SYMBOL"))
+rowData(sce.mess) <- anno[match(rownames(sce.mess), anno$GENEID),]
+```
+
+## Quality control
+
+```{r qc-metrics, echo=FALSE}
+location <- rowRanges(sce)
+is_mito <- any(seqnames(location) == "MT")
+
+library(scater)
+sce.mess <- addPerCellQC(sce.mess, subsets = list(Mito = is_mito))
+filtered <- quickPerCellQC(colData(sce.mess), sub.fields=TRUE, 
+    batch=sce$`experiment batch`) 
+
+original <- sce.mess
+sce.mess <- sce.mess[,!filtered$discard]
+```
+
+Let's have a look at the QC statistics.
+
+```{r}
+colSums(as.matrix(filtered))
+```
+
+```{r unref-messmer-hesc-qc, fig.width=6, fig.height=10, fig.cap="Distribution of QC metrics across batches (x-axis) and phenotypes (facets) for cells in the Messmer hESC dataset. Each point is a cell and is colored by whether it was discarded."}
+gridExtra::grid.arrange(
+    plotColData(original, x="experiment batch", y="sum",
+        colour_by=I(filtered$discard), other_field="phenotype") +
+        facet_wrap(~phenotype) + scale_y_log10(),
+    plotColData(original, x="experiment batch", y="detected",
+        colour_by=I(filtered$discard), other_field="phenotype") +
+        facet_wrap(~phenotype) + scale_y_log10(),
+    plotColData(original, x="experiment batch", y="subsets_Mito_percent",
+        colour_by=I(filtered$discard), other_field="phenotype") +
+        facet_wrap(~phenotype),
+    plotColData(original, x="experiment batch", y="altexps_ERCC_percent",
+        colour_by=I(filtered$discard), other_field="phenotype") +
+        facet_wrap(~phenotype),
+    ncol=1
+)
+```
+
+## Normalization
+
+```{r normalization}
+library(scran)
+
+set.seed(10000)
+clusters <- quickCluster(sce.mess)
+sce.mess <- computeSumFactors(sce.mess, cluster=clusters)
+sce.mess <- logNormCounts(sce.mess)
+```
+
+```{r unref-messmer-hesc-norm, fig.cap="Deconvolution size factors plotted against the library size (left) and spike-in size factors plotted against the deconvolution size factors (right). Each point is a cell and is colored by its phenotype."}
+par(mfrow=c(1,2))
+plot(sce.mess$sum, sizeFactors(sce.mess), log = "xy", pch=16,
+     xlab = "Library size (millions)", ylab = "Size factor",
+     col = ifelse(sce.mess$phenotype == "naive", "black", "grey"))
+
+spike.sf <- librarySizeFactors(altExp(sce.mess, "ERCC"))
+plot(sizeFactors(sce.mess), spike.sf, log = "xy", pch=16,
+     ylab = "Spike-in size factor", xlab = "Deconvolution size factor",
+     col = ifelse(sce.mess$phenotype == "naive", "black", "grey"))
+```
+
+## Cell cycle phase assignment
+
+```{r cell-cycle}
+set.seed(10001)
+hs_pairs <- readRDS(system.file("exdata", "human_cycle_markers.rds", package="scran"))
+assigned <- cyclone(sce.mess, pairs=hs_pairs, gene.names=rownames(sce.mess))
+sce.mess$phase <- assigned$phases
+```
+
+```{r}
+table(sce$phase)
+```
+
+```{r unref-messmer-hesc-cyclone, fig.cap="G1 `cyclone()` phase scores against the G2/M phase scores for each cell in the Messmer hESC dataset."}
+smoothScatter(assigned$scores$G1, assigned$scores$G2M, xlab="G1 score",
+     ylab="G2/M score", pch=16)
+```
+
+## Feature selection
+
+```{r feature-selection}
+dec <- modelGeneVarWithSpikes(sce, "ERCC", block = sce$`experiment batch`)
+top.hvgs <- getTopHVGs(dec, prop = 0.1)
+```
+
+```{r unref-messmer-hesc-var, fig.width=12, fig.height=5, fig.cap="Per-gene variance of the log-normalized expression values in the Messmer hESC dataset, plotted against the mean for each batch. Each point represents a gene with spike-ins shown in red and the fitted trend shown in blue."}
+par(mfrow=c(1,3))
+for (i in seq_along(dec$per.block)) {
+    current <- dec$per.block[[i]]
+    plot(current$mean, current$total, xlab="Mean log-expression", 
+        ylab="Variance", pch=16, cex=0.5, main=paste("Batch", i))
+
+    fit <- metadata(current)
+    points(fit$mean, fit$var, col="red", pch=16)
+    curve(fit$trend(x), col='dodgerblue', add=TRUE, lwd=2)
+}
+```
+
+## Batch correction 
+
+We eliminate the obvious batch effect between batches, which is possible due to the replicated nature of the experimental design.
+
+```{r batch-correction, echo=FALSE}
+# TODO: modify regressBatches to preserve some covariates.
+library(limma)
+assay(sce.mess, "corrected") <- removeBatchEffect(
+  logcounts(sce.mess),
+  design = model.matrix(~sce.mess$phenotype),
+  batch = sce.mess$`experiment batch`
+)
+```
+
+# Dimensionality Reduction
+
+## Across phenotypes 
+
+```{r dimensionality-reduction}
+set.seed(1101001)
+sce.mess <- runPCA(sce.mess, subset_row = top.hvgs, exprs_values = "corrected")
+sce.mess <- runTSNE(sce.mess, dimred = "PCA", perplexity = 40)
+```
+
+From a naive PCA, the cell cycle appears to be a major source of biological variation within each phenotype.
+
+```{r unref-messmer-hesc-tsne, fig.width=10, fig.height=10, fig.cap="Obligatory $t$-SNE plots of the Messmer hESC dataset, where each point is a cell and is colored by various attributes."}
+gridExtra::grid.arrange(
+    plotTSNE(sce.mess, colour_by = "phenotype") + ggtitle("By phenotype"),
+    plotTSNE(sce.mess, colour_by = "experiment batch") + ggtitle("By batch "),
+    plotTSNE(sce.mess, colour_by = "CDK1", swap_rownames="SYMBOL") + ggtitle("By CDK1"),
+    plotTSNE(sce.mess, colour_by = "phase") + ggtitle("By phase"),
+    ncol = 2
+)
+```
+
+Next, we perform contrastive PCA (cPCA) and sparse cPCA (scPCA) on the data to remove the cell cycle effect. 
+Given that the naive hESCs are actually reprogrammed primed hESCs, we will consider the primed hESCs as the "background" dataset.
+In this case, we use the phenotype in `clusters=` to help automatically determine a "good" value for the contrastive parameter, though simply setting `contrasts=` directly to a value such as 100 can often yield satisfactory results. 
+The 50 leading (sparse) contrastive PCs are then passed to t-SNE for visualization. 
+
+```{r contrastive-pca}
+library(scPCA)
+target <- t(assay(sce.mess, "corrected")[top.hvgs, ])
+background <- target[sce.mess$phenotype == "primed",]
+
+set.seed(1010101001)
+con_out <- scPCA(
+    target = target,
+    background = background,
+    penalties = 0, # no penalties, so cPCA.
+    n_eigen = 50,
+    clusters = as.integer(as.factor(sce.mess$phenotype)),
+    contrasts = exp(seq(log(1), log(100), length.out = 5)),
+    eigdecomp_iter=2000
+)
+reducedDim(sce.mess, "cPCA") <- con_out$x
+
+sparse_con_out <- scPCA(
+    target = target,
+    background = background,
+    clusters = as.integer(as.factor(sce.mess$phenotype)),
+    penalties = 1e-4, 
+    n_eigen = 50,
+    contrasts = con_out$contrast, 
+    alg = "rand_var_proj"
+)
+reducedDim(sce.mess, "scPCA") <- sparse_con_out$x
+
+set.seed(1101001)
+sce.mess <- runTSNE(sce.mess, dimred = "cPCA", perplexity = 40, name="cPCA+TSNE")
+sce.mess <- runTSNE(sce.mess, dimred = "scPCA", perplexity = 40, name="scPCA+TSNE")
+```
+
+Both cPCA and scPCA successfully remove the cell cycle effect from the naive hESCs and -- unsurprisingly -- the primed hESCs. 
+The cluster of primed hESCs is has an irregular shape in the cPCA embeddings, though this might be a side effect of including the background dataset in embedding. 
+
+```{r unref-messmer-hesc-cpca-tsne, fig.width=10, fig.height=6, fig.cap="More $t$-SNE plots of the Messmer hESC dataset after (sparse) contrastive PCA, where each point is a cell and is colored by various attributes."}
+gridExtra::grid.arrange(
+    plotReducedDim(sce.mess, "cPCA+TSNE", colour_by = "phase") + ggtitle("After cPCA"),
+    plotReducedDim(sce.mess, "scPCA+TSNE", colour_by = "phase") + ggtitle("After scPCA"),
+    ncol=2
+)
+```
+
+```{r, echo=FALSE}
+# Sanity check for actual reduction in phase-related variance.
+original <- getVarianceExplained(t(reducedDim(sce.mess, "TSNE")), variables=colData(sce.mess)[,"phase",drop=FALSE])
+cpca <- getVarianceExplained(t(reducedDim(sce.mess, "cPCA+TSNE")), variables=colData(sce.mess)[,"phase",drop=FALSE])
+scpca <- getVarianceExplained(t(reducedDim(sce.mess, "scPCA+TSNE")), variables=colData(sce.mess)[,"phase",drop=FALSE])
+stopifnot(mean(original) > mean(cpca)*2)
+stopifnot(mean(original) > mean(scpca)*2)
+```
+
+## Naive Human Embryonic Stem Cells
+
+Next, we perform cPCA and scPCA on the naive hESCs using the primed hESCs as
+a background dataset, and feed their ten leading components into t-SNE. This
+procedure is a more accurate representation of the workflow one might employ
+when applying contrastive dimension reduction methods since the target and
+background datasets are fully distinct.
+
+As in the previous section, one of the main sources of variation captured by the
+t-SNE embedding using the ten leading PCs as an initialization is cell
+cycle. Once again, this effect is removed by cPCA and scPCA. It's doubtful that
+this analysis will lead to any new insights, but it does demonstrate these
+methods works as expected.
+
+```{r naive-cells, fig.width=10, fig.height=10}
+set.seed(1433412)
+
+# define naive cells as target, background as primed
+target <- t(assay(sce, "corrected")[top_hvgs, sce$phenotype == "naive"])
+background <- t(assay(sce, "corrected")[top_hvgs, sce$phenotype == "primed"])
+sce_naive <- sce[, sce$phenotype == "naive"]
+
+# identify naive hESCs marker genes
+sce_naive$KLF4 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000136826"), ]
+sce_naive$KLF17 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000171872"), ] # not in top_hvgs
+sce_naive$DPPA3 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000187569"), ]
+sce_naive$TFCP2L1 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000115112"), ]
+sce_naive$NANOG <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000111704"), ] # not in top_hvgs
+
+# identify linage markers
+sce_naive$SNAI1 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000124216"), ] # not in top_hvgs
+sce_naive$ITGA6 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000091409"), ] # not in top_hvgs
+sce_naive$PAF1 <- assay(sce_naive, "corrected")[
+  which(rownames(sce_naive) == "ENSG00000006712"), ] # not in top_hvgs
+
+
+# perform PCA
+sce_naive <- runPCA(sce_naive, subset_row = top_hvgs,
+                    exprs_values = "corrected")
+sce_naive <- runTSNE(sce_naive, dimred = "PCA")
+naive_PCA_CDK1_p <- plotTSNE(sce_naive, colour_by = "CDK1")
+naive_PCA_phase_p <- plotTSNE(sce_naive, colour_by = "phase")
+
+# perform cPCA
+con_naive_out <- scPCA(
+  target = target,
+  background = background,
+  n_centers = 2,
+  penalties = 0, contrasts = 20, # fixed -- based on result of con_out
+  n_eigen = 10
+)
+reducedDim(sce_naive, "cPCA") <- con_naive_out$x
+sce_naive <- runTSNE(sce_naive, dimred = "cPCA")
+naive_cPCA_CDK1_p <- plotTSNE(sce_naive, colour_by = "CDK1")
+naive_cPCA_phase_p <- plotTSNE(sce_naive, colour_by = "phase")
+naive_cPCA_KLF4_p <- plotTSNE(sce_naive, colour_by = "KLF4")
+naive_cPCA_KLF17_p <- plotTSNE(sce_naive, colour_by = "KLF17")
+naive_cPCA_DPPA3_p <- plotTSNE(sce_naive, colour_by = "DPPA3")
+naive_cPCA_TFCP2L1_p <- plotTSNE(sce_naive, colour_by = "TFCP2L1")
+naive_cPCA_NANOG_p <- plotTSNE(sce_naive, colour_by = "NANOG")
+naive_cPCA_SNAI1_p <- plotTSNE(sce_naive, colour_by = "SNAI1")
+naive_cPCA_ITGA6_p <- plotTSNE(sce_naive, colour_by = "ITGA6")
+naive_cPCA_PAF1_p <- plotTSNE(sce_naive, colour_by = "PAF1")
+
+
+# perform scPCA
+sparse_con_naive_out <- scPCA(
+  target = target,
+  background = background,
+  n_centers = 2,
+  penalties = 1e-5, contrasts = 20, # fixed -- based on result of con_out
+  n_eigen = 10,
+  alg = "rand_var_proj"
+)
+reducedDim(sce_naive, "scPCA") <- sparse_con_naive_out$x
+sce_naive <- runTSNE(sce_naive, dimred = "scPCA")
+naive_scPCA_CDK1_p <- plotTSNE(sce_naive, colour_by = "CDK1")
+naive_scPCA_phase_p <- plotTSNE(sce_naive, colour_by = "phase")
+naive_scPCA_KLF4_p <- plotTSNE(sce_naive, colour_by = "KLF4")
+naive_scPCA_KLF17_p <- plotTSNE(sce_naive, colour_by = "KLF17")
+naive_scPCA_DPPA3_p <- plotTSNE(sce_naive, colour_by = "DPPA3")
+naive_scPCA_TFCP2L1_p <- plotTSNE(sce_naive, colour_by = "TFCP2L1")
+naive_scPCA_NANOG_p <- plotTSNE(sce_naive, colour_by = "NANOG")
+naive_scPCA_SNAI1_p <- plotTSNE(sce_naive, colour_by = "SNAI1")
+naive_scPCA_ITGA6_p <- plotTSNE(sce_naive, colour_by = "ITGA6")
+naive_scPCA_PAF1_p <- plotTSNE(sce_naive, colour_by = "PAF1")
+
+# plot the results
+gridExtra::grid.arrange(
+  naive_PCA_CDK1_p + ggtitle("PCA: CDK1 Expression, Naive hESCs"),
+  naive_PCA_phase_p + ggtitle("PCA: Cell Cycle Phase, Naive hESCs"),
+  naive_cPCA_CDK1_p + ggtitle("cPCA"),
+  naive_cPCA_phase_p + ggtitle("cPCA"),
+  naive_scPCA_CDK1_p + ggtitle("scPCA"),
+  naive_scPCA_phase_p + ggtitle("cPCA"),
+  ncol = 2
+)
+```
+
+We also verify that the gene expression of germ layer-specific marker genes do
+not possess any lineage-associated structure, as in Figure 3a of Messmer et al.
+Similarly, we plot the selected naive hESCs marker genes from Figure 2b, and
+determine that no spurious pattern emerges.
+
+```{r marker-genes, fig.width=10, fig.height=15}
+gridExtra::grid.arrange(
+  naive_cPCA_KLF4_p + ggtitle("cPCA"),
+  naive_scPCA_KLF4_p + ggtitle("scPCA"),
+  naive_cPCA_KLF17_p + ggtitle("cPCA"),
+  naive_scPCA_KLF17_p + ggtitle("scPCA"),
+  naive_cPCA_DPPA3_p + ggtitle("cPCA"),
+  naive_scPCA_DPPA3_p + ggtitle("scPCA"),
+  naive_cPCA_TFCP2L1_p + ggtitle("cPCA"),
+  naive_scPCA_TFCP2L1_p + ggtitle("scPCA"),
+  naive_cPCA_NANOG_p + ggtitle("cPCA"),
+  naive_scPCA_NANOG_p + ggtitle("scPCA"),
+  ncol = 2
+)
+```
+
+```{r lineage-markers, fig.width=10, fig.height=10}
+gridExtra::grid.arrange(
+  naive_cPCA_SNAI1_p + ggtitle("cPCA"),
+  naive_scPCA_SNAI1_p + ggtitle("scPCA"),
+  naive_cPCA_ITGA6_p + ggtitle("cPCA"),
+  naive_scPCA_ITGA6_p + ggtitle("scPCA"),
+  naive_cPCA_PAF1_p + ggtitle("cPCA"),
+  naive_scPCA_PAF1_p + ggtitle("scPCA"),
+  ncol = 2
+)
+```
