@@ -179,11 +179,9 @@ set.seed(1010101001)
 con_out <- scPCA(
     target = mat.target,
     background = mat.background,
-    penalties = 0, # no penalties, so cPCA.
+    penalties = 0, # no penalties = non-sparse cPCA.
     n_eigen = 50,
-    clusters = as.integer(as.factor(target$phenotype)),
-    contrasts = 100,
-    eigdecomp_iter=2000
+    contrasts = 100
 )
 reducedDim(target, "cPCA") <- con_out$x
 ```
@@ -193,16 +191,14 @@ set.seed(101010101)
 sparse_con_out <- scPCA(
     target = mat.target,
     background = mat.background,
-    clusters = as.integer(as.factor(target$phenotype)),
-    penalties = 1e-4, 
+    penalties = 1e-4,
     n_eigen = 50,
     contrasts = 100,
-    alg = "rand_var_proj"
+    alg = "rand_var_proj" # for speed.
 )
 reducedDim(target, "scPCA") <- sparse_con_out$x
 ```
 
-We pass the top t0 PCs to t-SNE for visualization. 
 We see greater intermingling between phases within both the naive and primed cells after cPCA and scPCA.
 
 ```{r tsne}
