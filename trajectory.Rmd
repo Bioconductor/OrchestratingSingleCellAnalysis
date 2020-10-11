@@ -751,7 +751,7 @@ colLabels(sce.sperm) <- clusterRows(reducedDim(sce.sperm, "PCA"), NNGraphParam()
 library(TSCAN)
 mst <- TSCAN::createClusterMST(sce.sperm, use.dimred="PCA", outgroup=TRUE)
 
-# Could also use velo.out$root_cell here, for a more direct estimate.
+# Could also use velo.out$root_cell here, for a more direct measure of 'rootness'.
 by.cluster <- split(sce.sperm$pseudotime, colLabels(sce.sperm))
 mean.by.cluster <- vapply(by.cluster, mean, 0)
 mean.by.cluster <- mean.by.cluster[names(igraph::V(mst))]
@@ -764,30 +764,24 @@ plot(mst, vertex.color=color.by.cluster)
 Needless to say, this lunch is not entirely free.
 The inferences rely on a sophisticated mathematical model that has a few assumptions,
 the most obvious of which being that the transcriptional dynamics are the same across subpopulations.
-The use of unspliced counts increases the sensitivity of the analysis to unannotated transcripts (e.g., microRNAs in the gene body), intron retention events, annotation errors or quantification ambiguities [@soneson2020preprocessing] that could interfere with the velocity calculations.
-There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for the relevant genes for the process of interest, and if not, whether this lack of information may bias the resulting velocity estimates.
+The use of unspliced counts increases the sensitivity of the analysis to unannotated transcripts (e.g., microRNAs in the gene body), 
+intron retention events, annotation errors or quantification ambiguities [@soneson2020preprocessing] that could interfere with the velocity calculations.
+There is also the question of whether there is enough intronic coverage to reliably estimate the velocity for the relevant genes for the process of interest,
+and if not, whether this lack of information may bias the resulting velocity estimates.
 From a purely practical perspective, the main difficulty with RNA velocity is that the unspliced counts are often unavailable.
 
 <!--
-Other assumptions that didn't make the cut to be mentioned:
-
-- Velocities can be reversed to construct the pseudotime,
-i.e., the past location of a cell is defined as the location of other cells that are moving towards that cell.
-Most obviously not the case if there are no longer any observed cells in the past location,
-though this represents a common weakness of all trajectory inference methods.
-
-- The velocities at any given coordinate of the expression space are constant with respect to real time.
-This is necessary to interpret the velocity pseudotime as a proxy for real time, 
-otherwise there's no reason to believe that the current movement of cells reflects their history.
-(Obviously, these cells were all collected at the same time, so the pseudotime cannot be a direct proxy for real time without this assumption.)
-Alternatively, one could consider the pseudotime as a proxy for the age of the cells, 
-but scVelo also returns a 'latent time' to capture the cell's 'internal clock' (https://github.com/theislab/scvelo/issues/89#issuecomment-558217638) 
-so even there we have multiple potential interpretations.
-
-- There are enough cells still in transit to obtain meaningful pseudotime orderings.
+We have the usual assumption that there are cells observed in intermediate states, which is also required for conventional trajectory analyses.
+The additional twist here is that those cells must still be "in transit" to obtain meaningful pseudotime orderings.
 If this is not the case, the pseudotimes are scrambled, which is not wrong but not useful either.
-Related is the assumption that the velocity-defined pseudotime lies along the relevant continuum.
-A continuum in a steady-state population would simply not be captured.
+Related is the assumption that the velocity-defined pseudotime lies along the relevant continuum;
+a continuum within a steady-state population would simply not be captured.
+
+Another assumption is that velocities can be reversed to construct the pseudotime,
+i.e., the past location of a cell is defined as the location of other cells that are moving towards that cell.
+This implies that the velocities at any given coordinate of the expression space do not change over real time,
+otherwise there's no reason to believe that the current movement of cells reflects their history.
+This may not be the case for non-constitutive processes with bursts of activity.
 
 With respect to bias, the most obvious example is that of a trajectory driven by a few genes, all of which lack intronic counts. 
 What happens then?
