@@ -678,15 +678,14 @@ Some extra thought is required to deal with reads spanning exon-intron boundarie
 Conveniently, both matrices have the same shape and thus can be stored as separate assays in our usual `SingleCellExperiment`.
 
 ```{r}
-# TODO: set the location= default to TRUE.
 library(scRNAseq)
-sce.sperm <- HermannSpermatogenesisData(strip=TRUE, location=TRUE)
+sce.sperm <- HermannSpermatogenesisData(strip=TRUE)
 assayNames(sce.sperm)
 ```
 
 We run through a quick-and-dirty analysis on the spliced counts, which can - by and large - be treated in the same manner as the standard exonic gene counts used in non-velocity-aware analyses.
-Alternatively, if the standard exonic count matrix was available, we could just use it directly in these steps, and restrict the role of the spliced/unspliced matrices to the velocity calculations.
-The latter approach may be logistically helpful when adding RNA velocity to an existing analysis, such that the prior steps (and the interpretation of their results) do not have to be repeated.
+Alternatively, if the standard exonic count matrix was available, we could just use it directly in these steps and restrict the involvement of the spliced/unspliced matrices to the velocity calculations.
+The latter approach is logistically convenient when adding an RNA velocity section to an existing analysis, such that the prior steps (and the interpretation of their results) do not have to be repeated on the spliced count matrix.
 
 ```{r}
 # Quality control:
@@ -716,41 +715,54 @@ We use the `r Biocpkg("velociraptor")` package to perform the velocity calculati
 
 ```{r}
 library(velociraptor)
-velo.out <- scvelo(sce.sperm, assay.X="spliced", use.dimred="PCA")
+velo.out <- scvelo(sce.sperm, assay.X="spliced", 
+    subset.row=hvgs, use.dimred="PCA")
 velo.out
 ```
 
-The estimated velocities can be embedded and visualized in any low-dimensional representation of the cells. 
-`r basilisk::PyPiLink("scvelo")` also returns an estimate of the pseudotime for each cell.
+The primary output is the matrix of velocity vectors that describe the direction and magnitude of transcriptional change for each cell.
+To construct an ordering, we extrapolate from the vector for each cell to determine its future state.
+Roughly speaking, if a cell's future state is close to the observed state of another cell, we place the former behind the latter in the ordering.
+This yields a "velocity pseudotime" that provides directionality without the need to explicitly define a root in our trajectory.
+We visualize this procedure in Figure \@ref(fig:tsne-hermann-velocity) by embedding the estimated velocities into any low-dimensional representation of the dataset. 
 
-```{r}
-embedded <- embedVelocity(reducedDim(sce.sperm, "TSNE"), velo.out)
-grid.df <- gridVectors(reducedDim(sce.sperm, "TSNE"), embedded)
+```{r tsne-hermann-velocity, fig.cap="$t$-SNE plot of the Hermann spermatogenesis dataset, where each point is a cell and is colored by its velocity pseudotime. Arrows indicate the direction and magnitude of the velocity vectors, averaged over nearby cells."}
 sce.sperm$pseudotime <- velo.out$velocity_pseudotime
 
+# Also embedding the velocity vectors, for some verisimilitude.
+embedded <- embedVelocity(reducedDim(sce.sperm, "TSNE"), velo.out)
+grid.df <- gridVectors(reducedDim(sce.sperm, "TSNE"), embedded, resolution=30)
+
 library(ggplot2)
-plotTSNE(sce.sperm, colour_by="pseudotime") +
-    geom_segment(data=grid.df, mapping=aes(x=start.1, y=start.2, 
-        xend=end.1, yend=end.2), arrow=arrow(length=unit(0.05, "inches")))
+plotTSNE(sce.sperm, colour_by="pseudotime", point_alpha=0.3) +
+    geom_segment(data=grid.df, 
+        mapping=aes(x=start.1, y=start.2, xend=end.1, yend=end.2), 
+        arrow=arrow(length=unit(0.05, "inches"), type="closed"))
 ```
 
-```{r}
+While we could use the velocity pseudotimes directly in our downstream analyses, it is often helpful to pair this information with other trajectory analyses.
+This is because the velocity calculations are done on a per-cell basis but interpretation is typically performed at a lower granularity, e.g., per cluster or lineage.
+For example, we can overlay the average velocity pseudotime for each cluster onto our `r Biocpkg("TSCAN")`-derived MST (Figure \@ref(fig:tscan-sperm-velocity)) to identify the likely root clusters.
+More complex analyses can also be performed (e.g., to identify the likely fate of each cell in the intermediate clusters) but will not be discussed here.
+
+```{r tscan-sperm-velocity, fig.cap="_TSCAN_-derived MST created from the Hermann spermatogenesis dataset. Each node is a cluster and is colored by the average velocity pseudotime of all cells in that cluster, from lowest (purple) to highest (yellow)."}
 library(bluster)
 colLabels(sce.sperm) <- clusterRows(reducedDim(sce.sperm, "PCA"), NNGraphParam())
-
 library(TSCAN)
-mst <- createClusterMST(sce.sperm, use.dimred="PCA", outgroup=TRUE)
-line.data <- reportEdges(sce.sperm, mst=mst, use.dimred="TSNE")
-plotTSNE(sce.sperm, colour_by="label") + 
-    geom_line(data=line.data, mapping=aes(x=dim1, y=dim2, group=edge))
-```
+mst <- TSCAN::createClusterMST(sce.sperm, use.dimred="PCA", outgroup=TRUE)
 
-```{r}
-boxplot(split(sce.sperm$pseudotime, clusters))
+# Could also use velo.out$root_cell here, for a more direct estimate.
+by.cluster <- split(sce.sperm$pseudotime, colLabels(sce.sperm))
+mean.by.cluster <- vapply(by.cluster, mean, 0)
+mean.by.cluster <- mean.by.cluster[names(igraph::V(mst))]
+color.by.cluster <- viridis::viridis(21)[cut(mean.by.cluster, 21)]
+
+set.seed(1001)
+plot(mst, vertex.color=color.by.cluster)
 ```
 
 Needless to say, this lunch is not entirely free.
-The inferences rely on a somewhat sophisticated mathematical model that has a few assumptions,
+The inferences rely on a sophisticated mathematical model that has a few assumptions,
 the most obvious of which being that the transcriptional dynamics are the same across subpopulations.
 The use of unspliced counts increases the sensitivity of the analysis to unannotated transcripts (e.g., microRNAs in the gene body), 
 intron retention events, annotation errors or quantification ambiguities [@soneson2020preprocessing] 
