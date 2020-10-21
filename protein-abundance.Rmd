@@ -168,29 +168,32 @@ summary(sf.geo)
 Ideally, we would like to compute size factors that adjust for the composition biases.
 This usually requires an assumption that most ADTs are not differentially expressed between cell types/states.
 At first glance, this appears to be a strong assumption - the target proteins were specifically chosen as they exhibit interesting heterogeneity across the population, meaning that a non-differential majority across ADTs would be unlikely.
-However, we can still make it work by assuming that (i) each cell only expresses a minority of the targeted proteins and (ii) the ambient contamination in each library is the same in terms of the number of molecules captured by each droplet.
-We can then compute size factors to equalize the coverage of these contaminating ADTs, thus eliminating cell-to-cell differences in capture efficiency.
-This is inspired by a similar approach for normalization of ChIP-seq data based on background enrichment [@lun2016csaw].
+However, we can make it work by assuming that each cell only upregulates a minority of the targeted proteins, with the remaining ADTs exhibiting some low baseline abundance that is constant across all cells.
+(Of course, the identity of the upregulated subset can differ across cells, otherwise the dataset would not be very interesting.)
+We then compute size factors to equalize the coverage of the non-upregulated majority, thus eliminating cell-to-cell differences in capture efficiency.
 
-If possible, we would prefer to obtain an estimate of the ambient profile from the barcodes that were identified as empty droplets (Section \@ref(qc-droplets)).
-In this case, though, this information has already been discarded from the dataset as we only have the counts for cell-containing libraries.
-We instead use a proxy profile (Figure \@ref(fig:pbmc-adt-ambient-profile)) constructed by assuming that most cells exhibit ambient-level coverage for each ADT.
-This assumption suggests that each ADT should exhibit a bimodal distribution of log-counts across all cells, meaning that we can use all cells in the lower mode to compute the (presumably) ambient concentration.
+We consider the baseline ADT profile to be a combination of weak constitutive expression and ambient contamination, both of which should be constant across the population.
+We estimate this profile by assuming that the distribution of abundances for each ADT should be bimodal, where one population of cells exhibits low baseline expression and another population upregulates the corresponding protein target.
+We then use all cells in the lower mode to compute the baseline abundance for that ADT. 
+This entire calculation is performed by the `inferAmbience()` function, which was originally designed to estimate HTO ambient concentrations but can be repurposed for more general use (Figure \@ref(fig:pbmc-adt-ambient-profile)).
 
-```{r pbmc-adt-ambient-profile, fig.cap="Inferred relative abundance of each ADT in the ambient solution of the the PBMC dataset."}
-# Replace 'ambient' with actual ambient profile, if available.
-ambient <- inferAmbience(counts(altExp(sce)))
-barplot(ambient, las=2, ylab="Relative ambient ambience")
+```{r pbmc-adt-ambient-profile, fig.cap="Distribution of (log-)counts for each ADT in the PBMC dataset, with the inferred ambient abundance marked by the black dot."}
+baseline <- inferAmbience(counts(altExp(sce)))
+head(baseline)
+
+plotExpression(altExp(sce), features=rownames(altExp(sce)), exprs_values="counts") +
+    scale_y_log10() + 
+    geom_point(data=data.frame(x=names(baseline), y=baseline), mapping=aes(x=x, y=y), cex=3)
 ```
 
-We use a `r Biocpkg("DESeq2")`-like approach to compute size factors based on the ambient profile.
-Specifically, the size factor for each cell is defined as the median of the ratios of that cell's counts to the ambient profile.
-If the abundances for most ADTs in each cell are ambient-derived, they should be roughly constant across cells;
+We use a `r Biocpkg("DESeq2")`-like approach to compute size factors against the baseline profile.
+Specifically, the size factor for each cell is defined as the median of the ratios of that cell's counts to the baseline profile.
+If the abundances for most ADTs in each cell are baseline-derived, they should be roughly constant across cells;
 any systematic differences in the ratios correspond to cell-specific biases in sequencing coverage and are captured by the size factor.
-The use of the median protects against the minority of ADTs corresponding to genuinely expressed markers.
+The use of the median protects against the minority of ADTs corresponding to genuinely expressed targets.
 
 ```{r}
-sf.amb <- medianSizeFactors(altExp(sce), reference=ambient)
+sf.amb <- medianSizeFactors(altExp(sce), reference=baseline)
 summary(sf.amb)
 ```
 
