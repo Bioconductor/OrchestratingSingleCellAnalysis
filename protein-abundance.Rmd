@@ -69,28 +69,29 @@ counts(altExp(sce))[,1:10] # sneak peek
 As with the endogenous genes, we want to remove cells that have failed to capture/sequence the ADTs.
 Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
 As the ADTs are (relatively) deeply sequenced, we can expect non-zero counts for most ADTs in each cell due to contamination (Figure \@ref(fig:detected-ab-hist); if this is not the case, we might suspect some failure of ADT processing for that cell.
-We thus remove cells that have unusually low numbers of detected ADTs using the usual outlier-based approach.
+We thus remove cells that have unusually low numbers of detected ADTs, defined here as less than or equal to half of the total number of tags.
 
 ```{r detected-ab-hist, fig.cap="Distribution of the number of detected ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
 # Applied on the alternative experiment containing the ADT counts:
 library(scuttle)
 df.ab <- perCellQCMetrics(altExp(sce))
 
-ab.discard <- isOutlier(df.ab$detected, log=TRUE, type="lower", min_diff=1)
+n.nonzero <- sum(!rowAlls(counts(altExp(sce)), value=0L))
+ab.discard <- df.ab$detected <= n.nonzero/2
 summary(ab.discard)
 
 hist(df.ab$detected, col='grey', main="", xlab="Number of detected ADTs")
-abline(v=attr(ab.discard, "thresholds")["lower"], col="red", lty=2)
+abline(v=n.nonzero/2, col="red", lty=2)
 ```
 
-To elaborate on the `isOutlier()` call above:
-we set `min_diff=1` to specify that the threshold should be defined at least one log~2~-unit below the median.
-This ensures that cells will not be removed if they contain non-zero counts for more than half of the median number of detected features.
-We do not rely only on the default behavior of `isOutlier()` as the MAD is often zero in deeply sequenced datasets (i.e., where most cells contain non-zero counts for all ADTs) and filtering would discard useful cells that detect _almost_ all of the ADTs.
+To elaborate on the filter above: we use `n.nonzero` to exclude ADTs with zero counts across all cells, which avoids inflation of the total number of ADTs due to barcodes that were erroniously included in the annotation.
+The use of the specific threshold of 50% aims to avoid zero size factors during median-based normalization (Section \@ref(cite-seq-median-norm)), though it is straightforward to use more stringent thresholds if so desired. 
+We do not rely only on `isOutlier()` as the MAD is often zero in deeply sequenced datasets - where most cells contain non-zero counts for all ADTs - such that filtering would discard useful cells that only detect _almost_ all of the ADTs.
 
-Some experiments will include isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
-Assuming that the magnitude of non-specific binding should be roughly constant across cells, we can define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing.
-This again uses our outlier-based approach; hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs. 
+Some experiments include isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
+If we assume that the magnitude of non-specific binding is constant across cells, we could define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing.
+Filtering uses the outlier-based approach described in Chapter \@ref(quality-control); hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs.
+Paradoxically, though, this QC metric becomes less useful in well-executed experiments where there is not enough non-specific binding to obtain consistent coverage of the control ADTs.
 
 ```{r detected-con-hist, fig.cap="Distribution of the log-coverage of IgG control ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
 # We could have specified subsets= in the above perCellQCMetrics call, but it's
@@ -101,14 +102,14 @@ df.ab2 <- perCellQCMetrics(altExp(sce), subsets=list(controls=controls))
 con.discard <- isOutlier(df.ab2$subsets_controls_sum, log=TRUE, type="lower")
 summary(con.discard)
 
-hist(log1p(df.ab2$subsets_controls_sum), col='grey', 
+hist(log1p(df.ab2$subsets_controls_sum), col='grey', breaks=50,
     main="", xlab="Log-coverage of controls")
-abline(v=log1p(attr(ab.discard, "thresholds")["lower"]), col="red", lty=2)
+abline(v=log1p(attr(con.discard, "thresholds")["lower"]), col="red", lty=2)
 ```
 
 The total ADT count is less useful as a QC metric because it is heavily correlated with the biological state of the cell.
-The presence of a targeted protein can lead to a several-fold increase in the total ADT count given the binary nature of most surface protein markers.
-Removing cells with low total ADTs would strongly penalize cell types that do not exhibit many (or any) of the selected protein targets, and would represent an extreme case of the issues discussed in Section \@ref(outlier-assumptions).
+The presence of a targeted protein can lead to an order-of-magnitude increase in the total ADT count given the binary nature of most surface protein markers.
+Removing cells with low total ADTs would strongly penalize cell types that do not express many (or any) of the selected protein targets, and would represent an extreme case of the issues discussed in Section \@ref(outlier-assumptions).
 
 Of course, if we want to analyze gene expression and ADT data together, we still need to apply quality control on the gene counts. 
 It is possible for a cell to have satisfactory ADT counts but poor QC metrics from the endogenous genes - for example, cell damage manifesting as high mitochondrial proportions would not be captured in the ADT data.
@@ -162,7 +163,7 @@ sf.geo <- geometricSizeFactors(altExp(sce))
 summary(sf.geo)
 ```
 
-### Median-based normalization
+### Median-based normalization {#cite-seq-median-norm}
 
 Ideally, we would like to compute size factors that adjust for the composition biases.
 This usually requires an assumption that most ADTs are not differentially expressed between cell types/states.
