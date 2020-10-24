@@ -96,6 +96,8 @@ In contrast, approaches based on taking the intersection or union of HVGs across
 
 Before we actually perform any correction, it is worth examining whether there is any batch effect in this dataset.
 We combine the two `SingleCellExperiment`s and perform a PCA on the log-expression values for all genes with positive (average) biological components.
+In this example, our datasets are file-backed and so we instruct `runPCA()` to use randomized PCA for greater efficiency - 
+see Section \@ref(big-data-svd) for more details - though the default IRLBA will suffice for more common in-memory representations.
 
 ```{r}
 # Synchronizing the metadata for cbind()ing.
@@ -176,8 +178,11 @@ However, at least one batch-specific cluster is still present, indicating that t
 This is attributable to violation of one of the aforementioned assumptions, even in this simple case involving replicated batches. 
 
 ```{r}
-set.seed(1010101010) # To ensure reproducibility of IRLBA.
-rescaled <- runPCA(rescaled, subset_row=chosen.hvgs, exprs_values="corrected")
+# To ensure reproducibility of the randomized PCA.
+set.seed(1010101010) 
+rescaled <- runPCA(rescaled, subset_row=chosen.hvgs, 
+    exprs_values="corrected",
+    BSPARAM=BiocSingular::RandomParam())
 
 snn.gr <- buildSNNGraph(rescaled, use.dimred="PCA")
 clusters.resc <- igraph::cluster_walktrap(snn.gr)$membership
@@ -190,7 +195,7 @@ stopifnot(any(tab.resc==0)) # Check the text above was correct.
 stopifnot(mean(rowSums(tab.resc==0)==1) < 0.1) # Most clusters have non-zero contributions.
 ```
 
-```{r tsne-pbmc-rescaled, fig.asp=0.5, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+```{r tsne-pbmc-rescaled, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `rescaleBatches()`. Each point represents a cell and is colored according to the batch of origin."}
 rescaled <- runTSNE(rescaled, dimred="PCA")
 rescaled$batch <- factor(rescaled$batch)
 plotTSNE(rescaled, colour_by="batch")
@@ -198,7 +203,24 @@ plotTSNE(rescaled, colour_by="batch")
 
 Alternatively, we could use the `regressBatches()` function to perform a more conventional linear regression for batch correction.
 This is subject to the same assumptions as described above for `rescaleBatches()`, though it has the additional disadvantage of discarding sparsity in the matrix of residuals.
-(We do put in some effort to mitigate the loss of efficiency by avoiding explicit calculation of the residuals, see `?ResidualMatrix` for details.)
+To avoid this, we avoid explicit calculation of the residuals during matrix multiplication (see `?ResidualMatrix` for details), allowing us to perform approximate PCA more efficiently.
+Advanced users can set `design=` and specify which coefficients to retain in the output matrix, reminiscent of `r Biocpkg("limma")`'s `removeBatchEffect()` function.
+
+```{r tsne-pbmc-residuals, fig.cap="$t$-SNE plot of the PBMC datasets after correction with `regressBatches()`. Each point represents a cell and is colored according to the batch of origin."}
+set.seed(10001)
+residuals <- regressBatches(pbmc3k, pbmc4k, d=50,
+    subset.row=chosen.hvgs, correct.all=TRUE,
+    BSPARAM=BiocSingular::RandomParam())
+    
+snn.gr <- buildSNNGraph(residuals, use.dimred="corrected")
+clusters.resid <- igraph::cluster_walktrap(snn.gr)$membership
+tab.resid <- table(Cluster=clusters.resid, Batch=residuals$batch)
+tab.resid
+
+residuals <- runTSNE(residuals, dimred="corrected")
+residuals$batch <- factor(residuals$batch)
+plotTSNE(residuals, colour_by="batch")
+```
 
 ## Performing MNN correction
 
