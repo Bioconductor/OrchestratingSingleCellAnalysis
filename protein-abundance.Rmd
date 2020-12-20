@@ -388,136 +388,224 @@ plotExpression(altExp(sce.cd8), x=I(sce.cd8$subcluster),
     features=c("CD3", "CD8a"))
 ```
 
-### By combined clustering
+### By intersecting clusters
 
-Alternatively, we can combine the information from both sets of features into a single matrix for use in downstream analyses.
-This is logistically convenient as the combined structure is compatible with routine analysis workflows for transcript-only data.
-To illustrate, we first perform some standard steps on the transcript count matrix:
+In contrast to subclustering, we can "intersect" the clusters generated independently for each set of features.
+Two cells are only considered to be in the same intersected cluster if they belong to the same cluster in every feature set.
+or in other words, strong separation between cells in any feature set is sufficient to cause the formation of a new cluster.
+The goal of the intersection is to capture population heterogeneity across all features in a single set of clusters.
+To illustrate, we first perform some standard steps on the transcript count matrix to obtain an RNA-only clustering.
 
 ```{r}
 sce.main <- logNormCounts(sce)
 dec.main <- modelGeneVar(sce.main)
 top.main <- getTopHVGs(dec.main, prop=0.1)
+
+set.seed(100010) # for IRLBA.
 sce.main <- runPCA(sce.main, subset_row=top.main, ncomponents=25)
+
+library(bluster)
+clusters.rna <- clusterRows(reducedDim(sce.main, "PCA"), NNGraphParam())
+table(clusters.rna)
 ```
 
-The simplest version of this idea involves literally combining the log-normalized abundance matrix for the ADTs with the log-expression matrix (or its compacted form, the matrix of PCs) to obtain a single matrix for use in downstream procedures.
-This requires some reweighting to balance the contribution of the transcript and ADT data to the total variance in the combined matrix, especially given that the former has around 100-fold more features than the latter.
-We see that the number of clusters is slightly higher than that from the ADT data alone, consistent with the introduction of additional heterogeneity when the two feature sets are combined.
+A naive implementation of this intersection concept would involve simply concatenating the cluster identifiers.
+However, this is not ideal as it generates many small clusters.
+Here, most intersected clusters would contain fewer than 10 cells each, which is not helpful for downstream interpretation.
 
 ```{r}
-# TODO: push this into a function somewhere.
-library(DelayedMatrixStats)
-transcript.data <- logcounts(sce.main)[top.main,,drop=FALSE]
-transcript.var <- sum(rowVars(DelayedArray(transcript.data)))
-tag.data <- logcounts(altExp(sce.main))
-tag.var <- sum(rowVars(DelayedArray(tag.data)))
-
-reweight <- sqrt(transcript.var/tag.var)
-combined <- rbind(transcript.data, tag.data*reweight)
-
-# 'buildSNNGraph' conveniently performs the PCA for us if requested. We use
-# more PCs in 'd' to capture more variance in both sets of features. Note that
-# this uses IRLBA by default so we need to set the seed.
-set.seed(100010)
-g.com <- buildSNNGraph(combined, d=50) 
-clusters.com <- igraph::cluster_walktrap(g.com)$membership
-table(clusters.com)
+naive.intersection <- paste0(clusters.rna, ".", clusters.adt)
+summary(table(naive.intersection) < 10)
 ```
 
 ```{r, echo=FALSE}
-# Checking that resolution is indeed higher.
-stopifnot(length(unique(clusters.com)) > length(unique(colLabels(altExp(sce)))))
+stopifnot(mean(table(naive.intersection) < 10) > 0.5)
 ```
 
-A more sophisticated approach uses the UMAP algorithm [@mcInnes2018umap] to integrate information from the two sets of features.
-Very loosely speaking, we can imagine this as an intersection of the nearest neighbor graphs formed from each set, which effectively encourages the formation of communities of cells that are close in both feature spaces.
-Here, we perform two rounds of UMAP; one round retains high dimensionality for a faithful representation of the data during clustering, while the other performs dimensionality reduction for a pretty visualization.
-This yields an extremely fine-grained clustering in Figure \@ref(fig:combined-umap), which is attributable to the stringency of intersection operations for defining the local neighborhood.
+A more careful approach is implemented in the `intersectClusters()` function from the `r Biocpkg("mumosa")` package.
+Given the per-feature-set clusterings and the coordinates used to generate them,
+the function starts with the naive intersection but performs a series of merges to eliminate the smaller clusters.
+Specifcially, we choose a pair of clusters to merge that minimizes the gain in the within-cluster sum of squares (WCSS);
+this is repeated until the WCSS of the intersected clusters exceeds the WCSS of any per-feature-set clustering.
+In this manner, we remove irrelevant partitionings without forcibly merging clusters that are well-separated in one of the feature sets.
 
-```{r combined-umap, fig.cap="UMAP plot obtained by combining transcript and ADT data in the PBMC dataset. Each point represents a cell and is colored according to its assigned cluster."}
+```{r}
+library(mumosa)
+clusters.intersect <- intersectClusters(
+    clusters=list(clusters.rna, clusters.adt),
+    coords=list(
+        reducedDim(sce.main, "PCA"),
+        t(assay(altExp(sce.main)))
+    )
+)
+table(clusters.intersect)
+```
+
+```{r, echo=FALSE}
+stopifnot(all(table(clusters.intersect) > 10))
+```
+
+Intersecting clusters is more convenient than subclustering as each feature set can be analyzed independently in the former.
+Changes in the analysis strategy for one feature set does not affect the processing of other sets;
+similarly, there is no need to choose one feature set to define the initial clusters.
+The disadvantage is that there is no opportunity to improve resolution by choosing a more appropriate set of HVGs to separate subpopulations within each cluster.
+
+### With rescaled expression matrices
+
+Alternatively, we can combine the data from both modalities into a single matrix for use in downstream analyses.
+The simplest version of this idea involves literally combining the log-normalized abundance matrix for the ADTs with the log-expression matrix (or the same with the corresponding matrices of PCs).
+This requires some reweighting to balance the contribution of the transcript and ADT data to variance in the combined matrix, especially given that the former has at least an order of magnitude more features than the latter.
+To do so, we compute the average nearest-neighbor distance in each feature set and use it as a proxy for uninteresting noise within each subpopulation.
+Each matrix is then scaled to equalize the nearest-neighbor distances, ensuring that all modalities have comparable "baseline" variation without forcing them to have the same total variance (which would not be desirable if they captured different aspects of biology).
+We demonstrate below by combining the log-abundance ADT matrix with the matrix of PCs derived from the log-expression matrix via the `rescaleByNeighbors()` function.
+
+```{r}
+# Re-using 'sce.main' from above.
+rescaled.combined <- rescaleByNeighbors(sce.main, dimreds="PCA", altexps="Antibody Capture")
+dim(rescaled.combined)
+```
+
+This approach is logistically convenient as the combined structure is compatible with the same analysis workflows used for transcript-only data.
+For example, we can use the `rescaled.combined` matrix for clustering or dimensionality reduction (Figure \@ref(fig:rescaled-tsne-adt)) as if we were dealing with our usual matrix of PCs.
+
+```{r rescaled-tsne-adt, fig.cap="UMAP plot of the PBMC data generated from rescaled ADT and RNA data values. Each point is a cell and is colored according to the assigned cluster from a graph-based approach."}
+library(bluster)
+clusters.rescale <- clusterRows(rescaled.combined, NNGraphParam())
+table(clusters.rescale)
+
+reducedDim(sce.main, "RescaledNeighbors") <- rescaled.combined
+set.seed(1000)
+sce.main <- runUMAP(sce.main, dimred="RescaledNeighbors", name="UMAP_rescaled")
+
+plotReducedDim(sce.main, "UMAP_rescaled", 
+    colour_by=I(clusters.rescale), text_by=I(clusters.rescale))
+```
+
+However, this strategy implicitly makes assumptions about the importance of heterogeneity in the ADT data relative to the transcript data.
+In this case, we are equalizing the within-population variance across feature sets but there is no reason to think that this is the best choice - one might instead give the ADT data twice as much weight, for example.
+More generally, any calculations involving multiple sets of features must consider the potential for uninteresting noise in one set to interfere with biological signal in the other set.
+This concern is largely avoided by subclustering or intersections, where a clearer separation exists between the information contributed by each feature set.
+
+### With multi-metric UMAP
+
+A more sophisticated approach to combining matrices uses the UMAP algorithm [@mcInnes2018umap] to integrate information from two or more sets of features.
+Loosely speaking, we can imagine this as an intersection of the nearest-neighbor graphs formed from each set, which effectively encourages the formation of communities of cells that are close in both feature spaces.
+The UMAP algorithm then uses this intersection to generate a matrix of coordinates that can be directly used in downstream analyses.
+We demonstrate this process below using the `runMultiUMAP()` function, setting `n_components=20` to return a reasonably faithful high-dimensional representation of the input data. 
+
+```{r}
 set.seed(1001010)
-sce.main <- runMultiUMAP(sce.main, dimred="PCA", 
-    altexp="Antibody Capture", n_components=50)
+umap.combined <- mumosa::calculateMultiUMAP(sce.main, dimreds="PCA", 
+    altexps="Antibody Capture", n_components=20)
+dim(umap.combined)
+```
 
-# Bumping up 'k' for less granularity.
-g.com2 <- buildSNNGraph(sce.main, k=20, use.dimred="MultiUMAP") 
-clusters.com2 <- igraph::cluster_walktrap(g.com2)$membership
-table(clusters.com2)
+Graph-based clustering on `umap.combined` generates a series of fine-grained clusters.
+This is attributable to the stringency of intersection operations for defining the local neighborhood;
+cells are only placed close together in the UMAP coordinate space if they are also close together in each of the feature sets.
+We perform another round of UMAP to generate a 2-dimensional representation for visualization of the same intersected graph (Figure \@ref(fig:combined-umap)).
 
-# Combining again for visualization:
+```{r combined-umap, fig.cap="UMAP plot obtained by combining transcript and ADT data in the PBMC dataset using a multi-metric UMAP embedding. Each point represents a cell and is colored according to its assigned cluster."}
+clusters.umap <- clusterRows(umap.combined, NNGraphParam(k=20))
+table(clusters.umap)
+
 set.seed(0101110)
-sce.main <- runMultiUMAP(sce.main, dimred="PCA", 
-    altexp="Antibody Capture", name="MultiUMAP2")
-colLabels(sce.main) <- clusters.com2
+sce.main <- mumosa::runMultiUMAP(sce.main, dimreds="PCA", 
+    altexps="Antibody Capture", name="MultiUMAP2")
+colLabels(sce.main) <- clusters.umap
 plotReducedDim(sce.main, "MultiUMAP2", colour_by="label", text_by="label")
 ```
 
 ```{r, echo=FALSE}
 # Checking that resolution is indeed higher.
-stopifnot(length(unique(clusters.com2)) > length(unique(clusters.com)))
-stopifnot(length(unique(clusters.com2)) > length(unique(clusters.adt)))
+stopifnot(length(unique(clusters.umap)) > length(unique(clusters.rescale)))
+stopifnot(length(unique(clusters.umap)) > length(unique(clusters.adt)))
 ```
 
+The same concerns mentioned for `rescaleByNeighbors()` are also relevant here.
+For example, both sets of features contribute equally to the edge weights in the intersected graph, 
+which may not be appropriate if the biology of interest is concentrated in only one set.
+The use of UMAP for both clustering and visualization may also reduce the effectiveness of plots like Figure \@ref(fig:combined-umap) as diagnostics, as discussed in Section \@ref(visualization-interpretation).
+
+<!--
 An even more sophisticated approach uses factor analysis to identify common and unique factors of variation in each feature set.
 The set of factors can then be used as low-dimensional coordinates for each cell in downstream analyses, though a number of additional statistics are also computed that may be useful, e.g., the contribution of each feature to each factor.
 
 ```{r}
 # Waiting for MOFA2. 
 ```
+-->
 
-These combined strategies are convenient but do not consider (or implicitly make assumptions about) the importance of heterogeneity in the ADT data relative to the transcript data.
-For example, the UMAP approach takes equal contributions from both sets of features to the intersection, which may not be appropriate if the biology of interest is concentrated in only one set.
-More generally, a combined analysis must consider the potential for uninteresting noise in one set to interfere with biological signal in the other set, a concern that is largely avoided during subclustering.
+## Finding correlations between features
 
-### By differential testing 
+Another interesting analysis involves finding correlations between gene expression and the abundance of surface markers.
+This can provide some information about the regulatory networks or pathways that might be driving a phenotype of interest - 
+for example, which genes are up- or down-regulated in response to increasing PD-1 abundance?
+We use the `computeCorrelations()` function to quickly compute all pairwise Spearman correlations between two feature sets.
 
-In more interesting applications of this technology, protein targets are chosen that reflect some functional activity rather than cell type.
-(Because, frankly, the latter is not particularly hard to infer from transcript data in most cases.)
-A particularly elegant example involves quantification of the immune response by using antibodies to target the influenza peptide-MHCII complexes in T cells, albeit for mass cytometry [@fehlings2018multiplex].
-If the aim is to test for differences in the functional readout, a natural analysis strategy is to use the transcript data for clustering (Figure \@ref(fig:tsne-naive)) and perform differential testing between clusters or conditions for the relevant ADTs.
+```{r}
+all.correlations <- computeCorrelations(sce.main, altExp(sce.main))
+with.pd1 <- all.correlations[all.correlations$feature2=="PD-1",]
+with.pd1 <- with.pd1[order(with.pd1$p.value),]
+with.pd1[which(with.pd1$rho > 0),]
+with.pd1[which(with.pd1$rho < 0),]
+```
 
-```{r tsne-naive, fig.cap="$t$-SNE plot of the PBMC dataset based on the transcript data. Each point is a cell and is colored according to the assigned cluster."}
-# Performing a quick analysis of the gene expression data.
-sce <- logNormCounts(sce)
-dec <- modelGeneVar(sce)
-top <- getTopHVGs(dec, prop=0.1)
+Of course, computing correlations across all cell types in the population is not particularly interesting.
+Strong correlations may be driven by cell type differences, while cell type-specific correlations may be "diluted" by noise in other cell types.
+Rather, it may be better to compute correlations for each cluster separately, which allows us to focus on the more subtle regulatory effects within each cell type.
+For example, in cluster `r of.interest`, we observe that PD-1 abundance is positively correlated with _GZMK_ but negatively correlated with _GZMH_ (Figure \@ref(fig:correlation-pd1-cluster)).
 
-set.seed(1001010)
-sce <- runPCA(sce, subset_row=top, ncomponents=25)
+```{r correlation-pd1-cluster, fig.cap=sprintf("Expression of _GZMH_ and _GZMK_ with respect to PD-1 abundance in each cell of cluster %s in the PBMC dataset.", of.interest)}
+chosen <- clusters.adt == of.interest
 
-g <- buildSNNGraph(sce, use.dimred="PCA")
-clusters <- igraph::cluster_walktrap(g)$membership
-colLabels(sce) <- factor(clusters)
+# TODO: add a subset.cols= method
+# TODO: allow people to pass in their own names.
+chosen.correlations <- computeCorrelations(sce.main[,chosen], altExp(sce.main)[,chosen])
+with.pd1 <- chosen.correlations[chosen.correlations$feature2=="PD-1",]
+with.pd1 <- with.pd1[order(with.pd1$p.value),]
+with.pd1[which(with.pd1$rho > 0),]
+with.pd1[which(with.pd1$rho < 0),]
 
-set.seed(1000010)
-sce <- runTSNE(sce, dimred="PCA")
-plotTSNE(sce, colour_by="label", text_by="label")
+plotExpression(sce.main[,chosen], x="PD-1", show_smooth=TRUE, show_se=FALSE, 
+    features=c("GZMH", "GZMK"), swap_rownames="Symbol")
 ```
 
 ```{r, echo=FALSE}
-chosen.cluster <- 13
+stopifnot("ENSG00000113088" %in% head(with.pd1$feature1[which(with.pd1$rho > 0)]))
+stopifnot("ENSG00000100450" %in% head(with.pd1$feature1[which(with.pd1$rho < 0)]))
 ```
 
-We demonstrate this approach using `findMarkers()` to test for differences in tag abundance between clusters (Chapter \@ref(marker-detection)).
-For example, if the PD-1 level was a readout for some interesting phenotype - say, T cell exhaustion [@pauken2015overcoming] - we might be interested in its upregulation in cluster `r chosen.cluster` compared to all other clustuers (Figure \@ref(fig:heat-pd-1)).
-Methods from Chapter \@ref(multi-sample-comparisons) can be similarly used to test for differences between conditions based on pseudo-bulk ADT counts.
+For experiments with multiple batches (or other uninteresting categorical factors), we can use the `block=` option to only compute correlations within each batch.
+The results are then consolidated across batches to obtain a single `DataFrame` of statistics as before.
+This ensures that correlations are not driven by differences between batches; it also focuses on feature pairs that have correlations with the same sign across batches.
+To demonstrate, assume that we are interested in correlations that are consistently present in all cell types.
+As such, clustering is an uninteresting factor of variation that can be specified in `block=`.
+This yields a number of gene/protein pairs with strong correlations - many of which, unsurprisingly, involve the gene responsible for producing the protein, e.g., _IL7R_ and CD127 (Figure \@ref(fig:correlation-pd1-blocked)).
 
-```{r heat-pd-1, fig.cap=sprintf("Heatmap of log-fold changes in tag abundances in cluster %s compared to all other clusters identified from transcript data in the PBMC data set.", chosen.cluster)}
-markers <- findMarkers(altExp(sce), colLabels(sce))
-of.interest <- markers[[13]]
-pheatmap(getMarkerEffects(of.interest), breaks=seq(-3, 3, length.out=101))
+```{r correlation-pd1-blocked, fig.cap="Expression of _IL7R_ with respect to CD127 abundance in each cluster of the PBMC dataset."}
+# Using multiple core for speed.
+library(BiocParallel)
+blocked.correlations <- computeCorrelations(sce.main, altExp(sce.main), 
+    block=clusters.adt, BPPARAM=MulticoreParam(4))
+
+blocked.correlations[order(blocked.correlations$p.value),]
+
+plotExpression(sce.main, x="CD127", show_smooth=TRUE, show_se=FALSE, 
+    features=c("IL7R"), swap_rownames="Symbol", 
+    other_fields=list(data.frame(clusters=clusters.adt))) + facet_wrap(~clusters)
 ```
 
-```{r, echo=FALSE, results="hide"}
-stopifnot(identical(markers[[chosen.cluster]], of.interest))
-stopifnot(all(getMarkerEffects(of.interest["PD-1",]) > 1))
-```
+For large feature sets, computing all pairwise correlations may not be computationally feasible.
+Instead, we can use the `findTopCorrelations()` to find the most correlated features in one set for each feature in the other set.
+The example below will find the top 10 genes in the RNA data that are correlated with the abundance of the markers in the ADT data.
+This uses a PCA to approximate the distances between genes in rank space, followed by a nearest-neighbors approach to identify the top closest genes for each protein marker.
 
-The main appeal of this approach is that it avoids data snooping (Section \@ref(from-data-snooping)) as the clusters are defined without knowledge of the ADTs.
-This improves the statistical rigor of the subsequent differential testing on the ADT abundances (though only to some extent; other problems are still present, such as the lack of true replication in between-cluster comparisons). 
-From a practical perspective, this approach yields fewer clusters and reduces the amount of work involved in manual annotation, especially if there are multiple functional states (e.g., stressed, apoptotic, stimulated) for each cell type.
-However, it is fundamentally limited to per-tag inferences; if we want to identify subpopulations with interesting combinations of target proteins, we must resort to high-dimensional analyses like clustering on the ADT abundances.
+```{r, eval=FALSE}
+set.seed(100)
+top.correlations <- findTopCorrelations(x=altExp(sce.main), y=sce.main, number=10)
+top.correlations
+```
 
 ## Session Info {-}
 
