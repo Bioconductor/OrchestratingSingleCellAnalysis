@@ -544,7 +544,9 @@ for example, which genes are up- or down-regulated in response to increasing PD-
 We use the `computeCorrelations()` function to quickly compute all pairwise Spearman correlations between two feature sets.
 
 ```{r}
-all.correlations <- computeCorrelations(sce.main, altExp(sce.main))
+all.correlations <- computeCorrelations(sce.main, altExp(sce.main), 
+    use.names=c("Symbol", NA))
+
 with.pd1 <- all.correlations[all.correlations$feature2=="PD-1",]
 with.pd1 <- with.pd1[order(with.pd1$p.value),]
 with.pd1[which(with.pd1$rho > 0),]
@@ -558,10 +560,9 @@ For example, in cluster `r of.interest`, we observe that PD-1 abundance is posit
 
 ```{r correlation-pd1-cluster, fig.cap=sprintf("Expression of _GZMH_ and _GZMK_ with respect to PD-1 abundance in each cell of cluster %s in the PBMC dataset.", of.interest)}
 chosen <- clusters.adt == of.interest
+chosen.correlations <- computeCorrelations(sce.main, altExp(sce.main),
+    subset.cols=chosen, use.names=c("Symbol", NA))
 
-# TODO: add a subset.cols= method
-# TODO: allow people to pass in their own names.
-chosen.correlations <- computeCorrelations(sce.main[,chosen], altExp(sce.main)[,chosen])
 with.pd1 <- chosen.correlations[chosen.correlations$feature2=="PD-1",]
 with.pd1 <- with.pd1[order(with.pd1$p.value),]
 with.pd1[which(with.pd1$rho > 0),]
@@ -572,8 +573,8 @@ plotExpression(sce.main[,chosen], x="PD-1", show_smooth=TRUE, show_se=FALSE,
 ```
 
 ```{r, echo=FALSE}
-stopifnot("ENSG00000113088" %in% head(with.pd1$feature1[which(with.pd1$rho > 0)]))
-stopifnot("ENSG00000100450" %in% head(with.pd1$feature1[which(with.pd1$rho < 0)]))
+stopifnot("GZMK" %in% head(with.pd1$feature1[which(with.pd1$rho > 0)]))
+stopifnot("GZMH" %in% head(with.pd1$feature1[which(with.pd1$rho < 0)]))
 ```
 
 For experiments with multiple batches (or other uninteresting categorical factors), we can use the `block=` option to only compute correlations within each batch.
@@ -583,11 +584,11 @@ To demonstrate, assume that we are interested in correlations that are consisten
 As such, clustering is an uninteresting factor of variation that can be specified in `block=`.
 This yields a number of gene/protein pairs with strong correlations - many of which, unsurprisingly, involve the gene responsible for producing the protein, e.g., _IL7R_ and CD127 (Figure \@ref(fig:correlation-pd1-blocked)).
 
-```{r correlation-pd1-blocked, fig.cap="Expression of _IL7R_ with respect to CD127 abundance in each cluster of the PBMC dataset."}
+```{r correlation-pd1-blocked, fig.cap="Expression of _IL7R_ with respect to CD127 abundance in each cluster of the PBMC dataset. Each facet represents a cluster and each point represents a cell in that cluster."}
 # Using multiple core for speed.
 library(BiocParallel)
 blocked.correlations <- computeCorrelations(sce.main, altExp(sce.main), 
-    block=clusters.adt, BPPARAM=MulticoreParam(4))
+    block=clusters.adt, BPPARAM=MulticoreParam(4), use.names=c("Symbol", NA))
 
 blocked.correlations[order(blocked.correlations$p.value),]
 
@@ -598,13 +599,16 @@ plotExpression(sce.main, x="CD127", show_smooth=TRUE, show_se=FALSE,
 
 For large feature sets, computing all pairwise correlations may not be computationally feasible.
 Instead, we can use the `findTopCorrelations()` to find the most correlated features in one set for each feature in the other set.
+This uses a nearest-neighbors approach in rank space to identify the top closest genes for each protein marker, which is equivalent to an exhaustive pairwise search;
+we further speed it up by performing a PCA to compact the data by approximating the distances between genes in a lower-dimensional space.
 The example below will find the top 10 genes in the RNA data that are correlated with the abundance of the markers in the ADT data.
-This uses a PCA to approximate the distances between genes in rank space, followed by a nearest-neighbors approach to identify the top closest genes for each protein marker.
+(Though in this case, the number of features in ADT data is small enough that an exhaustive search would actually be faster.)
 
-```{r, eval=FALSE}
-set.seed(100)
-top.correlations <- findTopCorrelations(x=altExp(sce.main), y=sce.main, number=10)
-top.correlations
+```{r}
+set.seed(100) # For the IRLBA step.
+top.correlations <- findTopCorrelations(x=altExp(sce.main), y=sce.main, 
+    number=10, use.names=c(NA, "Symbol"), BPPARAM=MulticoreParam(4))
+top.correlations$positive
 ```
 
 ## Session Info {-}
