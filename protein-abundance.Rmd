@@ -25,10 +25,12 @@ While we have counts for both ADTs and transcripts, there are fundamental differ
 Most experiments involve only a small number of antibodies (<20) that are chosen by the researcher because they are of _a priori_ interest, in contrast to gene expression data that captures the entire transcriptome regardless of the study.
 The coverage of the ADTs is also much deeper as they are sequenced separately from the transcripts, allowing the sequencing resources to be concentrated into a smaller number of features.
 And, of course, the use of antibodies against protein targets involves consideration of separate biases compared to those observed for transcripts.
+This chapter will describe some strategies for integrated analysis of ADT and transcript data in CITE-seq experiments.
 
-In this chapter, we will describe some strategies for integrated analysis of ADT and transcript data in CITE-seq experiments.
+## Setting up the data
+
 We will demonstrate using a PBMC dataset from 10X Genomics that contains quantified abundances for a number of interesting surface proteins.
-We conveniently obtain the dataset using the `r Biocpkg("DropletTestFiles")` package, after which we can create a `SingleCellExperiment` as shown below.
+We obtain the dataset using the `r Biocpkg("DropletTestFiles")` package, after which we can create a `SingleCellExperiment` as shown below.
 
 ```{r}
 library(DropletTestFiles)
@@ -42,8 +44,6 @@ sce <- read10xCounts(file.path(dir, "filtered_feature_bc_matrix"))
 sce
 ```
 
-## Setting up the data
-
 The `SingleCellExperiment` class provides the concept of an "alternative Experiment" to store data for different sets of features but the same cells.
 This involves storing another `SummarizedExperiment` (or an instance of a subclass) _inside_ our `SingleCellExperiment` where the rows (features) can differ but the columns (cells) are the same.
 In previous chapters, we were using the alternative Experiments to store spike-in data, but here we will use the concept to split off the ADT data.
@@ -53,76 +53,111 @@ This isolates the two sets of features to ensure that analyses on one set do not
 sce <- splitAltExps(sce, rowData(sce)$Type)
 altExpNames(sce)
 altExp(sce) # Can be used like any other SingleCellExperiment. 
-```
-
-At this point, it is also helpful to coerce the sparse matrix for ADTs into a dense matrix.
-The ADT counts are usually not sparse so storage as a sparse matrix provides no advantage; in fact, it actually increases memory usage and computational time as the indices of non-zero entries must be unnecessarily stored and processed.
-From a practical perspective, this avoids unnecessary incompatibilities with downstream applications that do not accept sparse inputs.
-
-```{r}
-counts(altExp(sce)) <- as.matrix(counts(altExp(sce)))
 counts(altExp(sce))[,1:10] # sneak peek
 ```
 
 ## Quality control
 
-As with the endogenous genes, we want to remove cells that have failed to capture/sequence the ADTs.
-Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
-As the ADTs are (relatively) deeply sequenced, we can expect non-zero counts for most ADTs in each cell due to contamination (Figure \@ref(fig:cite-detected-ab-hist); if this is not the case, we might suspect some failure of ADT processing for that cell.
-We thus remove cells that have unusually low numbers of detected ADTs, defined here as less than or equal to half of the total number of tags.
+### Issues with RNA-based metrics 
 
-```{r cite-detected-ab-hist, fig.cap="Distribution of the number of detected ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
-# Applied on the alternative experiment containing the ADT counts:
-library(scuttle)
-df.ab <- perCellQCMetrics(altExp(sce))
+As in the RNA-based analysis, we want to remove cells that have failed to capture/sequence the ADTs.
+Ideally, we would re-use the QC metrics and strategies described in Chapter \@ref(quality-control).
+Unfortunately, this is complicated by some key differences between ADT and RNA count data.
+In particular, the features in a CITE-seq experiment are usually chosen because they capture interesting variation.
+This enriches for biology, which is desirable, but also makes it difficult to separate biological and technical effects.
 
-n.nonzero <- sum(!rowAlls(counts(altExp(sce)), value=0L))
-ab.discard <- df.ab$detected <= n.nonzero/2
-summary(ab.discard)
+We start with the most obvious QC metric, the total count across all ADTs in a cell.
+The presence of a targeted protein can lead to a several-fold increase in the total ADT count given the binary nature of most surface markers.
+For example, the most abundant marker in each cell often takes up 40-60% of its total count and is different across cells (Figure \@ref(fig:top-prop-adt-dist)).
+Removing cells with low total ADT counts could inadvertently eliminate cell types that do not express many - or indeed, any - of the selected protein targets.
 
-hist(df.ab$detected, col='grey', main="", xlab="Number of detected ADTs")
-abline(v=n.nonzero/2, col="red", lty=2)
+```{r top-prop-adt-dist, fig.width=10, fig.height=6, fig.cap="Distribution of the proportion of counts taken up by the most abundant marker in each cell, stratified by the identity of the marker. Each boxplot contains the distribution across all cells for which the corresponding marker is the most abundant feature in that cell."}
+library(DelayedMatrixStats)
+adt.counts <- counts(altExp(sce))
+total.count <- colSums(adt.counts)
+top.prop <- colMaxs(adt.counts)/total.count
+top.marker <- rownames(adt.counts)[max.col(t(adt.counts))]
+boxplot(split(top.prop, top.marker), ylab="Proportion of total ADT count")
 ```
 
-To elaborate on the filter above: we use `n.nonzero` to exclude ADTs with zero counts across all cells, which avoids inflation of the total number of ADTs due to barcodes that were erroniously included in the annotation.
+The other common metric is the number of ADTs detected (i.e., with non-zero counts) in each cell, but again, this is not as helpful in ADT data compared to RNA data.
+Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
+As the ADTs are (relatively) deeply sequenced, we expect non-zero counts for most ADTs in each cell due to these contaminating transcripts.
+This may result in near-identical metrics for all cells (Figure \@ref(fig:cite-detected-ab-hist)) regardless of the efficacy of cDNA capture. 
+
+```{r cite-detected-ab-hist, fig.cap="Distribution of the number of detected ADTs across all cells in the PBMC dataset."}
+adt.detected <- colSums(adt.counts > 0)
+hist(adt.detected, col='grey', main="", xlab="Number of detected ADTs")
+```
+
+Contrast this with the utility of the same QC metrics for the RNA counts.
+Most counts in an RNA-seq library are assigned to constitutively expressed genes that should not exhibit major changes across subpopulations, allowing us to use the total RNA count as a QC metric that is (somewhat) independent of biological state.
+Similarly, the larger number of features keeps the counts close to zero and ensures that the number of detected genes changes appreciably in response to technical effects.
+This suggests that, for a larger antibody panel (including some constitutively abundant proteins) and shallower sequencing, the ADT count matrix may be sufficiently "RNA-like" that these metrics can be used in the same way.
+
+Obviously, the mitochondrial and spike-in proportions are not applicable here.
+
+### Applying custom QC filters
+
+We re-use the `perCellQCMetrics()` function to compute some metrics from the ADT count matrix.
+
+```{r}
+library(scuttle)
+controls <- grep("^Ig", rownames(altExp(sce)))
+df.adt <- perCellQCMetrics(altExp(sce), subsets=list(controls=controls))
+```
+
+As mentioned before, the number of detected ADTs is not very helpful here.
+Nonetheless, those cells with very low numbers of detected ADTs are likely to be failures of some kind - so we remove them.
+Specifically, we remove cells where the number of detected ADTs is less than or equal to half of the total number of tags.
 The use of the specific threshold of 50% aims to avoid zero size factors during median-based normalization (Section \@ref(cite-seq-median-norm)), though it is straightforward to use more stringent thresholds if so desired. 
 We do not rely only on `isOutlier()` as the MAD is often zero in deeply sequenced datasets - where most cells contain non-zero counts for all ADTs - such that filtering would discard useful cells that only detect _almost_ all of the ADTs.
 
-Some experiments include isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
+```{r }
+# TODO: Wrap this in something.
+n.nonzero <- sum(!rowAlls(counts(altExp(sce)), value=0L))
+ab.discard <- adt.detected <= n.nonzero/2
+summary(ab.discard)
+```
+
+This experiment includes isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
 If we assume that the magnitude of non-specific binding is constant across cells, we could define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing.
 We use the outlier-based approach described in Chapter \@ref(quality-control) to choose an appropriate filter threshold (Figure \@ref(fig:cite-total-con-hist));
 hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs.
 Paradoxically, though, this QC metric becomes less useful in well-executed experiments where there is not enough non-specific binding to obtain meaningful coverage of the control ADTs.
 
 ```{r cite-total-con-hist, fig.cap="Distribution of the log-coverage of IgG control ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
-# We could have specified subsets= in the above perCellQCMetrics call, but it's
-# easier to explain one concept at a time, so we'll just repeat it here:
-controls <- grep("^Ig", rownames(altExp(sce)))
-df.ab2 <- perCellQCMetrics(altExp(sce), subsets=list(controls=controls))
-
-con.discard <- isOutlier(df.ab2$subsets_controls_sum, log=TRUE, type="lower")
+con.discard <- isOutlier(df.adt$subsets_controls_sum, log=TRUE, type="lower")
 summary(con.discard)
 
-hist(log1p(df.ab2$subsets_controls_sum), col='grey', breaks=50,
+hist(log1p(df.adt$subsets_controls_sum), col='grey', breaks=50,
     main="", xlab="Log-total count for controls per cell")
 abline(v=log1p(attr(con.discard, "thresholds")["lower"]), col="red", lty=2)
 ```
 
-As with scRNA-seq, the total count across all ADTs can also be used as a QC metric (Figure \@ref(fig:cite-total-all-hist)).
-However, it is a riskier proportion for CITE-seq as there is a greater risk that the total count will be strongly correlated with the biological state of the cell.
-The presence of a targeted protein can lead to a several-fold increase in the total ADT count given the binary nature of most surface protein markers.
-Removing cells with low totals could inadvertently eliminate cell types that do not express many - or indeed, any - of the selected protein targets.
-Admittedly, this problem is the same as that discussed previously for the library size in scRNA-seq data (Section \@ref(outlier-assumptions)) but can be more pronounced in CITE-seq where there is no guaranteed set of constitutively expressed features to "buffer" cell-type-specific variation in the total count.
+<!--
+Another potential artifact in CITE-seq data is that of antibody conjugates in the ambient solution.
+The contamination of a droplet by a clump of antibodies causes large increase in the counts for all tags in the corresponding cell library.
+To identify these, we compute the entropy for each cell from the ADT count matrix.
+Higher entropies indicate that the counts are more evenly distributed across tags, consistent with the presence of an antibody conjugate.
+By comparison, cells with a small number of highly abundant tags would have low entropies.
+We use an outlier-based approach to identify and remove cells with unusually high entropies.
 
-```{r cite-total-all-hist, fig.cap="Distribution of the log-total count of all ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells are considered to be low outliers."}
-sum.discard <- isOutlier(df.ab2$sum, log=TRUE, type="lower")
-summary(sum.discard)
+```{r}
+# TODO: identify conjugates in DropletUtils.
+library(TSCAN)
+ent <- perCellEntropy(altExp(sce))
+ent.discard <- isOutlier(ent + log(df.adt$sum), type="higher")
+summary(ent.discard)
 
-hist(log1p(df.ab2$sum), col='grey', breaks=50, main="", xlab="Log-total count per cell")
-abline(v=log1p(attr(sum.discard, "thresholds")["lower"]), col="red", lty=2)
+hist(ent)
+abline(v=attr(ent.discard, "thresholds")["lower"], col="red", lty=2)
 ```
+-->
 
-Of course, if we want to analyze gene expression and ADT data together, we still need to apply quality control on the gene counts. 
+### Putting it all together
+
+If we want to analyze gene expression and ADT data together, we still need to apply quality control on the gene counts. 
 It is possible for a cell to have satisfactory ADT counts but poor QC metrics from the endogenous genes - for example, cell damage manifesting as high mitochondrial proportions would not be captured in the ADT data.
 More generally, the ADTs are synthetic, external to the cell and conjugated to antibodies, so it is not surprising that they would experience different cell-specific technical effects than the endogenous transcripts.
 This motivates a distinct QC step on the genes to ensure that we only retain high-quality cells in both feature spaces.
