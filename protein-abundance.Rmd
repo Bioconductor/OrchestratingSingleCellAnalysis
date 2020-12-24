@@ -80,7 +80,7 @@ top.marker <- rownames(adt.counts)[max.col(t(adt.counts))]
 boxplot(split(top.prop, top.marker), ylab="Proportion of total ADT count")
 ```
 
-The other common metric is the number of ADTs detected (i.e., with non-zero counts) in each cell, but again, this is not as helpful in ADT data compared to RNA data.
+The other common metric is the number of features detected (i.e., with non-zero counts) in each cell, but again, this is not as helpful for ADTs compared to RNA data.
 Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
 As the ADTs are (relatively) deeply sequenced, we expect non-zero counts for most ADTs in each cell due to these contaminating transcripts.
 This may result in near-identical metrics for all cells (Figure \@ref(fig:cite-detected-ab-hist)) regardless of the efficacy of cDNA capture. 
@@ -99,61 +99,45 @@ Obviously, the mitochondrial and spike-in proportions are not applicable here.
 
 ### Applying custom QC filters
 
-We re-use the `perCellQCMetrics()` function to compute some metrics from the ADT count matrix.
+To replace the standard QC metrics, we take advantage of one of the more obvious technical effects in ADT data - namely, contamination from the ambient solution.
+As previously mentioned, we expect non-zero counts for most ADTs due to this contamination, so their absence is indicative of a problem during library preparation.
+We can then identify droplets that have no estimated contribution from the ambient solution and mark them for removal during QC filtering.
+Estimation of the ambient contribution assumes most markers are not actually expressed by any given cell, 
+which is generally reasonable for diverse antibody panels that aim to characterize many different cell types.
+The calculations themselves are done using the `cleanHashDrops()` function from the `r Biocpkg("DropletUtils")` package, as shown below.
 
 ```{r}
-library(scuttle)
-controls <- grep("^Ig", rownames(altExp(sce)))
-df.adt <- perCellQCMetrics(altExp(sce), subsets=list(controls=controls))
+controls <- grep("^Ig", rownames(altExp(sce))) # see below for details.
+qc.stats <- cleanHashDrops(counts(altExp(sce)), controls=controls)
+summary(qc.stats$zero.discard) # libraries removed with no ambient contamination
 ```
 
-As mentioned before, the number of detected ADTs is not very helpful here.
-Nonetheless, those cells with very low numbers of detected ADTs are likely to be failures of some kind - so we remove them.
-Specifically, we remove cells where the number of detected ADTs is less than or equal to half of the total number of tags.
-The use of the specific threshold of 50% aims to avoid zero size factors during median-based normalization (Section \@ref(cite-seq-median-norm)), though it is straightforward to use more stringent thresholds if so desired. 
-We do not rely only on `isOutlier()` as the MAD is often zero in deeply sequenced datasets - where most cells contain non-zero counts for all ADTs - such that filtering would discard useful cells that only detect _almost_ all of the ADTs.
+Continuing on the theme of ambient contamination, another potential artifact in CITE-seq data is that of antibody conjugates.
+The inclusion of a clump of antibodies in a droplet causes large increase in the counts for all tags in the corresponding library,
+which interferes with the downstream analysis by masking the cell's true surface marker phenotype.
+We identify affected barcodes as those with unusually high counts for all tags (Figure \@ref(fig:cite-ambient-scale-hist)),
+quantified as an ambient "scaling factor" that is closely related to the size factors used for normalization.
+The exact threshold is defined by `cleanHashDrops()` using the same outlier-based approach from Section \@ref(quality-control-outlier).
 
-```{r }
-# TODO: Wrap this in something.
-n.nonzero <- sum(!rowAlls(counts(altExp(sce)), value=0L))
-ab.discard <- adt.detected <= n.nonzero/2
-summary(ab.discard)
+```{r cite-ambient-scale-hist, fig.cap="Distribution of the log-transformed ambient scaling factor to each cell in the PBMC dataset. The red dotted line indicates the threshold above which cells were removed."}
+summary(qc.stats$high.ambient)
+hist(log2(qc.stats$ambient.scale))
+abline(v=log2(attr(qc.stats$high.ambient, "threshold")["higher"]), 
+    col="red", lty=2)
 ```
 
-This experiment includes isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
-If we assume that the magnitude of non-specific binding is constant across cells, we could define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing.
-We use the outlier-based approach described in Chapter \@ref(quality-control) to choose an appropriate filter threshold (Figure \@ref(fig:cite-total-con-hist));
-hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs.
+This experiment also includes isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding.
+Assuming that the magnitude of non-specific binding is constant across cells, we can define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing.
+We identify these cells as low outliers (Figure \@ref(fig:cite-total-con-hist)), given that hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs.
 Paradoxically, though, this QC metric becomes less useful in well-executed experiments where there is not enough non-specific binding to obtain meaningful coverage of the control ADTs.
 
 ```{r cite-total-con-hist, fig.cap="Distribution of the log-coverage of IgG control ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold below which cells were removed."}
-con.discard <- isOutlier(df.adt$subsets_controls_sum, log=TRUE, type="lower")
-summary(con.discard)
-
-hist(log1p(df.adt$subsets_controls_sum), col='grey', breaks=50,
+summary(qc.stats$low.controls)
+hist(log10(qc.stats$sum.controls + 1), col='grey', breaks=50,
     main="", xlab="Log-total count for controls per cell")
-abline(v=log1p(attr(con.discard, "thresholds")["lower"]), col="red", lty=2)
+abline(v=log10(attr(qc.stats$low.controls, "thresholds")["lower"]+1), 
+    col="red", lty=2)
 ```
-
-<!--
-Another potential artifact in CITE-seq data is that of antibody conjugates in the ambient solution.
-The contamination of a droplet by a clump of antibodies causes large increase in the counts for all tags in the corresponding cell library.
-To identify these, we compute the entropy for each cell from the ADT count matrix.
-Higher entropies indicate that the counts are more evenly distributed across tags, consistent with the presence of an antibody conjugate.
-By comparison, cells with a small number of highly abundant tags would have low entropies.
-We use an outlier-based approach to identify and remove cells with unusually high entropies.
-
-```{r}
-# TODO: identify conjugates in DropletUtils.
-library(TSCAN)
-ent <- perCellEntropy(altExp(sce))
-ent.discard <- isOutlier(ent + log(df.adt$sum), type="higher")
-summary(ent.discard)
-
-hist(ent)
-abline(v=attr(ent.discard, "thresholds")["lower"], col="red", lty=2)
-```
--->
 
 ### Putting it all together
 
@@ -164,6 +148,7 @@ This motivates a distinct QC step on the genes to ensure that we only retain hig
 Here, the count matrix has already been filtered by _Cellranger_ to remove empty droplets so we only filter on the mitochondrial proportions to remove putative low-quality cells.
 
 ```{r}
+library(scuttle)
 mito <- grep("^MT-", rowData(sce)$Symbol)
 df <- perCellQCMetrics(sce, subsets=list(Mito=mito))
 mito.discard <- isOutlier(df$subsets_Mito_percent, type="higher")
@@ -173,9 +158,10 @@ summary(mito.discard)
 Finally, to remove the low-quality cells, we subset the `SingleCellExperiment` as previously described.
 This automatically applies the filtering to both the transcript and ADT data; such coordination is one of the advantages of storing both datasets in a single object.
 We omit the total count filter to reduce the risk of discarding an all-negative cell type, at least for the first round of analysis.
+Helpfully, `cleanHashDrops()` also provides a `discard` field containing the intersection of all ADT-specific filters described above.
 
 ```{r}
-discard <- ab.discard | con.discard | mito.discard
+discard <- qc.stats$discard | mito.discard
 sce <- sce[,!discard]
 ```
 
@@ -215,17 +201,15 @@ summary(sf.geo)
 Ideally, we would like to compute size factors that adjust for the composition biases.
 This usually requires an assumption that most ADTs are not differentially expressed between cell types/states.
 At first glance, this appears to be a strong assumption - the target proteins were specifically chosen as they exhibit interesting heterogeneity across the population, meaning that a non-differential majority across ADTs would be unlikely.
-However, we can make it work by assuming that each cell only upregulates a minority of the targeted proteins, with the remaining ADTs exhibiting some low baseline abundance that is constant across all cells.
-(Of course, the identity of the upregulated subset can differ across cells, otherwise the dataset would not be very interesting.)
-We then compute size factors to equalize the coverage of the non-upregulated majority, thus eliminating cell-to-cell differences in capture efficiency.
+However, we can make it work by assuming that each cell only upregulates a minority of the targeted proteins, with the remaining ADTs exhibiting some low baseline abundance - a combination of weak constitutive expression and ambient contamination - that should be constant across the population.
 
-We consider the baseline ADT profile to be a combination of weak constitutive expression and ambient contamination, both of which should be constant across the population.
-We estimate this profile by assuming that the distribution of abundances for each ADT should be bimodal, where one population of cells exhibits low baseline expression and another population upregulates the corresponding protein target.
-We then use all cells in the lower mode to compute the baseline abundance for that ADT. 
-This entire calculation is performed by the `inferAmbience()` function, which was originally designed to estimate HTO ambient concentrations but can be repurposed for more general use (Figure \@ref(fig:pbmc-adt-ambient-profile)).
+We estimate the baseline abundance profile from the ADT count matrix by assuming that the distribution of abundances for each ADT should be bimodal.
+In this model, one population of cells exhibits low baseline expression while another population upregulates the corresponding protein target.
+We use all cells in the lower mode to compute the baseline abundance for that ADT, as shown below with the `ambientProfileBimodal()` function.
+We can also use other baseline profiles here - one alternative would be the ambient solution computed from empty droplets (Section \@ref(qc-droplets)).
 
 ```{r pbmc-adt-ambient-profile, fig.cap="Distribution of (log-)counts for each ADT in the PBMC dataset, with the inferred ambient abundance marked by the black dot."}
-baseline <- inferAmbience(counts(altExp(sce)))
+baseline <- ambientProfileBimodal(counts(altExp(sce)))
 head(baseline)
 
 library(scater)
@@ -234,11 +218,12 @@ plotExpression(altExp(sce), features=rownames(altExp(sce)), exprs_values="counts
     geom_point(data=data.frame(x=names(baseline), y=baseline), mapping=aes(x=x, y=y), cex=3)
 ```
 
-We use a `r Biocpkg("DESeq2")`-like approach to compute size factors against the baseline profile.
-Specifically, the size factor for each cell is defined as the median of the ratios of that cell's counts to the baseline profile.
+We then compute size factors to equalize the coverage of the non-upregulated majority, thus eliminating cell-to-cell differences in capture efficiency.
+We use a `r Biocpkg("DESeq2")`-like approach where the size factor for each cell is defined as the median of the ratios of that cell's counts to the baseline profile.
 If the abundances for most ADTs in each cell are baseline-derived, they should be roughly constant across cells;
 any systematic differences in the ratios correspond to cell-specific biases in sequencing coverage and are captured by the size factor.
 The use of the median protects against the minority of ADTs corresponding to genuinely expressed targets.
+Observant readers will note that this is the same principle used by `cleanHashDrops()` to estimate the contribution of the ambient solution to each droplet.
 
 ```{r}
 sf.amb <- medianSizeFactors(altExp(sce), reference=baseline)
@@ -386,19 +371,20 @@ stopifnot(cor(log(ncells), log(nsubclusters))> 0.5)
 ```
 
 ```{r, echo=FALSE}
-chosen.cluster <- "11"
+chosen.cluster <- "1"
 ```
 
 Another benefit of subclustering is that we can use the annotation on the ADT-derived clusters to facilitate annotation of each subcluster.
 If we knew that cluster `X` contained T cells from the ADT-derived data, there is no need to identify subclusters `X.1`, `X.2`, etc. as T cells from scratch; rather, we can focus on the more subtle (and interesting) differences between the subclusters using `findMarkers()`.
-For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on granzyme expression (Figure \@ref(fig:gzmh-cd8-t)).
+For example, cluster `r chosen.cluster` contains CD8^+^ T cells according to Figure \@ref(fig:heat-tags), in which we further identify internal subclusters based on a variety of markers (Figure \@ref(fig:gzmh-cd8-t)).
 Subclustering is also conceptually appealing as it avoids comparing log-fold changes in protein abundances with log-fold changes in gene expression.
 This ensures that variation (or noise) from the transcript counts does not compromise cell type/state identification from the relatively cleaner ADT counts.
 
-```{r gzmh-cd8-t, fig.wide=TRUE, fig.asp=0.5, fig.cap="Distribution of log-normalized expression values of _GZMH_ (left) and _GZHK_ (right) in transcript-derived subclusters of a ADT-derived subpopulation of CD8^+^ T cells."}
-of.interest <- "11"
+```{r gzmh-cd8-t, fig.wide=TRUE, fig.asp=0.7, fig.cap="Distribution of log-normalized expression values of several markers in transcript-derived subclusters of a ADT-derived subpopulation of CD8^+^ T cells."}
+of.interest <- "1"
+markers <- c("GZMH", "IL7R", "LYZ", "KLRB1")
 plotExpression(all.sce[[of.interest]], x="subcluster",
-    features=c("ENSG00000100450", "ENSG00000113088"))
+    features=markers, swap_rownames="Symbol")
 ```
 
 ```{r, echo=FALSE}
@@ -407,10 +393,10 @@ stopifnot(averaged["CD3",of.interest] > 10)
 stopifnot(averaged["CD8a",of.interest] > 10)
 
 cur.sce <- all.sce[[chosen.cluster]]
-cur.markers <- findMarkers(cur.sce, cur.sce$subcluster, direction="up")
-stopifnot(length(cur.markers)==2L)
-stopifnot("ENSG00000113088" %in% rownames(cur.markers[[1]])[1:10])
-stopifnot("ENSG00000100450" %in% rownames(cur.markers[[2]])[1:10])
+cur.markers <- findMarkers(cur.sce, cur.sce$subcluster, direction="up", 
+    row.data=rowData(cur.sce)[,"Symbol",drop=FALSE])
+top.markers <- lapply(cur.markers, function(x) head(x$Symbol, 20))
+stopifnot(all(markers %in% unlist(top.markers)))
 ```
 
 The downside is that relying on previous results increases the risk of misleading conclusions when ambiguities in those results are not considered, as previously discussed in Section \@ref(subclustering).
@@ -477,7 +463,8 @@ table(clusters.intersect)
 ```
 
 ```{r, echo=FALSE}
-stopifnot(all(table(clusters.intersect) > 10))
+# Much fewer clusters involved here.
+stopifnot(length(unique(clusters.intersect)) < 0.25 * length(unique(naive.intersection)))
 ```
 
 Intersecting clusters is more convenient than subclustering as each feature set can be analyzed independently in the former.
@@ -584,32 +571,31 @@ all.correlations <- computeCorrelations(sce.main, altExp(sce.main),
 
 with.pd1 <- all.correlations[all.correlations$feature2=="PD-1",]
 with.pd1 <- with.pd1[order(with.pd1$p.value),]
-with.pd1[which(with.pd1$rho > 0),]
-with.pd1[which(with.pd1$rho < 0),]
+head(with.pd1[which(with.pd1$rho > 0),])
+head(with.pd1[which(with.pd1$rho < 0),])
 ```
 
 Of course, computing correlations across all cell types in the population is not particularly interesting.
 Strong correlations may be driven by cell type differences, while cell type-specific correlations may be "diluted" by noise in other cell types.
 Rather, it may be better to compute correlations for each cluster separately, which allows us to focus on the more subtle regulatory effects within each cell type.
-For example, in cluster `r of.interest`, we observe that PD-1 abundance is positively correlated with _GZMK_ but negatively correlated with _GZMH_ (Figure \@ref(fig:correlation-pd1-cluster)).
+For example, in cluster `r of.interest`, we observe that CD127 abundance is positively correlated with _LTB_ but negatively correlated with _GZMH_ (Figure \@ref(fig:correlation-cd127-cluster)).
 
-```{r correlation-pd1-cluster, fig.cap=sprintf("Expression of _GZMH_ and _GZMK_ with respect to PD-1 abundance in each cell of cluster %s in the PBMC dataset.", of.interest)}
+```{r correlation-cd127-cluster, fig.cap=sprintf("Expression of _GZMH_ and _LTB_ with respect to CD127 abundance in each cell of cluster %s in the PBMC dataset.", of.interest)}
 chosen <- clusters.adt == of.interest
 chosen.correlations <- computeCorrelations(sce.main, altExp(sce.main),
     subset.cols=chosen, use.names=c("Symbol", NA))
 
-with.pd1 <- chosen.correlations[chosen.correlations$feature2=="PD-1",]
-with.pd1 <- with.pd1[order(with.pd1$p.value),]
-with.pd1[which(with.pd1$rho > 0),]
-with.pd1[which(with.pd1$rho < 0),]
+sorted.correlations <- chosen.correlations[order(chosen.correlations$p.value),]
+head(sorted.correlations[which(sorted.correlations$rho > 0),])
+head(sorted.correlations[which(sorted.correlations$rho < 0),])
 
-plotExpression(sce.main[,chosen], x="PD-1", show_smooth=TRUE, show_se=FALSE, 
-    features=c("GZMH", "GZMK"), swap_rownames="Symbol")
+plotExpression(sce.main[,chosen], x="CD127", show_smooth=TRUE, show_se=FALSE, 
+    features=c("LTB", "GZMH"), swap_rownames="Symbol")
 ```
 
 ```{r, echo=FALSE}
-stopifnot("GZMK" %in% head(with.pd1$feature1[which(with.pd1$rho > 0)]))
-stopifnot("GZMH" %in% head(with.pd1$feature1[which(with.pd1$rho < 0)]))
+stopifnot("LTB" %in% head(sorted.correlations$feature1[which(sorted.correlations$rho > 0)]))
+stopifnot("GZMH" %in% head(sorted.correlations$feature1[which(sorted.correlations$rho < 0)]))
 ```
 
 For experiments with multiple batches (or other uninteresting categorical factors), we can use the `block=` option to only compute correlations within each batch.
@@ -630,6 +616,11 @@ blocked.correlations[order(blocked.correlations$p.value),]
 plotExpression(sce.main, x="CD127", show_smooth=TRUE, show_se=FALSE, 
     features=c("IL7R"), swap_rownames="Symbol", 
     other_fields=list(data.frame(clusters=clusters.adt))) + facet_wrap(~clusters)
+```
+
+```{r, echo=FALSE}
+top <- blocked.correlations[order(blocked.correlations$p.value)[1],]
+stopifnot(top$feature1=="IL7R", top$feature2=="CD127")
 ```
 
 For large feature sets, computing all pairwise correlations may not be computationally feasible.
