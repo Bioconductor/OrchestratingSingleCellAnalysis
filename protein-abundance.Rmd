@@ -22,7 +22,7 @@ This provides a powerful tool for interrogating aspects of the proteome (such as
 
 How should the ADT data be incorporated into the analysis?
 While we have counts for both ADTs and transcripts, there are fundamental differences in nature of the data that make it difficult to treat the former as additional features in the latter.
-Most experiments involve only a small number of antibodies (<20) that are chosen by the researcher because they are of _a priori_ interest, in contrast to gene expression data that captures the entire transcriptome regardless of the study.
+Most experiments involve only a small number (20-200) of antibodies that are chosen by the researcher because they are of _a priori_ interest, in contrast to gene expression data that captures the entire transcriptome regardless of the study.
 The coverage of the ADTs is also much deeper as they are sequenced separately from the transcripts, allowing the sequencing resources to be concentrated into a smaller number of features.
 And, of course, the use of antibodies against protein targets involves consideration of separate biases compared to those observed for transcripts.
 This chapter will describe some strategies for integrated analysis of ADT and transcript data in CITE-seq experiments.
@@ -225,7 +225,6 @@ The geometric mean is a reasonable estimator of the scaling biases for large cou
 While more robust than the ADT library size factors, these geometric mean-based factors are still not entirely correct and will progressively become less accurate as upregulation increases in strength.
 
 ```{r}
-library(scuttle)
 sf.geo <- geometricSizeFactors(altExp(sce))
 summary(sf.geo)
 ```
@@ -267,7 +266,7 @@ In one subpopulation, the size factors are consistently larger than the ADT libr
 This is consistent with the presence of composition biases due to differential abundance of the targeted proteins between subpopulations.
 Here, composition biases would introduce a spurious 2-fold change in normalized ADT abundance if the library size factors were used.
 
-```{r comp-bias-norm, fig.cap="DESeq-like size factors for each cell in the PBMC dataset, compared to ADT library size factors. Each point is a cell and is colored according to the cluster identity defined from normalized ADT data."}
+```{r comp-bias-norm, fig.cap="DESeq-like size factors for each cell in the PBMC dataset, compared to ADT library size factors. Each point is a cell and is colored according to the cluster identity defined from normalized ADT data. The dashed line represents equality."}
 # Coloring by cluster to highlight the composition biases.
 # We set k=20 to get fewer, broader clusters for a clearer picture.
 library(scran)
@@ -294,7 +293,7 @@ If control ADTs are available, we could make the assumption that they should not
 Any difference thus represents some bias that should be normalized by defining control-based size factors from the sum of counts over all control ADTs, analogous to spike-in normalization (Section \@ref(spike-norm)), 
 We demonstrate this approach below by computing size factors from the IgG controls (Figure \@ref(fig:control-bias-norm)).
 
-```{r control-bias-norm, fig.cap="IgG control-derived size factors for each cell in the PBMC dataset, compared to the DESeq-like size factors."}
+```{r control-bias-norm, fig.cap="IgG control-derived size factors for each cell in the PBMC dataset, compared to the DESeq-like size factors. The dashed line represents equality."}
 controls <- grep("^Ig", rownames(altExp(sce)))
 sf.control <- librarySizeFactors(altExp(sce), subset_row=controls) 
 summary(sf.control)
@@ -446,7 +445,7 @@ plotExpression(altExp(sce.cd8), x=I(sce.cd8$subcluster),
 
 In contrast to subclustering, we can "intersect" the clusters generated independently for each set of features.
 Two cells are only considered to be in the same intersected cluster if they belong to the same cluster in every feature set.
-or in other words, strong separation between cells in any feature set is sufficient to cause the formation of a new cluster.
+In other words, strong separation between cells in any feature set is sufficient to cause the formation of a new cluster.
 The goal of the intersection is to capture population heterogeneity across all features in a single set of clusters.
 To illustrate, we first perform some standard steps on the transcript count matrix to obtain an RNA-only clustering.
 
@@ -501,7 +500,7 @@ stopifnot(length(unique(clusters.intersect)) < 0.25 * length(unique(naive.inters
 ```
 
 Intersecting clusters is more convenient than subclustering as each feature set can be analyzed independently in the former.
-Changes in the analysis strategy for one feature set does not affect the processing of other sets;
+Changes in the analysis strategy for one feature set do not affect the processing of other sets;
 similarly, there is no need to choose one feature set to define the initial clusters.
 The disadvantage is that there is no opportunity to improve resolution by choosing a more appropriate set of HVGs to separate subpopulations within each cluster.
 
