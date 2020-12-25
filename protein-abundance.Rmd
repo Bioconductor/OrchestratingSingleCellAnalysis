@@ -68,21 +68,19 @@ This enriches for biology, which is desirable, but also makes it difficult to se
 
 We start with the most obvious QC metric, the total count across all ADTs in a cell.
 The presence of a targeted protein can lead to a several-fold increase in the total ADT count given the binary nature of most surface markers.
-For example, the most abundant marker in each cell often takes up 40-60% of its total count and is different across cells (Figure \@ref(fig:top-prop-adt-dist)).
+For example, the most abundant marker in each cell is variable and associated with order of magnitude changes in the total ADT count (Figure \@ref(fig:top-prop-adt-dist)).
 Removing cells with low total ADT counts could inadvertently eliminate cell types that do not express many - or indeed, any - of the selected protein targets.
 
-```{r top-prop-adt-dist, fig.width=10, fig.height=6, fig.cap="Distribution of the proportion of counts taken up by the most abundant marker in each cell, stratified by the identity of the marker. Each boxplot contains the distribution across all cells for which the corresponding marker is the most abundant feature in that cell."}
-library(DelayedMatrixStats)
+```{r top-prop-adt-dist, fig.cap="Distribution of the log~10~-total ADT count across cells, stratified by the identity of the most abundant marker in each cell."}
 adt.counts <- counts(altExp(sce))
-total.count <- colSums(adt.counts)
-top.prop <- colMaxs(adt.counts)/total.count
 top.marker <- rownames(adt.counts)[max.col(t(adt.counts))]
-boxplot(split(top.prop, top.marker), ylab="Proportion of total ADT count", las=2)
+total.count <- colSums(adt.counts)
+boxplot(split(log10(total.count), top.marker), ylab="Log-total ADT count", las=2)
 ```
 
 The other common metric is the number of features detected (i.e., with non-zero counts) in each cell, but again, this is not as helpful for ADTs compared to RNA data.
 Recall that droplet-based libraries will contain contamination from ambient solution (Section \@ref(qc-droplets)), in this case containing containing conjugated antibodies that are either free in solution or bound to cell fragments.
-As the ADTs are (relatively) deeply sequenced, we expect non-zero counts for most ADTs in each cell due to these contaminating transcripts.
+As the ADTs are relatively deeply sequenced, we expect non-zero counts for most ADTs in each cell due to these contaminating transcripts.
 This may result in near-identical values for all cells (Figure \@ref(fig:cite-detected-ab-hist)) regardless of the efficacy of cDNA capture. 
 
 ```{r cite-detected-ab-hist, fig.cap="Distribution of the number of detected ADTs across all cells in the PBMC dataset."}
@@ -91,7 +89,8 @@ hist(adt.detected, col='grey', main="", xlab="Number of detected ADTs")
 ```
 
 Contrast this with the utility of the same QC metrics for the RNA counts.
-Most counts in an RNA-seq library are assigned to constitutively expressed genes that should not exhibit major changes across subpopulations, allowing us to use the total RNA count as a QC metric that is (somewhat) independent of biological state.
+Most counts in an RNA-seq library are assigned to constitutively expressed genes that should not exhibit major changes across subpopulations, 
+allowing us to use the total RNA count as a QC metric that is somewhat independent of biological state.
 Similarly, the larger number of features keeps the counts close to zero and ensures that the number of detected genes changes appreciably in response to technical effects.
 This suggests that, for a larger antibody panel (including some constitutively abundant proteins) and shallower sequencing, the ADT count matrix may be sufficiently "RNA-like" that these metrics can be used in the same way.
 
@@ -102,7 +101,7 @@ Obviously, the mitochondrial and spike-in proportions are not applicable here.
 To replace the standard QC metrics, we take advantage of one of the more obvious technical effects in ADT data - namely, contamination from the ambient solution.
 As previously mentioned, we expect non-zero counts for most ADTs due to this contamination, 
 even if the cell does not exhibit any actual expression of the corresponding protein marker.
-If most ADTs for a cell are zero instead, this is indicative of a problem during library preparation.
+If most ADTs for a cell instead have zero counts, we may suspect a problem during library preparation.
 We identify such libraries that have no estimated contribution from the ambient solution and mark them for removal during QC filtering.
 
 ```{r}
@@ -112,14 +111,14 @@ summary(qc.stats$zero.ambient) # libraries removed with no ambient contamination
 ```
 
 This experiment also includes isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell.
-The coverage of these control ADTs serves as a measure of non-specific binding in each cell, and in particular, the presence of protein aggregates.
-Antibody aggregates cause large increase in the counts for all tags in the corresponding library,
+The coverage of these control ADTs serves as a measure of non-specific binding in each cell, most notably protein aggregates.
+Inclusion of antibody aggregates in a droplet causes a large increase in the counts for all tags in the corresponding library,
 which interferes with the downstream analysis by masking the cell's true surface marker phenotype.
 We identify affected cells as high outliers for the total control count (Figure \@ref(fig:cite-total-con-hist));
 hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs.
 
 ```{r cite-total-con-hist, fig.cap="Distribution of the log-coverage of IgG control ADTs across all cells in the PBMC dataset. The red dotted line indicates the threshold above which cells were removed."}
-summary(qc.stats$low.controls)
+summary(qc.stats$high.controls)
 hist(log10(qc.stats$sum.controls + 1), col='grey', breaks=50,
     main="", xlab="Log-total count for controls per cell")
 
