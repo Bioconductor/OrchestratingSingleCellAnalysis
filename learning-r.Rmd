@@ -202,9 +202,10 @@ Once comfortable with the basic concepts of the language, we take things to the 
 - [Advanced R](https://adv-r.hadley.nz/), as its name suggests, goes through some of the more advanced concepts in the language.
 - The aptly named [What They Forgot to Teach You About R](https://whattheyforgot.org/) discusses topics such as file naming, maintaining an R installation, and reproducible analysis habits.
 - The [R Inferno](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf) dives into many of the unique quirks of R and some of the common user mistakes.
+- [Happy Git and Github for the useR](https://happygitwithr.com/), which describes how to use the Git version control system with R.
 
 Over time, you may accumulate a collection of your own functions that you might want to re-use across projects or even share with other people.
 This can be done easily by creating your own R package.
 The [R Packages book](http://r-pkgs.had.co.nz/) provides a user-friendly guide for doing so;
-more experienced developers will consult [Writing R extensions](https://cran.r-project.org/doc/manuals/r-release/R-exts.html), 
-the definitive documentation for the R packaging system.
+more experienced developers will consult [Writing R extensions](https://cran.r-project.org/doc/manuals/r-release/R-exts.html), the definitive documentation for the R packaging system.
+Bioconductor itself also provides [some educational resources](https://www.bioconductor.org/developers/) for package development within the Bioconductor context.
