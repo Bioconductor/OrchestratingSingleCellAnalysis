@@ -1,4 +1,4 @@
-all: tenx-unfiltered-pbmc4k.md muraro-pancreas.md segerstolpe-pancreas.md zeisel-brain.md bach-mammary.md lun-416b.md grun-hsc.md tenx-filtered-pbmc3k-4k-8k.md lawlor-pancreas.md nestorowa-hsc.md paul-hsc.md grun-pancreas.md tenx-repertoire-pbmc8k.md pijuan-embryo.md about-the-contributors.md beyond-r-basics.md bibliography.md data-infrastructure.md hca-bone-marrow.md index.md installation.md interoperability.md learning-r.md messmer-hesc.md nuclei-analysis.md overview.md protein-abundance.md big-data.md droplet-processing.md interactive.md normalization.md reduced-dimensions.md cell-annotation.md doublet-detection.md clustering.md feature-selection.md quality-control.md cell-cycle.md data-integration.md marker-detection.md trajectory.md merged-hsc.md merged-pancreas.md repertoire-seq.md sample-comparisons.md
+all: tenx-unfiltered-pbmc4k.md muraro-pancreas.md segerstolpe-pancreas.md zeisel-brain.md bach-mammary.md lun-416b.md grun-hsc.md tenx-filtered-pbmc3k-4k-8k.md lawlor-pancreas.md nestorowa-hsc.md paul-hsc.md grun-pancreas.md tenx-repertoire-pbmc8k.md pijuan-embryo.md about-the-contributors.md bibliography.md data-infrastructure.md hca-bone-marrow.md index.md installation.md interoperability.md learning-r.md messmer-hesc.md nuclei-analysis.md overview.md protein-abundance.md big-data.md droplet-processing.md interactive.md normalization.md reduced-dimensions.md cell-annotation.md doublet-detection.md clustering.md feature-selection.md quality-control.md cell-cycle.md data-integration.md marker-detection.md trajectory.md merged-hsc.md merged-pancreas.md repertoire-seq.md sample-comparisons.md
 
 tenx-unfiltered-pbmc4k.md: tenx-unfiltered-pbmc4k.Rmd
 	R -e "knitr::knit('tenx-unfiltered-pbmc4k.Rmd')"
@@ -44,9 +44,6 @@ pijuan-embryo.md: pijuan-embryo.Rmd
 
 about-the-contributors.md: about-the-contributors.Rmd
 	R -e "knitr::knit('about-the-contributors.Rmd')"
-
-beyond-r-basics.md: beyond-r-basics.Rmd
-	R -e "knitr::knit('beyond-r-basics.Rmd')"
 
 bibliography.md: bibliography.Rmd
 	R -e "knitr::knit('bibliography.Rmd')"
