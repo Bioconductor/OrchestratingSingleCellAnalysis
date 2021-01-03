@@ -1,0 +1,210 @@
+# Learning R 
+
+```{r setup, echo=FALSE, results="asis"}
+library(rebook)
+chapterPreamble()
+```
+
+## Overview
+
+There are many, many online resources available for learning how to use R.
+To name a few:
+
+- The [R for data science book](https://r4ds.had.co.nz/), which is a fairly enjoyable read
+though it focuses heavily on a specific dialect of the R language.
+- A [free course from Codecademy](https://www.codecademy.com/learn/learn-r),
+which uses a web-based console; this allows people to start learning without actually installing R on their own computers.
+- A [free course from EdX](https://www.edx.org/course/statistics-and-r),
+which focuses on the use of R's statistical functionality. 
+- [An Introduction to R](https://cran.r-project.org/doc/manuals/R-intro.pdf),
+a definitive description of R that is best read after some basic familiarity has been established. 
+
+We will not attempt to repeat the contents of these resources here, as they already to a good job of explaining themselves.
+Rather, we will provide a minimal primer to R to enable readers to make sense of the code chunks in the rest of the book.
+
+## An extremely short R primer
+
+### Format
+
+This book contains code chunks interspersed with results and explanatory text.
+Code chunks contain R code that is to be evaluated, and interested readers can copy-paste these lines into the R console to try it out themselves.
+Each code chunk looks like this:
+
+```{r, results="hide"}
+a <- 2 * 5
+print(a)
+```
+
+Terms are colored differently depending on their category - this is mostly aesthetic and can be ignored for the time being.
+If a code chunk produces a visible result "on-screen", it is shown in another chunk like so:
+
+```{r, echo=FALSE}
+print(a)
+```
+
+Any text after a `#` is considered a comment and is ignored when running the code.
+Result chunks are always prefixed with `#` characters so that users can just copy-paste sections of code without having to explicitly remove the lines containing the results.
+
+### Variables
+
+When we create an object in an R session, we can give it a name so that we can use it later.
+This name is what we call a "variable".
+In the example below, we create the numeric value `2` and give it the name `blah`. 
+
+```{r}
+blah <- 2
+```
+
+We can then refer to this variable in later steps.
+For example, we can look at its value by passing the name to the `print()` function (see below for a discussion on functions):
+
+```{r}
+print(blah)
+```
+
+Or we can use it in calculations to create other variables.
+For example, we create the `whee` variable by multiplying the contents of `blah` by 4:
+
+```{r}
+whee <- blah * 4
+print(whee)
+```
+
+If we make a copy of `blah`, modifying the copy will not modify the original:
+
+```{r}
+blah2 <- blah
+blah2 <- blah2 * 10
+print(blah2) 
+print(blah) # still the same
+```
+
+Though if we assign another value to the `blah` name, then the old value will be overwritten:
+
+```{r}
+blah <- 100
+print(blah)
+```
+
+There is much more to be said about variables within R, but for the purposes of this primer, 
+all we need to know is that they are names that refer to data values in our R session.
+The data values shown above are very simple but the same principle applies to more complicated objects like data structures for genome-scale datasets.
+
+### Functions
+
+We can call functions on specified variables to perform various tasks.
+We have already seen the `print()` function, which prints the value of the variable onto the screen.
+A variety of general-purpose functions are provided with R itself;
+for example, we might use `toupper()` to convert a character string to upper case, and assign the output of the function to a new variable:
+
+```{r}
+message <- "Aaron was here"
+upper.cased <- toupper(message)
+upper.cased
+```
+
+Alternatively, we could create a new plot with the `plot()` function:
+
+```{r}
+plot(x=c(1,4,6), y=c(10, 8, 5), xlab="This is the x-axis", 
+    ylab="This is the y-axis", main=message)
+```
+
+Or we could write something to file with the `write()` function:
+
+```{r}
+write(message, file="message.txt")
+```
+
+The arguments accepted by each function are usually described in the documentation for each function, accessible by typing a `?` in front of the function name:
+
+```r
+?write
+```
+
+Some of these arguments may be required while others may be optional - consult the function's documentation for more details.
+Unnamed arguments are interpreted positionally, i.e., the first supplied variable is used as the first expected argument, the second variable is used as the second argument and so on.
+For example:
+
+```{r}
+# First argument is 'x', second argument is the logarithm's base.
+# This gives 2 as 10^2 = 100.
+log(100, 10)
+```
+
+We can override this interpretation by explicitly listing the argument names, which will use a variable for its named argument regardless of the order.
+This is useful for specifying certain arguments without having to provide all the preceding (optional) arguments.
+
+```{r}
+log(base=10, x=100)
+```
+
+Again, there is much more that can be said about functions in R, 
+but all we need to know right now is that we can pass in variables to functions to perform calculations or do some other task;
+we can then assign the function's output to new variables that we can pass to other functions, and so on until we have completed our analysis.
+
+### Packages
+
+R's package system allows the base installation to be extended with additional functionality.
+Each package will add more functions and variables that we can use in our analysis code. 
+For example, we can add the `r Biocpkg("GenomicRanges")` package to our current R session:
+    
+```{r}
+library(GenomicRanges)
+```
+
+This allows us to perform various tasks related to manipulation of genomic intervals.
+For example, we might construct `GenomicRanges` objects and find overlaps between them:
+
+```{r}
+gr1 <- GRanges("chr1:1-100")
+gr2 <- GRanges("chr1:90-150")
+overlapsAny(gr1, gr2)
+```
+
+On occasion, we may observe functions from different packages with the same name.
+We can explicitly specify the desired function of interest by prefixing it with the package name and `::`.
+
+```{r}
+GenomicRanges::GRanges("chr2:1-1000")
+```
+
+The same notation is also convenient for calling a function from a package without writing `library()` first,
+as `::` will automatically load the relevant package, e.g., `BiocManager::install()`.
+
+## Getting help
+
+If you have a question about how a function works, it can often be answered by the function's documentation.
+This is accessible by prepending the function name with `?`.
+
+More general questions on how to use a package may be answered by the package's vignette, if it is available.
+(One aspect of Bioconductor software that distinguishes it from CRAN packages is the required documentation of packages and workflows.)
+
+```{r, eval=FALSE}
+vignette(package='SingleCellExperiment') # list all available vignettes
+vignette(package='SingleCellExperiment', topic='intro') # open specific vignette
+```
+
+Beyond the R console, there are myriad online resources to get help. 
+The R for Data Science book has a great section dedicated to looking for help [outside of R](https://r4ds.had.co.nz/introduction.html#getting-help-and-learning-more). 
+For example, [Stack Overflow's R tag](https://stackoverflow.com/questions/tagged/r) is a helpful resource for asking and exploring general R programming questions.
+    
+For Bioconductor specifically, the [support site](https://support.bioconductor.org/) contains a question and answer-style support site that is actively updated by both users and package developers.
+This should generally be the first port of call for questions that are not answered by any existing documentation.
+
+Users can also connect to the Bioconductor community through [our Slack group](https://bioc-community.herokuapp.com), which hosts various channels dedicated to packages and workflows. 
+The Bioc-community Slack is a great way to stay in the loop on the latest developments happening across Bioconductor, and we recommend exploring the "Channels" section to find topics of interest. 
+
+## Beyond the basics
+
+Once comfortable with the basic concepts of the language, we take things to the next level:
+
+- [Advanced R](https://adv-r.hadley.nz/), as its name suggests, goes through some of the more advanced concepts in the language.
+- The aptly named [What They Forgot to Teach You About R](https://whattheyforgot.org/) discusses topics such as file naming, maintaining an R installation, and reproducible analysis habits.
+- The [R Inferno](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf) dives into many of the unique quirks of R and some of the common user mistakes.
+
+Over time, you may accumulate a collection of your own functions that you might want to re-use across projects or even share with other people.
+This can be done easily by creating your own R package.
+The [R Packages book](http://r-pkgs.had.co.nz/) provides a user-friendly guide for doing so;
+more experienced developers will consult [Writing R extensions](https://cran.r-project.org/doc/manuals/r-release/R-exts.html), 
+the definitive documentation for the R packaging system.

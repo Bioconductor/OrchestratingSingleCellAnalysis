@@ -9,7 +9,7 @@ cover-image: "images/cover.png"
 output_dir: "docs"
 rmd_files: ["index.Rmd",
     # Part 1, intro:
-    "introduction.Rmd",
+    "installation.Rmd",
     "learning-r-and-bioconductor.Rmd",
     "beyond-r-basics.Rmd",
     "data-infrastructure.Rmd",
