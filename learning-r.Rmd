@@ -19,7 +19,7 @@ which focuses on the use of R's statistical functionality.
 - [An Introduction to R](https://cran.r-project.org/doc/manuals/R-intro.pdf),
 a definitive description of R that is best read after some basic familiarity has been established. 
 
-We will not attempt to repeat the contents of these resources here, as they already to a good job of explaining themselves.
+We will not attempt to repeat the contents of these resources here, as they already do a good job of explaining themselves.
 Rather, we will provide a minimal primer to R to enable readers to make sense of the code chunks in the rest of the book.
 
 ## An extremely short R primer
