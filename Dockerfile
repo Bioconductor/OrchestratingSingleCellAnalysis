@@ -6,7 +6,7 @@ RUN for x in OSCA OSCA.intro OSCA.basic OSCA.advanced OSCA.multisample OSCA.work
 do \
     git clone https://github.com/OSCA-source/${x} /home/book/${x}; \
     git -C /home/book/${x} checkout master; \
-    R --quiet -e "options(warn=2); BiocManager::install(union(remotes::local_package_deps('/home/book/${x}'))"; \
+    R --quiet -e "options(warn=2); BiocManager::install(remotes::local_package_deps('/home/book/${x}'))"; \
 done
 
 LABEL name="bioconductor/bioconductor_docker_orchestratingsinglecellanalysis" \
