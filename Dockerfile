@@ -1,16 +1,21 @@
 FROM bioconductor/bioconductor_docker:devel
 
-RUN mkdir /home/book
-COPY . /home/book
+RUN mkdir /home/book/
 
-RUN R --quiet -e "options(warn=2); BiocManager::install(union(remotes::local_package_deps('/home/book', dependencies=TRUE), 'bookdown'))"
+RUN for x in OSCA OSCA.intro OSCA.basic OSCA.advanced OSCA.multisample OSCA.workflows; \
+do \
+    git clone https://github.com/OSCA-source/${x} /home/book/${x}; \
+    git -C /home/book/${x} checkout master; \
+    R --quiet -e "options(warn=2); BiocManager::install(union(remotes::local_package_deps('/home/book/${x}'))"; \
+done
 
 LABEL name="bioconductor/bioconductor_docker_orchestratingsinglecellanalysis" \
-      version="1.0.0" \
+      version="1.1.0" \
+      date="XXXX" \
       url="https://github.com/Bioconductor/OrchestratingSingleCellAnalysis" \
       maintainer="infinite.monkeys.with.keyboards@gmail.com" \
-      description="Build environment and contents of the OSCA book" \
-      license="Artistic-2.0"
+      description="Build environment and source files for the OSCA books" \
+      license="CC BY 4.0"
 
 RUN mkdir /home/cache
 ENV EXPERIMENT_HUB_CACHE /home/cache/ExperimentHub
