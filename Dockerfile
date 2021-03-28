@@ -1,4 +1,4 @@
-FROM bioconductor/bioconductor_docker:devel
+FROM bioconductor/bioconductor_docker:RELEASE_3_12
 
 RUN mkdir /home/book
 COPY . /home/book
