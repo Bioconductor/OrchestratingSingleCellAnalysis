@@ -1,27 +1,26 @@
 on:
-  push
+  schedule:
+    - cron: "0 0 * * 0"
 
 name: rebuild
 
 jobs:
   rebuild:
-    name: "Rebuilding sundries"
+    name: "sundries"
     runs-on: ubuntu-latest
     container: bioconductor/bioconductor_docker:devel
     steps:
       - name: Check out repo
         uses: actions/checkout@v2
-      - name: Update DESCRIPTION and Makefile
+      - name: Bumping the date
         run: |
-          BiocManager::install('LTLA/rebook')
-          rebook::updateDependencies(".", extra=c("Rtsne", "RMTstat", "statmod", "GO.db"))
-          BiocManager::install('igraph')
-          rebook::createMakefile()
-        shell: Rscript {0}
+            curdate=$(date --rfc-3339=date)
+            cat Dockerfile | sed "s/date=\".*\"/date=\"${curdate}\"/" > tmp
+            mv tmp Dockerfile
       - name: Committing to master
         run: | 
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add DESCRIPTION Makefile
-          git commit -m "Rebuilding sundries." || true
+          git add Dockerfile
+          git commit -m "Bumping the Dockerfile date." || true
           git push
