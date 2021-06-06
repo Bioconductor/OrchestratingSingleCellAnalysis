@@ -11,7 +11,7 @@ done
 
 LABEL name="bioconductor/bioconductor_docker_orchestratingsinglecellanalysis" \
       version="3.13" \
-      date="2021-05-30" \
+      date="2021-06-06" \
       url="https://github.com/Bioconductor/OrchestratingSingleCellAnalysis" \
       maintainer="infinite.monkeys.with.keyboards@gmail.com" \
       description="Build environment and source files for the OSCA books (Bioconductor 3.13)" \
